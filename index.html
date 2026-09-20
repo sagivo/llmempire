@@ -197,7 +197,7 @@
     #side{position:relative;flex:1;min-height:0;width:100%;border:0;border-radius:16px 16px 0 0;background:#0d1523;box-shadow:0 -10px 36px rgba(0,0,0,.28);overflow:hidden}
     #tabs{height:48px;position:relative;top:auto;padding:5px 8px;border:0;border-bottom:1px solid rgba(154,184,232,.1);background:#0d1523;gap:3px}
     #tabs button{position:relative;min-height:38px;padding:0;border:0;border-radius:10px;background:transparent;color:#71839c;font-size:11px;font-weight:750;box-shadow:none}
-    #tabs button.on{color:#eff7ff;border:0;background:rgba(99,216,255,.09);box-shadow:none}
+    #tabs button.on{color:#bcefff;border:0;border-radius:0;background:transparent!important;box-shadow:none}
     #tabs button.on:after{content:'';position:absolute;left:26%;right:26%;bottom:2px;height:2px;border-radius:2px;background:#63d8ff}
     #sidebody{height:calc(100% - 48px);min-height:0;padding:6px 10px 20px;overflow:auto;overscroll-behavior:contain;background:#0d1523}
     #eventMode{position:sticky;top:0;z-index:3;height:38px;padding:4px 0 5px;background:linear-gradient(180deg,#0f1725 76%,transparent);gap:5px}
@@ -225,7 +225,7 @@
 
   /* Spectator-first mobile UX: story, characters, timeline, observe controls. */
   #liveStory{display:none}
-  .story-kicker{font-size:8px;color:#ffb95c;font-weight:850;letter-spacing:.12em;text-transform:uppercase}.story-title{font-size:12px;font-weight:800;color:#f4f8ff;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.story-detail{font-size:10px;color:#91a4bd;margin-top:1px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .story-kicker{font-size:8px;color:#ffb95c;font-weight:850;letter-spacing:.12em;text-transform:uppercase}.story-title{font-size:12px;font-weight:800;color:#f4f8ff;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.story-detail{font-size:10px;color:#91a4bd;margin-top:1px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.world-brief{padding:9px 10px}.world-brief .story-detail{-webkit-line-clamp:1}.world-brief p{margin-top:5px!important;color:#7f93ad!important;font-size:10px}
   .agent-hero{padding:12px;border-radius:15px;background:linear-gradient(135deg,rgba(28,42,66,.94),rgba(13,20,34,.96));border:1px solid rgba(130,170,230,.16)}.agent-hero h2{margin:0 0 7px}.agent-stats{display:flex;gap:12px;color:#a9b8cc;font-size:11px}.agent-section{margin-top:10px;padding:11px;border-radius:13px;background:rgba(20,30,47,.72);border:1px solid rgba(130,170,230,.1)}.agent-section label{display:block;color:#7389a6;font-size:9px;font-weight:850;letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}.agent-section p{margin:0;color:#dbe6f4;line-height:1.45}.agent-action{display:flex;gap:8px;align-items:flex-start;margin:5px 0;color:#c8d4e4;font-size:11px}.agent-action b{color:#fff}.watch-btn{width:100%;margin-top:10px;background:linear-gradient(135deg,#58cfff,#8e76ff);border:0;color:#07101c;font-weight:900}
   .ev{cursor:pointer}.ev-icon{position:absolute;left:10px;top:8px;font-size:16px}.ev .t{left:auto!important;right:9px;top:9px!important}.ev-copy{display:block;padding-right:35px}.ev-day{margin:13px 2px 5px;color:#6e829e;font-size:9px;font-weight:900;letter-spacing:.13em;text-transform:uppercase}
   .observe-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.observe-toggle{display:flex;gap:8px;align-items:center;padding:10px;border-radius:12px;background:rgba(20,30,47,.75);font-size:11px}.observe-powers{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:12px}.observe-powers button{min-height:42px}.observe-note{color:#8295af;font-size:10px;line-height:1.45;margin:10px 2px}
@@ -410,7 +410,7 @@
     <button id="exitReplayBtn">Exit replay</button>
   </div>
   <div id="main">
-    <div id="boardwrap"><div id="matchPulse"><div class="pulse-card leader"><span>Leading the world</span><b id="pulseLeader">-</b></div><div class="pulse-card shift"><span>Live</span><b id="pulseEvent">Waiting for first tick</b></div></div><div id="mapframe"><canvas id="board" width="960" height="640"></canvas><div id="mapActions" aria-hidden="true"></div></div><div id="liveStory"><div class="story-kicker">Live story</div><div class="story-title" id="storyTitle">The kingdoms are taking position</div><div class="story-detail" id="storyDetail">Press play to watch the first decisions unfold.</div></div><div id="matchEnd"></div><div id="turnViz" aria-live="polite"></div><div id="empirebar"></div></div>
+    <div id="boardwrap"><div id="mapframe"><canvas id="board" width="960" height="640"></canvas><div id="mapActions" aria-hidden="true"></div></div><div id="matchEnd"></div><div id="turnViz" aria-live="polite"></div><div id="empirebar"></div></div>
     <div id="side">
       <div id="lb"></div>
       <div id="tabs">
@@ -1116,7 +1116,9 @@ function renderWorldTab(w){
   const ranked=w.kingdoms.map(k=>({k,land:cellsOf(w,k.id).length})).sort((a,b)=>b.land-a.land||b.k.army-a.k.army);
   const alive=ranked.filter(r=>r.k.alive);
   const notable=[...w.events].reverse().filter(e=>["Combat","Fall","Dawn","Transfer","Letter","Bulletin"].includes(e.type)).slice(0,4);
-  el.innerHTML='<div class="agent-section" style="margin-top:2px"><label>State of the world</label><p>Day '+w.day+' · '+alive.length+' of '+w.kingdoms.length+' kingdoms standing'+(ranked[0]?' · '+htmlSafe(ranked[0].k.name)+' leads with '+ranked[0].land+' land':'')+'.</p></div>'
+  const shift=[...w.events].reverse().find(e=>["Combat","Fall","Dawn","Transfer","Letter","Bulletin","ActRejected"].includes(e.type)||(e.type==="Control"&&e.operatorAction!=="match_start"));
+  const story=storyFor(w,shift);
+  el.innerHTML='<div class="agent-section world-brief" style="margin-top:2px"><label>World now</label><div class="story-title">'+htmlSafe(story.title)+'</div><div class="story-detail">'+htmlSafe(story.detail)+'</div><p>Day '+w.day+' · '+alive.length+'/'+w.kingdoms.length+' standing'+(ranked[0]?' · '+htmlSafe(ranked[0].k.name)+' leads with '+ranked[0].land+' land':'')+'</p></div>'
     +(notable.length?'<div class="agent-section"><label>Latest shifts</label>'+notable.map(e=>'<div class="agent-action"><span>'+eventIcon(e.type)+'</span><span>'+htmlSafe(evText(w,e))+'</span></div>').join('')+'</div>':'')
     +'<div class="analysis-empty" style="padding-top:8px">Tap a kingdom on the map or in the agent strip to follow its story.</div>';
 }
