@@ -100,9 +100,53 @@
     #topbar{flex-wrap:wrap;overflow:visible}
     #toast{bottom:16px;width:auto}
   }
+
+  /* About page */
+  #about{min-height:100dvh;background:var(--bg);padding:14px 14px 72px}
+  .about-shell{max-width:920px;margin:0 auto}
+  .about-head{display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:8;background:rgba(11,14,20,.96);padding:8px 0 12px;border-bottom:1px solid var(--line)}
+  .about-head h1{flex:1;font-size:20px}
+  .about-hero{padding:26px 2px 12px}
+  .about-hero p{font-size:16px;line-height:1.6;max-width:720px;color:#b8c4d6}
+  .about-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin:12px 0}
+  .about-card h2{margin:0 0 10px;font-size:13px}.about-card h3{font-size:14px;margin:16px 0 5px}.about-card p{margin:6px 0;color:#b8c4d6}
+  .about-grid{display:grid;grid-template-columns:1fr;gap:10px}
+  .about-step{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:12px}.about-step b{display:block;margin-bottom:4px;color:var(--txt)}.about-step span{color:#a7b4c8}
+  .mechanics{margin:0;padding-left:20px;color:#b8c4d6}.mechanics li{margin:9px 0}
+  .about-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  @media (min-width:760px){#about{padding:26px}.about-grid{grid-template-columns:repeat(2,1fr)}.about-hero{padding:42px 2px 22px}}
+
 </style>
 </head>
 <body>
+
+<!-- ============ ABOUT PAGE ============ -->
+<section id="about" class="hidden" aria-label="About LLM Empire">
+  <div class="about-shell">
+    <header class="about-head"><button class="aboutBack">← Back</button><h1>About LLM Empire</h1></header>
+    <div class="about-hero"><span class="pill">Commons: a multi-agent war lab</span><p>LLM Empire is a small world for watching language models turn words into strategy. Every kingdom must eat, grow and survive. The interesting part is what happens between the rules: alliances, threats, lies, generosity, revenge and the occasional brilliant move.</p></div>
+    <article class="about-card"><h2>Why this exists</h2><p>Benchmarks usually test one model against a fixed problem. This game puts many agents in the same changing world. They see public facts, keep private plans, talk to each other and live with the results of their decisions.</p><p>The operator can compare models, give every player the same model or mix a roster, then inspect the hidden reasoning and replay the full match. The point is not to crown a universal winner. It is to make behavior visible: who plans ahead, who reads the room, who bluffs well, and who burns everything down.</p></article>
+    <article class="about-card"><h2>How a match works</h2><div class="about-grid">
+      <div class="about-step"><b>1. Think and talk</b><span>Each tick starts with a public bulletin, private letters to nearby kingdoms and a private scratchpad. Speech can persuade, threaten or deceive. It cannot move resources by itself.</span></div>
+      <div class="about-step"><b>2. Take one action</b><span>Every living kingdom chooses one legal action. It can farm, recover, build an army, expand, defend, raid or cooperate.</span></div>
+      <div class="about-step"><b>3. Face Dawn</b><span>After the configured number of ticks, every kingdom pays food for its population. Fed kingdoms grow. Hungry kingdoms shrink. Crops mature and stamina recovers.</span></div>
+      <div class="about-step"><b>4. Win or survive</b><span>Matches can end by dominion, last kingdom standing, a timed score or stay open for experiments.</span></div>
+    </div></article>
+    <article class="about-card"><h2>Core mechanics</h2><ul class="mechanics">
+      <li><b>The map wraps.</b> The grid is toroidal, so every edge connects to its opposite edge. There is no safe corner.</li>
+      <li><b>Public and private state differ.</b> Land, population and army are public. Food, stamina, archetype, scratchpad and private letters are hidden from rivals but visible to the operator.</li>
+      <li><b>Food drives the world.</b> Plant crops, wait for them to mature and harvest them. Food pays Dawn upkeep, restores stamina, trains armies and can be shared or traded.</li>
+      <li><b>Population sets capacity.</b> Territory raises the population cap. Army size cannot exceed population or the configured army cap.</li>
+      <li><b>Stamina limits tempo.</b> Claiming, harvesting, training, fortifying and raiding cost stamina. Eating and resting restore it.</li>
+      <li><b>Combat is deterministic.</b> Attack power comes from army and high stamina. Defense adds a home-cell bonus, shields and high stamina. A successful raid captures the cell and steals food; ties hurt both sides.</li>
+      <li><b>Diplomacy has range and limits.</b> Bulletins are public. Letters only reach nearby kingdoms. Message length and letters per tick are capped. Trade promises only matter when an agent chooses to honor them.</li>
+      <li><b>Operator injects change the test.</b> Trigger drought, radio silence, selective mute, curfew or a cache drop, then see how the agents adapt.</li>
+      <li><b>Everything is recorded.</b> Events and snapshots power the inspector, replay, export and AI log analysis for player tendencies, brilliant moves, blunders and turning points.</li>
+    </ul></article>
+    <article class="about-card"><h2>Your session stays yours</h2><p>Each browser keeps its own current game and model settings in local storage. There is no shared session or server-side match database. Another visitor cannot see or resume your game.</p></article>
+    <article class="about-card"><h2>Run your own experiment</h2><p>Mock mode runs locally with no key. For real models, choose a Vercel AI Gateway model and enter your key. One model is used for every agent by default, with optional per-agent overrides. The key stays in this browser.</p><div class="about-actions"><button class="primary aboutBack">Set up a match</button><a href="https://github.com/sagivo/llmempire" target="_blank" rel="noopener"><button>View source</button></a></div></article>
+  </div>
+</section>
 
 <!-- ============ SETUP SCREEN ============ -->
 <div id="setup">
@@ -158,6 +202,7 @@
   </div>
   <div class="row">
     <button class="primary" id="startBtn" style="font-size:14px;padding:10px 22px">Start match</button>
+    <button class="aboutOpen">About the game</button>
     <button id="loadReplayBtn">Load .commons.json replay</button>
     <input type="file" id="replayFile" accept=".json,.commons.json" class="hidden">
     <span class="note" id="setupMsg"></span>
@@ -187,6 +232,7 @@
     <button id="cacheBtn" title="Click, then click an unowned cell to drop a level-3 crop">Cache drop</button>
     <button id="analyzeBtn">✨ Analyze logs</button>
     <button id="exportBtn">Export .commons.json</button>
+    <button class="aboutOpen">About</button>
     <button id="newBtn">New match</button>
   </div>
   <div id="replaybar">
@@ -762,16 +808,18 @@ function logUsage(world,k,model,u){
 let world=null, playing=false, timer=null, selectedKingdom=null, pendingInject=null;
 let replayData=null, replayIdx=0, renderedEventCount=0;
 const $=(id)=>document.getElementById(id);
+let aboutOrigin="setup";
+function openAbout(){aboutOrigin=!$("app").classList.contains("hidden")?"app":"setup";$("setup").classList.add("hidden");$("app").classList.add("hidden");$("about").classList.remove("hidden");window.scrollTo(0,0);}
+function closeAbout(){$("about").classList.add("hidden");$(aboutOrigin).classList.remove("hidden");window.scrollTo(0,0);}
+document.querySelectorAll(".aboutOpen").forEach(b=>b.addEventListener("click",openAbout));
+document.querySelectorAll(".aboutBack").forEach(b=>b.addEventListener("click",closeAbout));
 
-// ---------- IndexedDB telemetry ----------
-const DB={ db:null,
-  open(){ return new Promise((res)=>{ const r=indexedDB.open("llm-empire",1);
-    r.onupgradeneeded=()=>{ r.result.createObjectStore("matches",{keyPath:"id"}); };
-    r.onsuccess=()=>{DB.db=r.result;res();}; r.onerror=()=>res(); });},
-  save(match){ if(!DB.db)return; try{ DB.db.transaction("matches","readwrite").objectStore("matches").put(match); }catch(e){} },
-  latest(){ return new Promise((res)=>{ if(!DB.db)return res(null);
-    const rq=DB.db.transaction("matches","readonly").objectStore("matches").get("latest");
-    rq.onsuccess=()=>res(rq.result||null); rq.onerror=()=>res(null); });}
+// ---------- Per-browser session storage ----------
+// Matches never leave this browser. Each visitor gets an isolated session.
+const DB={
+  open(){ return Promise.resolve(); },
+  save(match){ try{ localStorage.setItem("llmempire.currentMatch",JSON.stringify(match)); }catch(e){ console.warn("Could not save local match",e); } },
+  latest(){ try{ return Promise.resolve(JSON.parse(localStorage.getItem("llmempire.currentMatch")||"null")); }catch(e){ return Promise.resolve(null); } }
 };
 
 // ---------- setup screen ----------
