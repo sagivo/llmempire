@@ -178,8 +178,8 @@
     #topbar select{width:64px!important;appearance:none;text-align:center;color:#dce8f7}
     #topbar .clock{min-width:0;text-align:center;font-size:10px;line-height:1.15;white-space:normal;color:#93a5bd;font-weight:650;letter-spacing:.01em}
     #topbar #toolsBtn{font-size:0}#topbar #toolsBtn:before{content:'•••';font-size:18px;letter-spacing:2px;color:#dce8f7}
-    #operatorDrawer{position:absolute;top:62px;left:8px;right:8px;z-index:30;border:1px solid rgba(142,174,225,.2);border-radius:16px;padding:9px;background:rgba(10,15,25,.94);box-shadow:0 20px 60px rgba(0,0,0,.55);backdrop-filter:blur(22px)}
-    #operatorDrawer button{border-radius:11px;background:#182337;border-color:#273750;min-height:40px}
+    #operatorDrawer{position:absolute;top:62px;left:8px;right:8px;z-index:30;border:1px solid rgba(142,174,225,.2);border-radius:16px;padding:9px;background:rgba(10,15,25,.96);box-shadow:0 20px 60px rgba(0,0,0,.55);backdrop-filter:blur(22px)}#operatorDrawer.show{display:grid;grid-template-columns:1fr 1fr}
+    #operatorDrawer button{border-radius:11px;background:#182337;border-color:#273750;min-height:40px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     #main{position:relative;display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
     #boardwrap{position:relative;display:flex;flex-direction:column;justify-content:flex-start;flex:0 0 auto;height:auto;min-height:0;padding:10px 10px 0;gap:8px;background:transparent}
     #board{width:100%;height:auto;aspect-ratio:3/2;border-radius:18px;border:1px solid rgba(125,162,220,.18);background:#09101c;box-shadow:0 22px 50px rgba(0,0,0,.34),0 0 0 1px rgba(76,129,211,.04);order:1}
@@ -191,9 +191,9 @@
     #empirebar{order:2;width:100%;height:82px;min-height:82px;gap:7px;padding:0 1px 7px;scroll-snap-type:x proximity;overflow-x:auto}
     .ecard{position:relative;scroll-snap-align:start;flex:0 0 142px;min-width:142px;height:74px;padding:9px 10px;border:1px solid rgba(143,172,221,.13);border-radius:14px;background:linear-gradient(145deg,rgba(22,31,49,.94),rgba(11,17,29,.96));box-shadow:0 8px 24px rgba(0,0,0,.2)}
     .ecard.sel{border-color:var(--cyan);background:linear-gradient(145deg,rgba(33,54,79,.98),rgba(14,24,43,.98));box-shadow:0 0 0 1px rgba(99,216,255,.18),0 8px 28px rgba(31,117,180,.2)}
-    .ecard .ename{font-size:11px;margin:0 0 7px;padding-right:30px;overflow:hidden;text-overflow:ellipsis}.ecard .dot{width:8px;height:8px;border-radius:50%;box-shadow:0 0 10px currentColor}
-    .ecard .estat{display:inline-flex;justify-content:flex-start;gap:3px;margin-right:7px;font-size:9px;line-height:1.3}.ecard .estat span{font-size:0}.ecard .estat:nth-of-type(1) span:after{content:'⚔';font-size:10px}.ecard .estat:nth-of-type(2) span:after{content:'●';font-size:8px}.ecard .estat:nth-of-type(3) span:after{content:'▦';font-size:10px}.ecard .estat:nth-of-type(4) span:after{content:'✦';font-size:10px;color:#d7b659}.ecard .estat b{font-size:10px}
-    .ecard .ebar{position:absolute;left:10px;right:10px;bottom:7px;height:3px;margin:0;background:#1d293b}
+    .ecard .ename{font-size:11px;margin:0 0 6px;padding-right:26px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ecard .dot{width:8px;height:8px;border-radius:50%;box-shadow:0 0 10px currentColor}
+    .ecard .estat{display:inline-flex;justify-content:flex-start;gap:2px;font-size:9px;line-height:1.3;min-width:0}.ecard .estat span{font-size:0}.ecard .estat:nth-of-type(1) span:after{content:'⚔';font-size:10px}.ecard .estat:nth-of-type(2) span:after{content:'●';font-size:8px}.ecard .estat:nth-of-type(3) span:after{content:'▦';font-size:10px}.ecard .estat:nth-of-type(4) span:after{content:'✦';font-size:10px;color:#d7b659}.ecard .estat b{font-size:10px}
+    .ecard .estats{display:grid;grid-template-columns:repeat(4,auto);justify-content:space-between;margin:0 0 2px}.ecard .ebar{position:absolute;left:10px;right:10px;bottom:6px;height:3px;margin:0;background:#1d293b}
     #side{position:relative;flex:1;min-height:0;width:100%;border:0;border-radius:22px 22px 0 0;background:linear-gradient(180deg,#101827,#0a101c);box-shadow:0 -14px 50px rgba(0,0,0,.38);overflow:hidden}
     #tabs{height:48px;position:relative;top:auto;padding:5px 9px;border:0;background:rgba(13,20,33,.95);gap:4px}
     #tabs button{position:relative;min-height:38px;padding:0;border:0;border-radius:11px;color:#72849d;font-size:11px;font-weight:750}
@@ -208,7 +208,7 @@
     .ev.Combat,.ev.Fall{background:linear-gradient(90deg,rgba(154,54,73,.19),rgba(20,30,47,.72))!important;color:#f1d5dc}.ev.Dawn{background:linear-gradient(90deg,rgba(159,120,45,.15),rgba(20,30,47,.72))!important}.ev.Transfer{background:linear-gradient(90deg,rgba(52,137,104,.14),rgba(20,30,47,.72))!important}
     #lb{display:none}
     #replaybar{position:absolute;z-index:25;top:62px;left:8px;right:8px;border-radius:14px}
-    #toast{bottom:18px;border-radius:13px;background:#152238;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+    #toast{bottom:18px;width:auto;max-width:86%;border-radius:999px;background:#152238;box-shadow:0 12px 40px rgba(0,0,0,.5);font-size:11px;padding:8px 16px}
   }
 
   .roster-presets{margin-top:12px;padding:11px;border:1px solid rgba(126,154,200,.14);border-radius:12px;background:rgba(8,13,22,.45)}.roster-presets .key-row{grid-template-columns:minmax(0,1fr) auto auto}.roster-presets button{white-space:nowrap}
@@ -225,19 +225,23 @@
 
   /* Spectator-first mobile UX: story, characters, timeline, observe controls. */
   #liveStory{display:none}
-  .story-kicker{font-size:9px;color:#ffb95c;font-weight:850;letter-spacing:.12em;text-transform:uppercase}.story-title{font-size:13px;font-weight:800;color:#f4f8ff;margin-top:3px}.story-detail{font-size:10px;color:#91a4bd;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .story-kicker{font-size:8px;color:#ffb95c;font-weight:850;letter-spacing:.12em;text-transform:uppercase}.story-title{font-size:12px;font-weight:800;color:#f4f8ff;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.story-detail{font-size:10px;color:#91a4bd;margin-top:1px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
   .agent-hero{padding:12px;border-radius:15px;background:linear-gradient(135deg,rgba(28,42,66,.94),rgba(13,20,34,.96));border:1px solid rgba(130,170,230,.16)}.agent-hero h2{margin:0 0 7px}.agent-stats{display:flex;gap:12px;color:#a9b8cc;font-size:11px}.agent-section{margin-top:10px;padding:11px;border-radius:13px;background:rgba(20,30,47,.72);border:1px solid rgba(130,170,230,.1)}.agent-section label{display:block;color:#7389a6;font-size:9px;font-weight:850;letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}.agent-section p{margin:0;color:#dbe6f4;line-height:1.45}.agent-action{display:flex;gap:8px;align-items:flex-start;margin:5px 0;color:#c8d4e4;font-size:11px}.agent-action b{color:#fff}.watch-btn{width:100%;margin-top:10px;background:linear-gradient(135deg,#58cfff,#8e76ff);border:0;color:#07101c;font-weight:900}
   .ev{cursor:pointer}.ev-icon{position:absolute;left:10px;top:8px;font-size:16px}.ev .t{left:auto!important;right:9px;top:9px!important}.ev-copy{display:block;padding-right:35px}.ev-day{margin:13px 2px 5px;color:#6e829e;font-size:9px;font-weight:900;letter-spacing:.13em;text-transform:uppercase}
   .observe-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.observe-toggle{display:flex;gap:8px;align-items:center;padding:10px;border-radius:12px;background:rgba(20,30,47,.75);font-size:11px}.observe-powers{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:12px}.observe-powers button{min-height:42px}.observe-note{color:#8295af;font-size:10px;line-height:1.45;margin:10px 2px}
   @media(max-width:759px){
     #boardwrap{padding-bottom:0}.pulse-card.leader{max-width:48%}
-    #liveStory{display:block;position:absolute;z-index:6;left:18px;right:18px;bottom:92px;padding:9px 11px;border:1px solid rgba(255,184,92,.22);border-radius:13px;background:linear-gradient(135deg,rgba(28,23,20,.9),rgba(10,16,27,.9));box-shadow:0 10px 30px rgba(0,0,0,.34);backdrop-filter:blur(16px);pointer-events:none}
+    #mapframe{position:relative;order:1}
+    #board{display:block}
+    #matchPulse{left:8px;right:8px;top:8px}
+    #mapActions{position:absolute;inset:0;pointer-events:none}
+    #liveStory{display:block;order:2;padding:7px 11px;border:1px solid rgba(255,184,92,.2);border-radius:12px;background:linear-gradient(135deg,rgba(28,23,20,.85),rgba(10,16,27,.85));pointer-events:none}
     #tabs button{font-size:0}#tabs button:before{display:block;font-size:16px;line-height:18px}#tabs button:after{display:block;font-size:9px;line-height:12px;margin-top:1px}
     #tabs button[data-tab="world"]:before{content:'🌍'}#tabs button[data-tab="world"]:after{content:'World'}
     #tabs button[data-tab="insp"]:before{content:'👥'}#tabs button[data-tab="insp"]:after{content:'Agents'}
     #tabs button[data-tab="events"]:before{content:'📜'}#tabs button[data-tab="events"]:after{content:'Events'}
     #tabs button[data-tab="observe"]:before{content:'👁'}#tabs button[data-tab="observe"]:after{content:'Observe'}
-    #empirebar{height:70px;min-height:70px}.ecard{height:62px}.ecard .ebar{bottom:6px}
+    #empirebar{height:74px;min-height:74px}.ecard{flex-basis:150px;min-width:150px;height:66px}.ecard .ebar{bottom:6px}
     #side{min-height:31dvh}.ev{padding-left:39px!important}
   }
 
@@ -389,7 +393,7 @@
     <button id="exitReplayBtn">Exit replay</button>
   </div>
   <div id="main">
-    <div id="boardwrap"><div id="matchPulse"><div class="pulse-card leader"><span>Leading the world</span><b id="pulseLeader">-</b></div><div class="pulse-card shift"><span>Live</span><b id="pulseEvent">Waiting for first tick</b></div></div><canvas id="board" width="960" height="640"></canvas><div id="liveStory"><div class="story-kicker">Live story</div><div class="story-title" id="storyTitle">The kingdoms are taking position</div><div class="story-detail" id="storyDetail">Press play to watch the first decisions unfold.</div></div><div id="mapActions" aria-hidden="true"></div><div id="turnViz" aria-live="polite"></div><div id="empirebar"></div></div>
+    <div id="boardwrap"><div id="mapframe"><canvas id="board" width="960" height="640"></canvas><div id="matchPulse"><div class="pulse-card leader"><span>Leading the world</span><b id="pulseLeader">-</b></div><div class="pulse-card shift"><span>Live</span><b id="pulseEvent">Waiting for first tick</b></div></div><div id="mapActions" aria-hidden="true"></div></div><div id="liveStory"><div class="story-kicker">Live story</div><div class="story-title" id="storyTitle">The kingdoms are taking position</div><div class="story-detail" id="storyDetail">Press play to watch the first decisions unfold.</div></div><div id="turnViz" aria-live="polite"></div><div id="empirebar"></div></div>
     <div id="side">
       <div id="lb"></div>
       <div id="tabs">
@@ -399,11 +403,11 @@
         <button data-tab="observe">Observe</button>
       </div>
       <div id="sidebody">
-        <div id="worldview"><div class="analysis-empty">The world is live above. Tap a kingdom on the map or in the agent strip to follow its story.</div></div>
+        <div id="worldview"></div>
         <div id="eventMode" class="hidden"><button id="highlightsBtn" class="on">Highlights</button><button id="allEventsBtn">All activity</button></div>
         <div id="events" class="hidden"></div>
         <div id="insp" class="hidden"></div>
-        <div id="observe" class="hidden"><div class="observe-grid"><label class="observe-toggle"><input type="checkbox" checked disabled> Private thoughts</label><label class="observe-toggle"><input type="checkbox" checked disabled> Private messages</label><label class="observe-toggle"><input type="checkbox" checked disabled> Hidden resources</label><label class="observe-toggle"><input type="checkbox" checked disabled> Planned actions</label></div><p class="observe-note">God mode is on. You can see what every model knows, remembers and plans. Operator powers change the experiment immediately.</p><div class="observe-powers"><button data-power="drought">☀️ Drought</button><button data-power="silence">📵 Radio silence</button><button data-power="curfew">🕊️ Curfew</button><button data-power="cache">📦 Cache drop</button></div><button id="observeAnalyze" style="width:100%;margin-top:8px">✨ Analyze the match</button></div>
+        <div id="observe" class="hidden"><div class="observe-grid"><label class="observe-toggle"><input type="checkbox" checked disabled> Private thoughts</label><label class="observe-toggle"><input type="checkbox" checked disabled> Private messages</label><label class="observe-toggle"><input type="checkbox" checked disabled> Hidden resources</label><label class="observe-toggle"><input type="checkbox" checked disabled> Planned actions</label></div><p class="observe-note">God mode is on. You can see what every model knows, remembers and plans. Operator powers change the experiment immediately.</p><div class="observe-powers"><button data-power="drought">☀️ Drought</button><button data-power="silence">📵 Radio silence</button><button data-power="curfew">🕊️ Curfew</button><button data-power="cache">📦 Cache drop</button><button data-power="mute">🔇 Mute selected</button></div><p class="observe-note">Log analysis, export and starting over live in the ••• menu above.</p></div>
         <div id="analysis" class="hidden"><div class="analysis-empty">Run a match, then tap “Analyze logs” for player tendencies, brilliant moves, blunders and strategic insights.</div></div>
       </div>
     </div>
@@ -1086,10 +1090,19 @@ function showTurnActions(w,events){
   const acts=events.filter(e=>e.type==="Act"); if(!acts.length)return;
   const viz=$("turnViz"), map=$("mapActions");
   viz.textContent=acts.map(e=>{const k=w.kingdoms[e.kingdomId],v=ACTION_VISUALS[e.act]||["•",e.act];return "Player "+(k.id+1)+" "+k.name+": "+v[1];}).join(". ");
-  map.innerHTML=acts.map(e=>{const k=w.kingdoms[e.kingdomId],a=kingdomAnchor(w,k.id),v=ACTION_VISUALS[e.act]||["•",e.act];if(!a)return "";const g=boardGeom(w),cv=$("board"),left=Math.max(6,Math.min(94,(g.ox+(a[0]+.5)*g.cell)/cv.width*100)),top=Math.max(8,Math.min(86,(g.oy+(a[1]+.5)*g.cell)/cv.height*100));return '<span class="map-action" title="'+htmlSafe(k.name+' · '+v[1])+'" style="--kc:'+k.color+';left:'+left+'%;top:'+top+'%"><span class="map-action-icon">'+v[0]+'</span><span class="map-action-who">'+(k.id+1)+'</span><span class="map-action-label">'+htmlSafe(v[1])+'</span></span>';}).join("");
+  map.innerHTML=acts.map(e=>{const k=w.kingdoms[e.kingdomId],a=kingdomAnchor(w,k.id),v=ACTION_VISUALS[e.act]||["•",e.act];if(!a)return "";const g=boardGeom(w),cv=$("board");let left=Math.max(7,Math.min(93,(g.ox+(a[0]+.5)*g.cell)/cv.width*100)),top=Math.max(9,Math.min(82,(g.oy+(a[1]+.5)*g.cell)/cv.height*100));if(top<26&&left<62)top=26;return '<span class="map-action" title="'+htmlSafe(k.name+' · '+v[1])+'" style="--kc:'+k.color+';left:'+left+'%;top:'+top+'%"><span class="map-action-icon">'+v[0]+'</span><span class="map-action-who">'+(k.id+1)+'</span><span class="map-action-label">'+htmlSafe(v[1])+'</span></span>';}).join("");
   map.getAnimations({subtree:true}).forEach(a=>{a.cancel();a.play()});
 }
-function renderAll(){ if(!world)return; renderBoard(world); renderLeaderboard(world); renderEmpires(world); renderEvents(world); renderInspector(); renderClock(world); if(world.aiAnalysis)renderAnalysis(world.aiAnalysis); }
+function renderWorldTab(w){
+  const el=$("worldview"); if(!el)return;
+  const ranked=w.kingdoms.map(k=>({k,land:cellsOf(w,k.id).length})).sort((a,b)=>b.land-a.land||b.k.army-a.k.army);
+  const alive=ranked.filter(r=>r.k.alive);
+  const notable=[...w.events].reverse().filter(e=>["Combat","Fall","Dawn","Transfer","Letter","Bulletin"].includes(e.type)).slice(0,4);
+  el.innerHTML='<div class="agent-section" style="margin-top:2px"><label>State of the world</label><p>Day '+w.day+' · '+alive.length+' of '+w.kingdoms.length+' kingdoms standing'+(ranked[0]?' · '+htmlSafe(ranked[0].k.name)+' leads with '+ranked[0].land+' land':'')+'.</p></div>'
+    +(notable.length?'<div class="agent-section"><label>Latest shifts</label>'+notable.map(e=>'<div class="agent-action"><span>'+eventIcon(e.type)+'</span><span>'+htmlSafe(evText(w,e))+'</span></div>').join('')+'</div>':'')
+    +'<div class="analysis-empty" style="padding-top:8px">Tap a kingdom on the map or in the agent strip to follow its story.</div>';
+}
+function renderAll(){ if(!world)return; renderBoard(world); renderLeaderboard(world); renderEmpires(world); renderEvents(world); renderInspector(); renderClock(world); renderWorldTab(world); if(world.aiAnalysis)renderAnalysis(world.aiAnalysis); }
 function storyFor(w,ev){
   if(!ev)return {title:"The kingdoms are taking position",detail:"Press play to watch the first decisions unfold."};
   const name=id=>id>=0&&w.kingdoms[id]?w.kingdoms[id].name:"A kingdom";
@@ -1098,7 +1111,9 @@ function storyFor(w,ev){
   if(ev.type==="Transfer")return {title:"🤝 "+name(ev.from)+" helped "+name(ev.to),detail:"They sent "+ev.amount+" food. Watch whether the favor is returned."};
   if(ev.type==="Letter")return {title:"💬 "+name(ev.from)+" contacted "+name(ev.to),detail:'"'+(ev.text||"").slice(0,90)+'"'};
   if(ev.type==="Dawn")return {title:"🌅 Day "+ev.day+" begins",detail:Object.keys(ev.starvedPop||{}).length?"Food shortages are hurting kingdoms.":"The world resets for another round of decisions."};
-  if(ev.type==="Control")return {title:"⚡ God mode changed the world",detail:(ev.operatorAction||"Operator event")+" is now active."};
+  if(ev.type==="Control"){const labels={drought:"☀️ The operator declared a drought",radio_silence:"📵 The operator cut all speech",curfew:"🕊️ The operator called a curfew",cache_drop:"📦 The operator dropped a food cache",mute:"🔇 The operator muted a kingdom"};return {title:labels[ev.operatorAction]||"⚡ The operator changed the world",detail:"God mode is shaping the experiment. Watch how the kingdoms adapt."};}
+  if(ev.type==="Bulletin")return {title:"📣 "+name(ev.kingdomId)+" speaks to everyone",detail:'"'+(ev.text||"").slice(0,140)+'"'};
+  if(ev.type==="ActRejected")return {title:"🚫 "+name(ev.kingdomId)+"'s move was rejected",detail:"Tried to "+ev.attemptedAct+" - "+ev.reason+"."};
   return {title:"👁 The world keeps moving",detail:evText(w,ev)};
 }
 function renderClock(w){
@@ -1108,7 +1123,7 @@ function renderClock(w){
   $("silencePill").style.display = w.tick<w.silenceUntil?"":"none";
   const ranked=w.kingdoms.map(k=>({k,land:cellsOf(w,k.id).length})).sort((a,b)=>b.land-a.land||b.k.army-a.k.army);
   if($("pulseLeader")&&ranked[0]) $("pulseLeader").textContent=ranked[0].k.name+" · "+ranked[0].land+" land · ⚔ "+ranked[0].k.army;
-  const shift=[...w.events].reverse().find(e=>["Combat","Fall","Dawn","Transfer","Control","Letter","Bulletin","ActRejected"].includes(e.type));
+  const shift=[...w.events].reverse().find(e=>["Combat","Fall","Dawn","Transfer","Letter","Bulletin","ActRejected"].includes(e.type)||(e.type==="Control"&&e.operatorAction!=="match_start"));
   if($("pulseEvent")) $("pulseEvent").textContent=shift?evText(w,shift):"No major shift yet";
   if($("storyTitle")){const story=storyFor(w,shift);$("storyTitle").textContent=story.title;$("storyDetail").textContent=story.detail;}
 }
@@ -1198,11 +1213,11 @@ function renderEmpires(w){
   for (const {k,land} of rows){
     html+='<div class="ecard'+(k.alive?"":" dead")+(selectedKingdom===k.id?" sel":"")+'" data-k="'+k.id+'">'
       +'<div class="ename"><span class="dot" style="background:'+k.color+'"></span>'+htmlSafe(k.name)+'</div>'
-      +'<div class="estat"><span>\u2694 Army</span><b>'+k.army+'</b></div>'
-      +'<div class="ebar"><i style="width:'+Math.round(k.army/maxArmy*100)+'%;background:'+k.color+'"></i></div>'
+      +'<div class="estats"><div class="estat"><span>\u2694 Army</span><b>'+k.army+'</b></div>'
       +'<div class="estat"><span>\u25CF Pop</span><b>'+k.pop+'</b></div>'
       +'<div class="estat"><span>\u25A6 Land</span><b>'+land+'</b></div>'
-      +'<div class="estat secret"><span>\uD83C\uDF3E Food</span><b>'+k.food+'</b></div>'
+      +'<div class="estat secret"><span>\uD83C\uDF3E Food</span><b>'+k.food+'</b></div></div>'
+      +'<div class="ebar"><i style="width:'+Math.round(k.army/maxArmy*100)+'%;background:'+k.color+'"></i></div>'
       +'</div>';
   }
   bar.innerHTML=html;
@@ -1277,7 +1292,7 @@ $("board").addEventListener("click",(e)=>{
 
 // ---------- wiring ----------
 const operatorDrawer=$("operatorDrawer");
-if(operatorDrawer) ["droughtBtn","silenceBtn","muteBtn","curfewBtn","cacheBtn","analyzeBtn","exportBtn","newBtn"].forEach(id=>operatorDrawer.appendChild($(id)));
+if(operatorDrawer){["analyzeBtn","exportBtn","newBtn"].forEach(id=>operatorDrawer.appendChild($(id)));const ab=document.querySelector("#topbar .aboutOpen");if(ab)operatorDrawer.appendChild(ab);}
 $("toolsBtn").onclick=()=>{operatorDrawer.classList.toggle("show");$("toolsBtn").textContent=operatorDrawer.classList.contains("show")?"Close":"Tools";};
 $("highlightsBtn").onclick=()=>{eventView="highlights";$("highlightsBtn").classList.add("on");$("allEventsBtn").classList.remove("on");renderEvents(world);};
 $("allEventsBtn").onclick=()=>{eventView="all";$("allEventsBtn").classList.add("on");$("highlightsBtn").classList.remove("on");renderEvents(world);};
@@ -1316,8 +1331,7 @@ $("replayFile").onchange=(e)=>{ const f=e.target.files[0]; if(!f)return;
   f.text().then(t=>{ try{ loadReplay(JSON.parse(t)); }catch(err){ $("setupMsg").textContent="Could not parse replay: "+err.message; } }); };
 $("replaySlider").oninput=(e)=>{ replayIdx=+e.target.value; applyReplayIdx(); };
 $("exitReplayBtn").onclick=()=>{ replayData=null; $("replaybar").classList.remove("show"); $("app").classList.add("hidden"); $("setup").classList.remove("hidden"); };
-document.querySelectorAll("#observe [data-power]").forEach(b=>b.onclick=()=>{const m={drought:"droughtBtn",silence:"silenceBtn",curfew:"curfewBtn",cache:"cacheBtn"};$(m[b.dataset.power]).click();});
-$("observeAnalyze").onclick=()=>$("analyzeBtn").click();
+document.querySelectorAll("#observe [data-power]").forEach(b=>b.onclick=()=>{const m={drought:"droughtBtn",silence:"silenceBtn",curfew:"curfewBtn",cache:"cacheBtn",mute:"muteBtn"};$(m[b.dataset.power]).click();});
 for (const b of document.querySelectorAll("#tabs button")) b.onclick=()=>showTab(b.dataset.tab);
 
 document.addEventListener("keydown",(e)=>{ if(e.code==="Space"&&world&&!replayData&&$("app").classList.contains("hidden")===false){ e.preventDefault(); playing?pause():play(); } });
@@ -1346,5 +1360,3 @@ DB.open().then(async ()=>{
 </script>
 </body>
 </html>
-
-
