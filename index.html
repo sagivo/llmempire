@@ -311,8 +311,17 @@ function executeAct(world,kid,action,events){
       emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"fortify",target:null,dir:null,note:action.note||""});
       break;}
     case "claim":{
-      const opts=[];
+      let opts=[];
       for (const c of cells) for (const n of neighbors4(world,c[0],c[1])) if (world.grid[n[1]][n[0]].owner===null) opts.push(n);
+      // expand toward the nearest rival: borders meet, conflict happens
+      let bestD=Infinity; const dists=opts.map(n=>{
+        let d=Infinity;
+        for (const o of world.kingdoms){ if (!o.alive||o.id===kid) continue;
+          for (const oc of cellsOf(world,o.id)){ const dd=chebyshev(world,n,oc); if(dd<d)d=dd; } }
+        return d;
+      });
+      const minD=Math.min(...dists);
+      opts=opts.filter((n,i)=>dists[i]<=minD+1);
       const c=pick(opts); world.grid[c[1]][c[0]].owner=kid; k.stamina-=1;
       emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"claim",target:null,dir:null,note:action.note||("claim "+c)});
       break;}
@@ -501,31 +510,44 @@ function mockPlan(world,k){
 }
 function mockPhaseB(world,k){
   const legal=legalActions(world,k);
+  const cfg=world.cfg, cells=cellsOf(world,k.id), land=cells.length;
   const pickT=(pred)=>{ const adj=adjacentKingdoms(world,k.id).filter(pred); return adj.length?adj[Math.floor(world.rng()*adj.length)]:null; };
-  // 1. survival
+  const richest=(pred)=>{ const adj=adjacentKingdoms(world,k.id).filter(pred); adj.sort((a,b)=>(world.kingdoms[b].food-world.kingdoms[a].food)||(world.kingdoms[a].army-world.kingdoms[b].army)); return adj.length?adj[0]:null; };
+  const hasEmpty=cells.some(c=>world.grid[c[1]][c[0]].crop===0);
+  const aggressive=(k.goal==="Raider"||k.goal==="Warlord"||k.goal==="Schemer");
+  const target=Math.max(8,2*k.pop+2);
+  // 1. emergency: upkeep at dawn exceeds stores
   if (k.food<k.pop){
+    if (legal.includes("raid")&&k.army>=2){ const t=richest(()=>true)||pickT(()=>true); return {act:"raid",target:t,dir:null,note:"raid for food"}; }
     if (legal.includes("harvest")) return {act:"harvest",target:null,dir:null,note:"food below upkeep"};
-    if (legal.includes("plant")) return {act:"plant",target:null,dir:null,note:"seed future food"};
-    if (legal.includes("raid")&&(k.goal==="Raider"||k.goal==="Warlord")) return {act:"raid",target:pickT(()=>true),dir:null,note:"desperate raid"};
-    if (legal.includes("eat")&&k.stamina<2) return {act:"eat",target:null,dir:null,note:"stamina low"};
-    if (legal.includes("claim")) return {act:"claim",target:null,dir:null,note:"land for farms"};
+    if (legal.includes("claim")) return {act:"claim",target:null,dir:null,note:"land or starve"};
     return {act:"rest",target:null,dir:null,note:"survive"};
   }
-  // 2. archetype aggression
-  if ((k.goal==="Raider"||k.goal==="Warlord")&&legal.includes("raid")&&k.army>=2&&world.rng()<0.6){
-    const t=pickT(o=>world.kingdoms[o].army<=k.army)||pickT(()=>true);
-    return {act:"raid",target:t,dir:null,note:k.goal+" strikes"};
+  // 2. military archetypes: train, march, raid - loot is the food economy
+  if (aggressive){
+    if (legal.includes("raid")&&k.army>=2){ const t=richest(o=>world.kingdoms[o].army<=k.army)||richest(()=>true)||pickT(()=>true); return {act:"raid",target:t,dir:null,note:k.goal+" strikes"}; }
+    if (legal.includes("train")&&k.food>=cfg.trainCostFood+1&&world.rng()<0.7) return {act:"train",target:null,dir:null,note:"raise the host"};
+    if (legal.includes("claim")) return {act:"claim",target:null,dir:null,note:"march on rivals"};
+    if (legal.includes("plant")&&hasEmpty&&k.food>2*k.pop+2) return {act:"plant",target:null,dir:null,note:"work conquered fields"};
+    if (legal.includes("harvest")) return {act:"harvest",target:null,dir:null,note:"loot the fields"};
+    if (legal.includes("eat")&&k.stamina<2&&k.food>1) return {act:"eat",target:null,dir:null,note:"recover"};
+    if (legal.includes("rest")) return {act:"rest",target:null,dir:null,note:"sharpen blades"};
   }
-  // 3. economy
-  if (legal.includes("harvest")) return {act:"harvest",target:null,dir:null,note:"cash in crops"};
-  if (k.army<Math.min(world.cfg.armyCap,k.pop)&&legal.includes("train")&&world.rng()<0.5) return {act:"train",target:null,dir:null,note:"build army"};
-  if (legal.includes("plant")&&world.rng()<0.6) return {act:"plant",target:null,dir:null,note:"plant"};
-  if (cellsOf(world,k.id).length<8&&legal.includes("claim")&&world.rng()<0.7) return {act:"claim",target:null,dir:null,note:"expand"};
-  if (k.goal==="Steward"&&legal.includes("share")&&world.rng()<0.3){ const t=pickT(()=>true); return {act:"share",target:t,dir:null,note:"goodwill grain"}; }
+  // 3. agrarian archetypes: expand, plant, harvest
+  if (legal.includes("claim")&&land<target) return {act:"claim",target:null,dir:null,note:"expand"};
+  if (legal.includes("plant")&&hasEmpty&&k.food>k.pop+cfg.plantCostFood) return {act:"plant",target:null,dir:null,note:"seed future food"};
+  if (legal.includes("harvest")&&(k.food<3*k.pop||k.stamina>=cfg.staminaCap)) return {act:"harvest",target:null,dir:null,note:"cash in crops"};
+  if (legal.includes("eat")&&k.stamina<2&&k.food>k.pop+2) return {act:"eat",target:null,dir:null,note:"recover stamina"};
+  if (legal.includes("train")&&k.food>k.pop+4&&world.rng()<0.5) return {act:"train",target:null,dir:null,note:"militia"};
+  if (k.goal==="Steward"&&legal.includes("share")&&k.food>2*k.pop+2&&world.rng()<0.4){
+    const t=pickT(o=>world.kingdoms[o].food<world.kingdoms[o].pop)||pickT(()=>true);
+    return {act:"share",target:t,dir:null,note:"goodwill grain"};
+  }
   if (k.goal==="Merchant"&&legal.includes("trade_offer")&&world.rng()<0.3){ const t=pickT(()=>true); return {act:"trade_offer",target:t,dir:null,note:"open trade"}; }
   if (legal.includes("honor")&&world.rng()<0.5) return {act:"honor",target:null,dir:null,note:"honor trade"};
-  if (legal.includes("fortify")&&world.rng()<0.4) return {act:"fortify",target:null,dir:null,note:"fortify"};
-  if (legal.includes("eat")&&k.stamina<2) return {act:"eat",target:null,dir:null,note:"recover"};
+  if (legal.includes("fortify")&&adjacentKingdoms(world,k.id).length&&world.rng()<0.4) return {act:"fortify",target:null,dir:null,note:"fortify border"};
+  if (legal.includes("harvest")) return {act:"harvest",target:null,dir:null,note:"cash in crops"};
+  if (legal.includes("plant")&&hasEmpty&&k.food>1) return {act:"plant",target:null,dir:null,note:"plant"};
   return {act:"rest",target:null,dir:null,note:"consolidate"};
 }
 
