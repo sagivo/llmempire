@@ -212,14 +212,16 @@
   }
 
   .roster-presets{margin-top:12px;padding:11px;border:1px solid rgba(126,154,200,.14);border-radius:12px;background:rgba(8,13,22,.45)}.roster-presets .key-row{grid-template-columns:minmax(0,1fr) auto auto}.roster-presets button{white-space:nowrap}
-  /* Turn action theater: each kingdom's choice stays legible even at 25x. */
-  #turnViz{position:absolute;z-index:7;left:18px;right:18px;bottom:98px;pointer-events:none;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
-  .turn-action{--kc:#63d8ff;display:flex;align-items:center;min-width:0;gap:6px;padding:7px 8px;border:1px solid color-mix(in srgb,var(--kc) 38%,transparent);border-radius:11px;background:rgba(6,11,19,.86);box-shadow:0 7px 22px rgba(0,0,0,.32),inset 3px 0 var(--kc);backdrop-filter:blur(12px);animation:actionIn .34s cubic-bezier(.2,.8,.2,1) both}
-  .turn-action:nth-child(2){animation-delay:.04s}.turn-action:nth-child(3){animation-delay:.08s}.turn-action:nth-child(4){animation-delay:.12s}
-  .turn-action .aicon{font-size:16px;filter:drop-shadow(0 0 8px var(--kc));animation:actionPop .6s ease both}.turn-action .awho{min-width:0}.turn-action b,.turn-action small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.turn-action b{font-size:9px;color:#eef6ff}.turn-action small{font-size:8px;color:#9aabc2;text-transform:uppercase;letter-spacing:.06em;margin-top:1px}
-  .map-action{position:absolute;z-index:6;width:34px;height:34px;margin:-17px 0 0 -17px;display:grid;place-items:center;border:1px solid var(--kc);border-radius:50%;background:rgba(7,12,21,.9);font-size:17px;box-shadow:0 0 0 0 color-mix(in srgb,var(--kc) 45%,transparent),0 0 22px color-mix(in srgb,var(--kc) 65%,transparent);animation:mapAction 1s ease-out both;pointer-events:none}
-  @keyframes actionIn{from{opacity:0;transform:translateY(9px) scale(.96)}to{opacity:1;transform:none}}@keyframes actionPop{0%{transform:scale(.4) rotate(-16deg)}55%{transform:scale(1.24) rotate(5deg)}100%{transform:none}}@keyframes mapAction{0%{opacity:0;transform:scale(.35)}25%{opacity:1;box-shadow:0 0 0 10px color-mix(in srgb,var(--kc) 20%,transparent),0 0 24px var(--kc)}100%{opacity:.88;transform:scale(1);box-shadow:0 0 0 22px transparent,0 0 12px color-mix(in srgb,var(--kc) 45%,transparent)}}
-  @media(min-width:760px){#turnViz{left:22px;right:22px;bottom:18px;max-width:720px;margin:auto}.turn-action b{font-size:11px}.turn-action small{font-size:9px}}
+  /* Turn actions live on the map: one light icon per player, no card rail. */
+  #turnViz{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  .map-action{--kc:#63d8ff;position:absolute;z-index:8;width:30px;height:30px;margin:-15px 0 0 -15px;display:grid;place-items:center;pointer-events:none;filter:drop-shadow(0 2px 4px #02050a) drop-shadow(0 0 7px color-mix(in srgb,var(--kc) 75%,transparent));animation:mapAction .9s cubic-bezier(.18,.8,.28,1) both}
+  .map-action::before{content:"";position:absolute;inset:2px;border:1px solid var(--kc);border-radius:50%;animation:actionRing .9s ease-out both}
+  .map-action .map-action-icon{position:relative;font-size:20px;line-height:1;animation:actionPop .55s cubic-bezier(.2,.9,.25,1.25) both}
+  .map-action .map-action-who{position:absolute;right:-3px;top:-3px;min-width:14px;height:14px;padding:0 3px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.75);border-radius:9px;background:var(--kc);color:#07101d;font:900 8px/1 system-ui;box-shadow:0 1px 4px #000}
+  .map-action .map-action-label{position:absolute;top:29px;left:50%;transform:translateX(-50%);color:#f4f8ff;font:800 8px/1 system-ui;letter-spacing:.03em;text-transform:uppercase;white-space:nowrap;text-shadow:0 1px 3px #000,0 0 5px #000}
+  @keyframes actionPop{0%{transform:scale(.2) rotate(-18deg)}58%{transform:scale(1.28) rotate(5deg)}100%{transform:none}}
+  @keyframes actionRing{0%{opacity:0;transform:scale(.35)}22%{opacity:1}100%{opacity:0;transform:scale(2.15)}}
+  @keyframes mapAction{0%{opacity:0;transform:translateY(5px) scale(.7)}22%,78%{opacity:1;transform:none}100%{opacity:.94;transform:none}}
 
 </style>
 </head>
@@ -1062,9 +1064,9 @@ const ACTION_VISUALS={harvest:["🌾","Harvest"],plant:["🌱","Plant"],eat:["�
 function showTurnActions(w,events){
   const acts=events.filter(e=>e.type==="Act"); if(!acts.length)return;
   const viz=$("turnViz"), map=$("mapActions");
-  viz.innerHTML=acts.map(e=>{const k=w.kingdoms[e.kingdomId],v=ACTION_VISUALS[e.act]||["•",e.act];return '<div class="turn-action" style="--kc:'+k.color+'"><span class="aicon">'+v[0]+'</span><span class="awho"><b>#'+(k.id+1)+' '+htmlSafe(k.name)+'</b><small>'+htmlSafe(v[1])+'</small></span></div>';}).join("");
-  map.innerHTML=acts.map(e=>{const k=w.kingdoms[e.kingdomId],a=kingdomAnchor(w,k.id),v=ACTION_VISUALS[e.act]||["•",e.act];if(!a)return "";const g=boardGeom(w),cv=$("board"),left=(g.ox+(a[0]+.5)*g.cell)/cv.width*100,top=(g.oy+(a[1]+.5)*g.cell)/cv.height*100;return '<span class="map-action" title="'+htmlSafe(k.name+' · '+v[1])+'" style="--kc:'+k.color+';left:'+left+'%;top:'+top+'%">'+v[0]+'</span>';}).join("");
-  viz.getAnimations().forEach(a=>{a.cancel();a.play()}); map.getAnimations({subtree:true}).forEach(a=>{a.cancel();a.play()});
+  viz.textContent=acts.map(e=>{const k=w.kingdoms[e.kingdomId],v=ACTION_VISUALS[e.act]||["•",e.act];return "Player "+(k.id+1)+" "+k.name+": "+v[1];}).join(". ");
+  map.innerHTML=acts.map(e=>{const k=w.kingdoms[e.kingdomId],a=kingdomAnchor(w,k.id),v=ACTION_VISUALS[e.act]||["•",e.act];if(!a)return "";const g=boardGeom(w),cv=$("board"),left=(g.ox+(a[0]+.5)*g.cell)/cv.width*100,top=(g.oy+(a[1]+.5)*g.cell)/cv.height*100;return '<span class="map-action" title="'+htmlSafe(k.name+' · '+v[1])+'" style="--kc:'+k.color+';left:'+left+'%;top:'+top+'%"><span class="map-action-icon">'+v[0]+'</span><span class="map-action-who">'+(k.id+1)+'</span><span class="map-action-label">'+htmlSafe(v[1])+'</span></span>';}).join("");
+  map.getAnimations({subtree:true}).forEach(a=>{a.cancel();a.play()});
 }
 function renderAll(){ if(!world)return; renderBoard(world); renderLeaderboard(world); renderEmpires(world); renderEvents(world); renderInspector(); renderClock(world); if(world.aiAnalysis)renderAnalysis(world.aiAnalysis); }
 function renderClock(w){
@@ -1311,4 +1313,5 @@ DB.open().then(async ()=>{
 </script>
 </body>
 </html>
+
 
