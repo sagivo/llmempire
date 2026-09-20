@@ -147,6 +147,22 @@
   #setup{max-width:none;margin:0;background:transparent;min-height:100dvh;padding:14px 14px 100px}.settings-shell{max-width:980px;margin:auto}.settings-head{display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:9;padding:8px 0 12px;background:rgba(7,10,16,.92);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}.settings-head h1{font-size:21px}.settings-head .spacer{flex:1}.settings-intro{padding:22px 2px 4px}.settings-intro h2{font-size:30px;text-transform:none;letter-spacing:-.04em;color:#fff;margin:0 0 8px}.settings-intro p{color:#8f9eb3;max-width:620px}.setup-card,#setup .cols>div{background:rgba(15,21,33,.78);border:1px solid rgba(126,154,200,.14);border-radius:14px;padding:14px;margin-top:12px}.setup-card h2,#setup .cols h2{color:#b7c5d8}.settings-actions{position:fixed;left:0;right:0;bottom:0;z-index:12;display:flex;gap:8px;align-items:center;padding:10px 14px calc(10px + env(safe-area-inset-bottom));background:rgba(7,10,16,.92);border-top:1px solid var(--line);backdrop-filter:blur(14px)}.settings-actions .primary{flex:1}.settings-actions .note{display:none}
   @media(min-width:760px){.hero{grid-template-columns:minmax(0,1.5fr) minmax(300px,.75fr);padding:70px 0 62px}.feature-grid{grid-template-columns:repeat(4,1fr)}#setup{padding:22px 24px 110px}#setup .cols{gap:12px}.settings-actions{position:sticky;max-width:980px;margin:18px auto 0;border:1px solid var(--line);border-radius:14px;padding:10px}.settings-actions .primary{flex:0 0 auto}.settings-actions .note{display:inline}.world-card{min-height:330px}}
 
+  /* Playtest pass: readable mobile match controls and a signal-first event feed. */
+  #toolsBtn{font-weight:750}
+  #operatorDrawer{display:none;padding:8px;background:rgba(11,15,24,.98);border-bottom:1px solid var(--line);gap:7px;overflow-x:auto;scrollbar-width:none}
+  #operatorDrawer.show{display:flex} #operatorDrawer::-webkit-scrollbar{display:none} #operatorDrawer button{flex:0 0 auto}
+  #matchPulse{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px;background:#0b101a;border-bottom:1px solid var(--line)}
+  .pulse-card{min-width:0;background:#121a28;border:1px solid #22314a;border-radius:10px;padding:8px 10px}.pulse-card span{display:block;color:#7f90a9;text-transform:uppercase;letter-spacing:.08em;font-size:9px}.pulse-card b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px;margin-top:2px}
+  #eventMode{display:flex;gap:6px;padding:2px 0 7px;position:sticky;top:44px;background:var(--panel2);z-index:3}#eventMode button{min-height:34px;padding:4px 10px;font-size:12px}#eventMode button.on{background:#263853;border-color:#4da3ff}
+  .ev.important{background:rgba(77,163,255,.055);border-radius:0 6px 6px 0}.empty-feed{color:var(--dim);padding:20px 6px;text-align:center}
+  @media(max-width:759px){
+    #topbar{display:grid;grid-template-columns:auto auto auto 1fr auto;overflow:visible;padding:7px 8px}#topbar .spacer,#topbar>button:not(#playBtn):not(#stepBtn):not(#toolsBtn),#topbar>#analyzeBtn,#topbar>#exportBtn,#topbar>.aboutOpen,#topbar>#newBtn{display:none}#topbar select{width:66px!important}#topbar .clock{font-size:11px;align-self:center;white-space:nowrap}#topbar .pill{display:none!important}#toolsBtn{display:block!important}
+    #boardwrap{flex-basis:auto;min-height:0;padding:8px 8px 0}#board{height:auto;aspect-ratio:3/2}.empirebar{padding-bottom:8px}
+    #lb{display:none}#side{min-height:42dvh}#sidebody{padding-top:6px}.ev{font-size:12px;padding:6px 7px;margin:4px 0}
+    .settings-intro{padding-top:14px}.settings-intro h2{font-size:25px}#setup .cols>div{padding:10px 12px}#setup .cols h2{cursor:pointer;display:flex;justify-content:space-between;align-items:center}#setup .cols h2:after{content:"tap to expand";font-size:9px;font-weight:500;color:#6f819c;text-transform:none;letter-spacing:0}#setup .cols>div.collapsed label,#setup .cols>div.collapsed input,#setup .cols>div.collapsed select{display:none}
+  }
+  @media(min-width:760px){#toolsBtn{display:none}#operatorDrawer{display:none!important}#matchPulse{display:none}}
+
 </style>
 </head>
 <body>
@@ -269,6 +285,7 @@
     <span class="pill" id="curfewPill" style="display:none">curfew</span>
     <span class="pill" id="silencePill" style="display:none">radio silence</span>
     <span class="spacer"></span>
+    <button id="toolsBtn">Tools</button>
     <button id="droughtBtn" title="Click, then drag a rectangle on the map">Drought</button>
     <button id="silenceBtn" title="Block all speech for 8 ticks">Radio silence 8t</button>
     <button id="muteBtn" title="Select a kingdom in the leaderboard first">Mute selected</button>
@@ -279,6 +296,8 @@
     <button class="aboutOpen">About</button>
     <button id="newBtn">New match</button>
   </div>
+  <div id="operatorDrawer" aria-label="Operator tools"></div>
+  <div id="matchPulse"><div class="pulse-card"><span>Leader</span><b id="pulseLeader">-</b></div><div class="pulse-card"><span>Latest shift</span><b id="pulseEvent">Waiting for first tick</b></div></div>
   <div id="replaybar">
     <span>REPLAY</span>
     <input type="range" id="replaySlider" min="0" max="0" value="0" style="flex:1">
@@ -295,6 +314,7 @@
         <button data-tab="analysis">AI analysis</button>
       </div>
       <div id="sidebody">
+        <div id="eventMode"><button id="highlightsBtn" class="on">Highlights</button><button id="allEventsBtn">All activity</button></div>
         <div id="events"></div>
         <div id="insp" class="hidden"></div>
         <div id="analysis" class="hidden"><div class="analysis-empty">Run a match, then tap “Analyze logs” for player tendencies, brilliant moves, blunders and strategic insights.</div></div>
@@ -320,8 +340,8 @@ const CONFIG_SCHEMA = [
     ["dominionPct",40,25,80,"% of map cells for dominion victory"]
   ]],
   ["caps", [
-    ["startFood",6,2,20,"Starting food"],["startPop",2,1,8,"Starting population"],
-    ["startArmy",0,0,4,"Starting army"],["startStamina",2,0,6,"Starting stamina"],
+    ["startFood",10,2,20,"Starting food"],["startPop",2,1,8,"Starting population"],
+    ["startArmy",1,0,4,"Starting army"],["startStamina",4,0,6,"Starting stamina"],
     ["foodCap",40,10,99,"Food storage cap"],["popBaseCap",2,1,8,"Pop capacity of capital"],
     ["popPerCell",2,1,4,"Pop capacity per cell"],["armyCap",12,4,30,"Global army ceiling"],
     ["staminaCap",6,3,12,"Stamina cap"],["shieldCap",2,0,4,"Max shield per cell"],
@@ -654,13 +674,13 @@ function mockPhaseB(world,k){
   const richest=(pred)=>{ const adj=adjacentKingdoms(world,k.id).filter(pred); adj.sort((a,b)=>(world.kingdoms[b].food-world.kingdoms[a].food)||(world.kingdoms[a].army-world.kingdoms[b].army)); return adj.length?adj[0]:null; };
   const hasEmpty=cells.some(c=>world.grid[c[1]][c[0]].crop===0);
   const aggressive=(k.goal==="Raider"||k.goal==="Warlord"||k.goal==="Schemer");
-  const target=Math.max(8,2*k.pop+2);
+  const target=Math.max(4,Math.min(7,k.pop+3));
   // 1. emergency: upkeep at dawn exceeds stores
   if (k.food<k.pop){
-    if (legal.includes("raid")&&k.army>=2){ const t=richest(()=>true)||pickT(()=>true); return {act:"raid",target:t,dir:null,note:"raid for food"}; }
-    if (legal.includes("harvest")) return {act:"harvest",target:null,dir:null,note:"food below upkeep"};
-    if (legal.includes("claim")) return {act:"claim",target:null,dir:null,note:"land or starve"};
-    return {act:"rest",target:null,dir:null,note:"survive"};
+    if (legal.includes("harvest")) return {act:"harvest",target:null,dir:null,note:"emergency harvest"};
+    if (legal.includes("raid")&&k.army>=1){ const t=richest(()=>true)||pickT(()=>true); return {act:"raid",target:t,dir:null,note:"raid for food"}; }
+    if (legal.includes("plant")&&hasEmpty) return {act:"plant",target:null,dir:null,note:"emergency planting"};
+    return {act:"rest",target:null,dir:null,note:"save stamina"};
   }
   // 2. military archetypes: train, march, raid - loot is the food economy
   if (aggressive){
@@ -850,7 +870,7 @@ function logUsage(world,k,model,u){
 "use strict";
 // ---------- UI state ----------
 let world=null, playing=false, timer=null, selectedKingdom=null, pendingInject=null;
-let replayData=null, replayIdx=0, renderedEventCount=0;
+let replayData=null, replayIdx=0, renderedEventCount=0, eventView="highlights";
 const $=(id)=>document.getElementById(id);
 let aboutOrigin="home";
 function showScreen(id){["home","setup","app","about"].forEach(x=>$(x).classList.toggle("hidden",x!==id));window.scrollTo(0,0);}
@@ -967,6 +987,10 @@ function renderClock(w){
   $("alivePill").textContent=w.kingdoms.filter(k=>k.alive).length+" alive";
   $("curfewPill").style.display = w.tick<w.curfewUntil?"":"none";
   $("silencePill").style.display = w.tick<w.silenceUntil?"":"none";
+  const ranked=w.kingdoms.map(k=>({k,land:cellsOf(w,k.id).length})).sort((a,b)=>b.land-a.land||b.k.army-a.k.army);
+  if($("pulseLeader")&&ranked[0]) $("pulseLeader").textContent=ranked[0].k.name+" · "+ranked[0].land+" land · ⚔ "+ranked[0].k.army;
+  const shift=[...w.events].reverse().find(e=>["Combat","Fall","Dawn","Transfer","Control"].includes(e.type));
+  if($("pulseEvent")) $("pulseEvent").textContent=shift?evText(w,shift):"No major shift yet";
 }
 function boardGeom(w){
   const cv=$("board"), W=w.cfg.width, H=w.cfg.height;
@@ -997,15 +1021,16 @@ function renderBoard(w, snap){
     }
   }
   const dispCell = cell * (cv.clientWidth ? cv.clientWidth / cv.width : 1);
-  if (!snap && dispCell >= 22){
+  if (!snap && dispCell >= 10){
     ctx.textAlign="center"; ctx.textBaseline="middle";
     for (const k of w.kingdoms){
       if (!k.alive) continue;
       const a=kingdomAnchor(w,k.id); if(!a) continue;
       const cx=ox+a[0]*cell+cell/2, cy=oy+a[1]*cell+cell/2;
-      const label="\u2694"+k.army;
-      ctx.font="bold "+Math.max(10,Math.floor(cell*0.32))+"px -apple-system,Segoe UI,Roboto,sans-serif";
-      const tw=ctx.measureText(label).width+12, th=Math.max(15,Math.floor(cell*0.46));
+      const strengthAsset=k.army<=0?"○":k.army===1?"♟":k.army<=3?"⚔":k.army<=6?"♜":"♛";
+      const label=dispCell<22?strengthAsset:(strengthAsset+" "+k.army);
+      ctx.font="bold "+Math.max(dispCell<22?8:10,Math.floor(cell*(dispCell<22?0.44:0.32)))+"px -apple-system,Segoe UI,Roboto,sans-serif";
+      const tw=ctx.measureText(label).width+(dispCell<22?7:12), th=Math.max(dispCell<22?12:15,Math.floor(cell*(dispCell<22?0.7:0.46)));
       ctx.beginPath();
       ctx.roundRect(cx-tw/2, cy-th/2, tw, th, th/2);
       ctx.fillStyle="rgba(6,10,16,.88)"; ctx.fill();
@@ -1065,15 +1090,10 @@ function renderEmpires(w){
 }
 function renderEvents(w){
   const box=$("events");
-  for (let i=renderedEventCount;i<w.events.length;i++){
-    const ev=w.events[i], d=document.createElement("div");
-    d.className="ev "+ev.type;
-    const t=document.createElement("span"); t.className="t"; t.textContent="t"+ev.tick;
-    d.appendChild(t); d.appendChild(document.createTextNode(evText(w,ev)));
-    box.appendChild(d);
-  }
+  const important=new Set(["Combat","Fall","Dawn","Transfer","Control","ThinkTimeout"]);
+  const source=(eventView==="highlights"?w.events.filter(e=>important.has(e.type)):w.events).slice(-120);
+  box.innerHTML=source.length?source.map(ev=>'<div class="ev '+ev.type+(important.has(ev.type)?' important':'')+'"><span class="t">t'+ev.tick+'</span>'+htmlSafe(evText(w,ev))+'</div>').join(""):'<div class="empty-feed">No major events yet. Let the match run or use an operator tool.</div>';
   renderedEventCount=w.events.length;
-  box.parentElement.scrollTop=box.parentElement.scrollHeight;
 }
 function renderInspector(){
   const el=$("insp");
@@ -1138,6 +1158,12 @@ $("board").addEventListener("click",(e)=>{
 });
 
 // ---------- wiring ----------
+const operatorDrawer=$("operatorDrawer");
+if(operatorDrawer) ["droughtBtn","silenceBtn","muteBtn","curfewBtn","cacheBtn","analyzeBtn","exportBtn","newBtn"].forEach(id=>operatorDrawer.appendChild($(id)));
+$("toolsBtn").onclick=()=>{operatorDrawer.classList.toggle("show");$("toolsBtn").textContent=operatorDrawer.classList.contains("show")?"Close":"Tools";};
+$("highlightsBtn").onclick=()=>{eventView="highlights";$("highlightsBtn").classList.add("on");$("allEventsBtn").classList.remove("on");renderEvents(world);};
+$("allEventsBtn").onclick=()=>{eventView="all";$("allEventsBtn").classList.add("on");$("highlightsBtn").classList.remove("on");renderEvents(world);};
+for(const group of document.querySelectorAll("#setup .cols>div")){const h=group.querySelector("h2");if(h)h.onclick=()=>{if(matchMedia("(max-width:759px)").matches)group.classList.toggle("collapsed");};}
 $("homeSettings").onclick=()=>showScreen("setup");
 $("configureMatch").onclick=()=>showScreen("setup");
 $("settingsBack").onclick=()=>showScreen("home");
