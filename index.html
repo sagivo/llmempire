@@ -1004,7 +1004,7 @@ $("silenceBtn").onclick=()=>{ injectSilence(world,8); toast("Radio silence for 8
 $("curfewBtn").onclick=()=>{ injectCurfew(world,16); toast("Curfew: raids disabled for 16 ticks"); renderAll(); };
 $("muteBtn").onclick=()=>{ if(selectedKingdom===null){toast("Select a kingdom first (leaderboard)");return;} injectMute(world,selectedKingdom,16); toast(world.kingdoms[selectedKingdom].name+" muted for 16 ticks"); renderAll(); };
 $("toggleKey").onclick=()=>{ const key=$("apiKey"); const reveal=key.type==="password"; key.type=reveal?"text":"password"; $("toggleKey").textContent=reveal?"Hide":"Show"; };
-$("cfg_playerCount").addEventListener("change",buildAgentOverrides);
+document.addEventListener("change",e=>{ if(e.target.id==="cfg_playerCount") buildAgentOverrides(); });
 $("modelA").addEventListener("change",()=>{ if($("modelA").value.trim()==="mock") $("setupMsg").textContent="Mock mode runs locally with no key."; else $("setupMsg").textContent=$("apiKey").value.trim()?"Model ready.":"Add an API key to use this model."; });
 $("startBtn").onclick=()=>{ const cfg=readConfig(); newMatch(cfg); };
 $("loadReplayBtn").onclick=()=>$("replayFile").click();
