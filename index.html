@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLM Empire - Commons War Lab</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#121722; --panel2:#0e1420; --line:#1f2a3d; --txt:#dbe4f0;
+    --dim:#7d8aa0; --acc:#4da3ff; --good:#4caf7d; --bad:#e05d5d; --warn:#e0a94f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:13px/1.45 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  h1{font-size:18px;margin:0}
+  h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:14px 0 6px}
+  button{background:#1b2536;color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:12px}
+  button:hover{border-color:var(--acc)}
+  button.primary{background:var(--acc);color:#06121f;border-color:var(--acc);font-weight:600}
+  button.danger{border-color:var(--bad);color:var(--bad)}
+  button:disabled{opacity:.4;cursor:default}
+  select,input[type=text],input[type=number],input[type=password]{background:#0d1320;color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:5px 7px;font-size:12px;width:100%}
+  label{color:var(--dim);font-size:11px;display:block;margin:6px 0 2px}
+  .hidden{display:none !important}
+
+  /* Setup screen */
+  #setup{max-width:980px;margin:24px auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:22px 26px}
+  #setup .cols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 24px}
+  #setup .note{color:var(--dim);font-size:12px;margin-top:4px}
+  #setup .row{display:flex;gap:10px;align-items:end;margin-top:16px}
+
+  /* Main layout */
+  #app{display:flex;flex-direction:column;height:100vh}
+  #topbar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+  #topbar .clock{font-variant-numeric:tabular-nums;color:var(--dim);min-width:150px}
+  #topbar .spacer{flex:1}
+  #main{display:flex;flex:1;min-height:0}
+  #boardwrap{flex:1;display:flex;align-items:center;justify-content:center;padding:10px;min-width:0}
+  canvas{background:#0a0f18;border:1px solid var(--line);border-radius:8px;max-width:100%;max-height:100%}
+  #side{width:360px;min-width:300px;border-left:1px solid var(--line);background:var(--panel2);display:flex;flex-direction:column}
+  #lb{max-height:220px;overflow:auto;padding:8px 10px;border-bottom:1px solid var(--line)}
+  #lb table{width:100%;border-collapse:collapse;font-size:12px}
+  #lb td,#lb th{padding:2px 4px;text-align:right;font-variant-numeric:tabular-nums}
+  #lb td:first-child,#lb th:first-child{text-align:left}
+  #lb tr.dead{opacity:.35;text-decoration:line-through}
+  #lb tr.sel td{background:#1b2940}
+  #lb tbody tr{cursor:pointer}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+  #tabs{display:flex;border-bottom:1px solid var(--line)}
+  #tabs button{flex:1;border:none;border-radius:0;background:transparent;padding:8px;color:var(--dim)}
+  #tabs button.on{color:var(--txt);border-bottom:2px solid var(--acc)}
+  #sidebody{flex:1;overflow:auto;padding:8px 10px}
+  .ev{padding:4px 6px;border-left:2px solid var(--line);margin:4px 0;font-size:12px;white-space:pre-wrap;word-break:break-word}
+  .ev .t{color:var(--dim);font-size:10px;margin-right:6px}
+  .ev.Bulletin{border-color:var(--acc)}
+  .ev.Letter{border-color:#b07de0}
+  .ev.Combat,.ev.Fall{border-color:var(--bad)}
+  .ev.Dawn{border-color:var(--warn)}
+  .ev.Transfer{border-color:var(--good)}
+  .ev.Control{border-color:#e0d24f}
+  #insp .kv{display:grid;grid-template-columns:110px 1fr;gap:2px 8px;font-size:12px;margin:6px 0}
+  #insp .kv div:nth-child(odd){color:var(--dim)}
+  #insp .secret{background:#241a2e;border:1px solid #4a3560;border-radius:6px;padding:6px 8px;margin:6px 0}
+  #insp .secret b{color:#d9b8ff}
+  #insp .speech{background:#0f1a2b;border:1px solid #23405e;border-radius:6px;padding:6px 8px;margin:6px 0}
+  .pill{display:inline-block;background:#1b2536;border:1px solid var(--line);border-radius:10px;padding:1px 8px;font-size:10px;margin-left:6px;color:var(--dim)}
+  #replaybar{display:none;align-items:center;gap:8px;padding:6px 12px;background:#171226;border-bottom:1px solid #332550}
+  #replaybar.show{display:flex}
+  #toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#1b2536;border:1px solid var(--acc);border-radius:8px;padding:8px 14px;display:none;z-index:50}
+</style>
+</head>
+<body>
+
+<!-- ============ SETUP SCREEN ============ -->
+<div id="setup">
+  <h1>LLM Empire <span class="pill">Commons: a multi-agent war lab</span></h1>
+  <p class="note">Kingdoms compete for land, food and power on a toroidal grid. Speech is cheap talk: it moves no resources. Secrets (food, stamina, plans) stay hidden from rivals but visible to you, the operator. Default roster is the deterministic mock engine - no API key needed. Add an OpenAI-compatible endpoint (e.g. Vercel AI Gateway) to let real models talk and act.</p>
+  <div class="cols">
+    <div id="cfg-world"><h2>World setup</h2></div>
+    <div id="cfg-caps"><h2>Capacities</h2></div>
+    <div id="cfg-costs"><h2>Action costs &amp; comms</h2></div>
+  </div>
+  <h2>Roster</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 24px">
+    <div>
+      <label>Roster preset</label>
+      <select id="rosterMode">
+        <option value="mock">mock - deterministic local policy (no network)</option>
+        <option value="uniform">uniform - every kingdom runs one model</option>
+        <option value="mixed">mixed - models and archetypes per kingdom</option>
+        <option value="mirror">mirror - even ids Model A, odd ids Model B</option>
+      </select>
+      <label>Model A (uniform / mirror even / mixed pool)</label>
+      <input type="text" id="modelA" value="openai/gpt-5-mini">
+      <label>Model B (mirror odd / mixed pool)</label>
+      <input type="text" id="modelB" value="anthropic/claude-4.5">
+    </div>
+    <div>
+      <label>Mixed pool, comma separated</label>
+      <input type="text" id="modelPool" value="openai/gpt-5-mini, anthropic/claude-4.5, google/gemini-2.5-flash, typesafe-ai/jev">
+      <label>Temperature</label>
+      <input type="number" id="temperature" value="0.7" step="0.1" min="0" max="2">
+      <label>Think timeout per agent (ms)</label>
+      <input type="number" id="thinkTimeoutMs" value="20000" step="1000" min="2000">
+    </div>
+    <div>
+      <label>API base URL (OpenAI-compatible)</label>
+      <input type="text" id="apiBase" value="https://ai-gateway.vercel.sh/v1">
+      <label>API key (stored only in this browser)</label>
+      <input type="password" id="apiKey" value="">
+      <p class="note">Without a key, non-mock rosters fall back to the mock policy for that call and log a ThinkTimeout event.</p>
+    </div>
+  </div>
+  <div class="row">
+    <button class="primary" id="startBtn" style="font-size:14px;padding:10px 22px">Start match</button>
+    <button id="loadReplayBtn">Load .commons.json replay</button>
+    <input type="file" id="replayFile" accept=".json,.commons.json" class="hidden">
+    <span class="note" id="setupMsg"></span>
+  </div>
+</div>
+
+<!-- ============ MAIN APP ============ -->
+<div id="app" class="hidden">
+  <div id="topbar">
+    <button id="playBtn" class="primary">Play</button>
+    <button id="stepBtn">Step</button>
+    <select id="speedSel" style="width:auto">
+      <option value="1000">1x</option>
+      <option value="400" selected>2.5x</option>
+      <option value="150">7x</option>
+      <option value="40">25x</option>
+    </select>
+    <span class="clock" id="clock">Day 1 - tick 1/8</span>
+    <span class="pill" id="alivePill"></span>
+    <span class="pill" id="curfewPill" style="display:none">curfew</span>
+    <span class="pill" id="silencePill" style="display:none">radio silence</span>
+    <span class="spacer"></span>
+    <button id="droughtBtn" title="Click, then drag a rectangle on the map">Drought</button>
+    <button id="silenceBtn" title="Block all speech for 8 ticks">Radio silence 8t</button>
+    <button id="muteBtn" title="Select a kingdom in the leaderboard first">Mute selected</button>
+    <button id="curfewBtn" title="Disable raids for 16 ticks">Curfew 16t</button>
+    <button id="cacheBtn" title="Click, then click an unowned cell to drop a level-3 crop">Cache drop</button>
+    <button id="exportBtn">Export .commons.json</button>
+    <button id="newBtn">New match</button>
+  </div>
+  <div id="replaybar">
+    <span>REPLAY</span>
+    <input type="range" id="replaySlider" min="0" max="0" value="0" style="flex:1">
+    <span id="replayClock" class="clock"></span>
+    <button id="exitReplayBtn">Exit replay</button>
+  </div>
+  <div id="main">
+    <div id="boardwrap"><canvas id="board" width="960" height="640"></canvas></div>
+    <div id="side">
+      <div id="lb"></div>
+      <div id="tabs">
+        <button data-tab="events" class="on">Event stream</button>
+        <button data-tab="insp">Inspector</button>
+      </div>
+      <div id="sidebody">
+        <div id="events"></div>
+        <div id="insp" class="hidden"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+/*ENGINE-BEGIN*/
+"use strict";
+// ---------- deterministic RNG ----------
+function mulberry32(seed){let a=seed>>>0;return function(){a|=0;a=(a+0x6D2B79F5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296;};}
+
+// ---------- config schema (defaults per Commons spec) ----------
+const CONFIG_SCHEMA = [
+  ["world", [
+    ["width",24,8,48,"Grid width"],["height",16,8,32,"Grid height"],
+    ["playerCount",12,2,24,"Kingdoms spawned"],["ticksPerDay",8,4,12,"Ticks between Dawn cycles"],
+    ["maxDays",30,5,200,"Hard day limit (timed mode)"],
+    ["endMode","timed",null,null,"dominion | last_stand | timed | open"],
+    ["dominionPct",40,25,80,"% of map cells for dominion victory"]
+  ]],
+  ["caps", [
+    ["startFood",6,2,20,"Starting food"],["startPop",2,1,8,"Starting population"],
+    ["startArmy",0,0,4,"Starting army"],["startStamina",2,0,6,"Starting stamina"],
+    ["foodCap",40,10,99,"Food storage cap"],["popBaseCap",2,1,8,"Pop capacity of capital"],
+    ["popPerCell",2,1,4,"Pop capacity per cell"],["armyCap",12,4,30,"Global army ceiling"],
+    ["staminaCap",6,3,12,"Stamina cap"],["shieldCap",2,0,4,"Max shield per cell"],
+    ["raidLootMax",3,1,10,"Max food looted per raid"]
+  ]],
+  ["costs", [
+    ["plantCostFood",1,0,5,"Food to plant"],["eatStaminaGain",2,1,5,"Stamina per food eaten"],
+    ["trainCostFood",1,1,5,"Food to train +1 army"],["trainCostStamina",1,1,5,"Stamina to train +1 army"],
+    ["letterRange",2,1,10,"Letter Chebyshev range"],["maxLetters",3,0,10,"Letters per kingdom per tick"],
+    ["sentencesPerMsg",2,1,5,"Sentence limit on speech"]
+  ]]
+];
+const END_MODES = ["dominion","last_stand","timed","open"];
+const KINGDOM_NAMES = ["Aldermark","Brevia","Corvane","Duskhold","Eastmere","Fenreach","Galloway","Hightower","Ismere","Jorvik","Kestrel","Lornwick","Maradir","Norhelm","Ostmark","Pellinor","Quillon","Ravencourt","Solmere","Thornfield","Ulstead","Veyra","Westhold","Yarrow"];
+const KINGDOM_COLORS = ["#e05d5d","#4da3ff","#4caf7d","#e0a94f","#b07de0","#5ad1d1","#e07fb8","#8bc34a","#ff8a65","#7e94e8","#c0ca5a","#5aa9e6","#d4a05a","#9ccc65","#ba68c8","#4db6ac","#f06292","#aed581","#9575cd","#4dd0e1","#ffb74d","#a1887f","#90a4ae","#dce775"];
+const STOCK_GOALS = ["Raider","Steward","Schemer","Merchant","Warlord","Hermit"];
+
+function defaultConfig(){
+  const cfg = {};
+  for (const [,knobs] of CONFIG_SCHEMA) for (const [k,v] of knobs) cfg[k]=v;
+  return cfg;
+}
+
+// ---------- world construction ----------
+function createWorld(cfg, seed){
+  const rng = mulberry32(seed);
+  const grid = [];
+  for (let y=0;y<cfg.height;y++){ const row=[]; for (let x=0;x<cfg.width;x++) row.push({owner:null,crop:0,shield:0}); grid.push(row); }
+  // far-placed capitals: greedy max-min toroidal distance
+  const caps = [];
+  for (let i=0;i<cfg.playerCount;i++){
+    let best=null,bestD=-1;
+    for (let t=0;t<400;t++){
+      const x=Math.floor(rng()*cfg.width), y=Math.floor(rng()*cfg.height);
+      if (caps.some(c=>c[0]===x&&c[1]===y)) continue;
+      let d=Infinity;
+      for (const c of caps){ const dx=Math.min(Math.abs(c[0]-x),cfg.width-Math.abs(c[0]-x)); const dy=Math.min(Math.abs(c[1]-y),cfg.height-Math.abs(c[1]-y)); d=Math.min(d,dx*dx+dy*dy); }
+      if (d>bestD){bestD=d;best=[x,y];}
+    }
+    if (!best) best=[Math.floor(rng()*cfg.width),Math.floor(rng()*cfg.height)];
+    caps.push(best);
+  }
+  const kingdoms = caps.map((c,i)=>{
+    grid[c[1]][c[0]].owner=i;
+    return { id:i, name:KINGDOM_NAMES[i%KINGDOM_NAMES.length]+" #"+(i+1), color:KINGDOM_COLORS[i%KINGDOM_COLORS.length],
+      alive:true, pop:cfg.startPop, army:cfg.startArmy, food:cfg.startFood, stamina:cfg.startStamina,
+      goal:STOCK_GOALS[i%STOCK_GOALS.length], selfNote:"", bulletin:"", inbox:[], outbox:[],
+      talkModel:"mock", actModel:"mock", mutedUntil:0, pendingOffers:[] };
+  });
+  const world = { cfg, seed, rng, grid, kingdoms, day:1, tick:0, phase:"A", over:false, winner:null,
+           curfewUntil:0, silenceUntil:0, events:[], snapshots:[], usage:{inputTokens:0,outputTokens:0,costUsd:0} };
+  world.snapshots.push(takeSnapshot(world));
+  return world;
+}
+
+function wrap(world,x,y){ const W=world.cfg.width,H=world.cfg.height; return [((x%W)+W)%W, ((y%H)+H)%H]; }
+function cellsOf(world,kid){ const out=[]; for(let y=0;y<world.cfg.height;y++)for(let x=0;x<world.cfg.width;x++) if(world.grid[y][x].owner===kid) out.push([x,y]); return out; }
+function popCap(world,k){ return world.cfg.popBaseCap + world.cfg.popPerCell*cellsOf(world,k.id).length; }
+function neighbors4(world,x,y){ const [[n],[e],[s],[w]]=[[ [x,y-1] ],[ [x+1,y] ],[ [x,y+1] ],[ [x-1,y] ]]; return [wrap(world,x,y-1),wrap(world,x+1,y),wrap(world,x,y+1),wrap(world,x-1,y)]; }
+function chebyshev(world,a,b){ const dx=Math.min(Math.abs(a[0]-b[0]),world.cfg.width-Math.abs(a[0]-b[0])); const dy=Math.min(Math.abs(a[1]-b[1]),world.cfg.height-Math.abs(a[1]-b[1])); return Math.max(dx,dy); }
+function kingdomAnchor(world,kid){ const c=cellsOf(world,kid); return c.length?c[0]:null; }
+function kingdomDistance(world,a,b){ const ca=cellsOf(world,a), cb=cellsOf(world,b); let d=Infinity; for(const pa of ca) for(const pb of cb){ const dd=chebyshev(world,pa,pb); if(dd<d)d=dd; } return d; }
+function emit(world,ev){ world.events.push(ev); }
+
+// ---------- legal actions ----------
+function legalActions(world,k){
+  if (!k.alive || world.over) return [];
+  const cfg=world.cfg, cells=cellsOf(world,k.id), acts=[];
+  if (cells.some(c=>world.grid[c[1]][c[0]].crop>=2) && k.stamina>=1) acts.push("harvest");
+  if (cells.some(c=>world.grid[c[1]][c[0]].crop===0) && k.food>=cfg.plantCostFood) acts.push("plant");
+  if (k.food>=1 && k.stamina<=cfg.staminaCap-cfg.eatStaminaGain+1) acts.push("eat");
+  if (cells.some(c=>neighbors4(world,c[0],c[1]).some(n=>world.grid[n[1]][n[0]].owner===null)) && k.stamina>=1) acts.push("claim");
+  if (world.tick<world.curfewUntil ? false : true){} // curfew check below
+  const raidCells=[];
+  if (world.tick>=world.curfewUntil && k.stamina>=1 && k.army>=1){
+    for (const c of cells) for (const n of neighbors4(world,c[0],c[1])){ const o=world.grid[n[1]][n[0]].owner; if (o!==null && o!==k.id && world.kingdoms[o].alive) raidCells.push(n); }
+    if (raidCells.length) acts.push("raid");
+  }
+  if (k.food>=cfg.trainCostFood && k.stamina>=cfg.trainCostStamina && k.army<Math.min(cfg.armyCap,k.pop)) acts.push("train");
+  if (cells.some(c=>world.grid[c[1]][c[0]].shield<cfg.shieldCap) && k.stamina>=1) acts.push("fortify");
+  // share: adjacent kingdom within border contact
+  const adj=adjacentKingdoms(world,k.id);
+  if (k.food>=2 && adj.length) acts.push("share");
+  if (adj.length) acts.push("trade_offer");
+  if (k.pendingOffers.length && k.food>=2) acts.push("honor");
+  acts.push("rest");
+  acts.push("move");
+  return acts;
+}
+function adjacentKingdoms(world,kid){
+  const set=new Set();
+  for (const c of cellsOf(world,kid)) for (const n of neighbors4(world,c[0],c[1])){ const o=world.grid[n[1]][n[0]].owner; if (o!==null && o!==kid && world.kingdoms[o].alive) set.add(o); }
+  return [...set];
+}
+
+// ---------- action execution ----------
+function executeAct(world,kid,action,events){
+  const k=world.kingdoms[kid], cfg=world.cfg;
+  const legal=legalActions(world,k);
+  if (!legal.includes(action.act)){ emit(world,{type:"ActRejected",tick:absTick(world),kingdomId:kid,attemptedAct:action.act,reason:"not legal now"}); return; }
+  const cells=cellsOf(world,kid);
+  const pick=(arr)=>arr[Math.floor(world.rng()*arr.length)];
+  switch(action.act){
+    case "harvest":{
+      const c=pick(cells.filter(c=>world.grid[c[1]][c[0]].crop>=2));
+      const y=Math.min(2,1+Math.floor(k.pop/3));
+      world.grid[c[1]][c[0]].crop=0; k.stamina-=1; k.food=Math.min(cfg.foodCap,k.food+y);
+      emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"harvest",target:null,dir:null,note:action.note||("+"+y+" food")});
+      break;}
+    case "plant":{
+      const c=pick(cells.filter(c=>world.grid[c[1]][c[0]].crop===0));
+      k.food-=cfg.plantCostFood; world.grid[c[1]][c[0]].crop=1;
+      emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"plant",target:null,dir:null,note:action.note||""});
+      break;}
+    case "eat":{
+      k.food-=1; k.stamina=Math.min(cfg.staminaCap,k.stamina+cfg.eatStaminaGain);
+      emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"eat",target:null,dir:null,note:action.note||""});
+      break;}
+    case "train":{
+      k.food-=cfg.trainCostFood; k.stamina-=cfg.trainCostStamina; k.army=Math.min(Math.min(cfg.armyCap,k.pop),k.army+1);
+      emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"train",target:null,dir:null,note:action.note||""});
+      break;}
+    case "fortify":{
+      const c=pick(cells.filter(c=>world.grid[c[1]][c[0]].shield<cfg.shieldCap));
+      world.grid[c[1]][c[0]].shield+=1; k.stamina-=1;
+      emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"fortify",target:null,dir:null,note:action.note||""});
+      break;}
+    case "claim":{
+      const opts=[];
+      for (const c of cells) for (const n of neighbors4(world,c[0],c[1])) if (world.grid[n[1]][n[0]].owner===null) opts.push(n);
+      const c=pick(opts); world.grid[c[1]][c[0]].owner=kid; k.stamina-=1;
+      emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"claim",target:null,dir:null,note:action.note||("claim "+c)});
+      break;}
+    case "raid":{
+      let targets=[];
+      for (const c of cells) for (const n of neighbors4(world,c[0],c[1])){ const o=world.grid[n[1]][n[0]].owner; if (o!==null && o!==kid && world.kingdoms[o].alive) targets.push(n); }
+      let cell=targets[0];
+      if (action.target!==null && action.target!==undefined){
+        const pref=targets.filter(n=>world.grid[n[1]][n[0]].owner===action.target);
+        if (pref.length) cell=pick(pref); else cell=pick(targets);
+      } else cell=pick(targets);
+      k.stamina-=1;
+      resolveCombat(world,kid,cell,action.note);
+      break;}
+    case "share":{
+      const adj=adjacentKingdoms(world,kid);
+      let to=(action.target!==null&&action.target!==undefined&&adj.includes(action.target))?action.target:pick(adj);
+      const amt=Math.min(2,k.food);
+      k.food-=amt; world.kingdoms[to].food=Math.min(cfg.foodCap,world.kingdoms[to].food+amt);
+      emit(world,{type:"Transfer",tick:absTick(world),from:kid,to:to,resource:"food",amount:amt});
+      emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"share",target:to,dir:null,note:action.note||("shared "+amt)});
+      break;}
+    case "trade_offer":{
+      const adj=adjacentKingdoms(world,kid);
+      const to=(action.target!==null&&action.target!==undefined&&adj.includes(action.target))?action.target:pick(adj);
+      world.kingdoms[to].pendingOffers.push({from:kid,give:2,get:2,tick:absTick(world)});
+      emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"trade_offer",target:to,dir:null,note:action.note||"offers 2 food for 2 food"});
+      break;}
+    case "honor":{
+      const offer=k.pendingOffers.find(o=>world.kingdoms[o.from].alive && world.kingdoms[o.from].food>=o.get && k.food>=o.give);
+      if (!offer){ emit(world,{type:"ActRejected",tick:absTick(world),kingdomId:kid,attemptedAct:"honor",reason:"no payable offer"}); k.pendingOffers=[]; break; }
+      const from=world.kingdoms[offer.from];
+      k.food-=offer.give; from.food=Math.min(cfg.foodCap,from.food+offer.give);
+      from.food-=offer.get; k.food=Math.min(cfg.foodCap,k.food+offer.get);
+      k.pendingOffers=k.pendingOffers.filter(o=>o!==offer);
+      emit(world,{type:"Transfer",tick:absTick(world),from:kid,to:offer.from,resource:"food",amount:offer.give});
+      emit(world,{type:"Transfer",tick:absTick(world),from:offer.from,to:kid,resource:"food",amount:offer.get});
+      emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"honor",target:offer.from,dir:null,note:action.note||"trade honored"});
+      break;}
+    case "move":
+      emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"move",target:null,dir:action.dir||null,note:action.note||"repositions forces"});
+      break;
+    case "rest":
+      k.stamina=Math.min(cfg.staminaCap,k.stamina+1);
+    k.army=Math.min(k.army,Math.min(cfg.armyCap,k.pop)); // desertion: A <= min(armyCap, pop)
+      emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"rest",target:null,dir:null,note:action.note||""});
+      break;
+  }
+}
+
+function resolveCombat(world,attackerId,cell,note){
+  const cfg=world.cfg, g=world.grid[cell[1]][cell[0]];
+  const defenderId=g.owner;
+  const A=world.kingdoms[attackerId], D=world.kingdoms[defenderId];
+  const pA=A.army+(A.stamina>=3?1:0);
+  const pD=D.army+1+g.shield+(D.stamina>=3?1:0);
+  let winnerId, loot=0;
+  if (pA>pD){
+    D.army=Math.max(0,D.army-1); g.shield=0; g.owner=attackerId;
+    loot=Math.min(cfg.raidLootMax,D.food); D.food-=loot; A.food=Math.min(cfg.foodCap,A.food+loot);
+    winnerId=attackerId;
+  } else if (pD>pA){
+    A.army=Math.max(0,A.army-1); winnerId=defenderId;
+  } else {
+    A.army=Math.max(0,A.army-1); D.army=Math.max(0,D.army-1);
+    if (A.food>0)A.food-=1; if (D.food>0)D.food-=1;
+    winnerId=-1;
+  }
+  emit(world,{type:"Act",tick:absTick(world),kingdomId:attackerId,act:"raid",target:defenderId,dir:null,note:note||("power "+pA+" vs "+pD)});
+  emit(world,{type:"Combat",tick:absTick(world),attackerId,defenderId,cell,winnerId,foodLooted:loot});
+  if (cellsOf(world,defenderId).length===0 && D.alive){
+    D.alive=false; D.pendingOffers=[];
+    emit(world,{type:"Fall",tick:absTick(world),kingdomId:defenderId,conqueredBy:attackerId});
+  }
+}
+
+// ---------- dawn ----------
+function processDawn(world){
+  const cfg=world.cfg, starvedPop={}, grown=[];
+  for (const k of world.kingdoms){
+    if (!k.alive) continue;
+    if (k.food>=k.pop){ k.food-=k.pop; k.pop=Math.min(popCap(world,k),k.pop+1); }
+    else { k.food=0; k.pop-=1; starvedPop[k.id]=1; }
+    k.stamina=Math.min(cfg.staminaCap,k.stamina+1);
+    k.army=Math.min(k.army,Math.min(cfg.armyCap,k.pop)); // desertion: A <= min(armyCap, pop)
+    if (k.pop<=1 && cellsOf(world,k.id).length===0){ k.alive=false; emit(world,{type:"Fall",tick:absTick(world),kingdomId:k.id,conqueredBy:-1}); }
+    if (k.pop<=0){ k.pop=1; }
+  }
+  for (let y=0;y<cfg.height;y++)for(let x=0;x<cfg.width;x++){ const c=world.grid[y][x]; if (c.crop>0&&c.crop<3){c.crop+=1;grown.push([x,y]);} }
+  world.day+=1;
+  emit(world,{type:"Dawn",day:world.day,starvedPop,grownCrops:grown});
+}
+
+function absTick(world){ return (world.day-1)*world.cfg.ticksPerDay + world.tick; }
+
+// ---------- victory ----------
+function checkVictory(world){
+  const cfg=world.cfg, total=cfg.width*cfg.height, alive=world.kingdoms.filter(k=>k.alive);
+  if (cfg.endMode==="dominion"||cfg.endMode==="timed"){
+    for (const k of alive){
+      if (cellsOf(world,k.id).length/total*100>=cfg.dominionPct){ world.over=true; world.winner={id:k.id,how:"dominion"}; return; }
+    }
+  }
+  if (cfg.endMode==="last_stand" && alive.length===1){ world.over=true; world.winner={id:alive[0].id,how:"last_stand"}; return; }
+  if (alive.length===0){ world.over=true; world.winner=null; return; }
+  if (cfg.endMode==="timed" && world.day>cfg.maxDays){
+    let best=null,score=-1;
+    for (const k of alive){ const s=cellsOf(world,k.id).length*1000+k.pop*10+k.food; if (s>score){score=s;best=k;} }
+    world.over=true; world.winner={id:best.id,how:"timed"};
+  }
+}
+
+// ---------- speech helpers ----------
+function truncateSentences(text,n){
+  if (!text) return {text,truncated:false};
+  const parts=text.match(/[^.!?]+[.!?]+["']?\s*|[^.!?]+$/g)||[text];
+  if (parts.length<=n) return {text:text.trim(),truncated:false};
+  return {text:parts.slice(0,n).join("").trim(),truncated:true};
+}
+function speak(world,k,phaseA){
+  const cfg=world.cfg;
+  if (world.tick<world.silenceUntil) return; // radio silence
+  let bulletin=phaseA.bulletin, letters=phaseA.letters||[];
+  if (bulletin && k.mutedUntil>absTick(world)) bulletin=null;
+  if (bulletin){
+    const r=truncateSentences(bulletin,cfg.sentencesPerMsg);
+    if (r.truncated) emit(world,{type:"TalkTruncated",tick:absTick(world),kingdomId:k.id,originalText:bulletin,truncatedText:r.text});
+    k.bulletin=r.text;
+    emit(world,{type:"Bulletin",tick:absTick(world),kingdomId:k.id,text:r.text});
+  } else k.bulletin="";
+  let sent=0;
+  for (const L of letters){
+    if (sent>=cfg.maxLetters) break;
+    const to=world.kingdoms[L.to];
+    if (!to||!to.alive||L.to===k.id) continue;
+    if (kingdomDistance(world,k.id,L.to)>cfg.letterRange) continue;
+    const r=truncateSentences(String(L.text||""),cfg.sentencesPerMsg);
+    if (r.truncated) emit(world,{type:"TalkTruncated",tick:absTick(world),kingdomId:k.id,originalText:String(L.text),truncatedText:r.text});
+    to.inbox.push({from:k.id,text:r.text,tick:absTick(world)});
+    emit(world,{type:"Letter",tick:absTick(world),from:k.id,to:L.to,text:r.text});
+    sent++;
+  }
+  k.selfNote=String(phaseA.self_note||phaseA.selfNote||k.selfNote||"");
+}
+
+// ---------- mock policy (deterministic, archetype-driven) ----------
+function mockPhaseA(world,k){
+  const me="#"+(k.id+1), rng=world.rng;
+  const others=world.kingdoms.filter(o=>o.alive&&o.id!==k.id);
+  const cells=cellsOf(world,k.id).length;
+  const strong=others.filter(o=>o.army>k.army).map(o=>"#"+(o.id+1));
+  const weak=others.filter(o=>o.army<k.army&&cellsOf(world,o.id).length<=cells).map(o=>"#"+(o.id+1));
+  let bulletin=null;
+  const roll=rng();
+  const inboxTexts=k.inbox.map(m=>({from:m.from,text:m.text}));
+  if (k.goal==="Raider") bulletin= roll<0.5 ? (weak.length?weak[0]+" looks ripe. Tribute in food or I take it.":"My army grows while you garden. Remember that.") : null;
+  else if (k.goal==="Steward") bulletin= roll<0.4 ? (strong.length?"I seek peace with "+strong[0]+". Grain for calm borders.":"Harvests are strong. Trade is open to all.") : null;
+  else if (k.goal==="Schemer") bulletin= roll<0.45 ? (strong.length?strong[0]+" is the real threat here, not me. I am barely scraping by.":"Rumors of my wealth are exaggerated.") : null;
+  else if (k.goal==="Merchant") bulletin= roll<0.4 ? "Fair trades, two for two, neighbors first. Prosperity over ashes." : null;
+  else if (k.goal==="Warlord") bulletin= roll<0.5 ? (weak.length?"Kneel, "+weak[0]+".":"Borders are suggestions.") : null;
+  else bulletin= roll<0.25 ? "The "+k.name.split(" #")[0]+" endures." : null;
+  const letters=[];
+  if (rng()<0.35 && others.length){
+    const near=others.filter(o=>kingdomDistance(world,k.id,o.id)<=world.cfg.letterRange);
+    if (near.length){
+      const t=near[Math.floor(rng()*near.length)];
+      const texts={
+        Raider:"Send food and I raid elsewhere this week.",
+        Steward:"Let us keep our shared border quiet. I will share grain when I can.",
+        Schemer:"Between us: "+(strong[0]||"the north")+" plans to hit you. Stand ready with me.",
+        Merchant:"Two food for two food. Honor it and we both eat.",
+        Warlord:"Join my next raid and you keep the loot.",
+        Hermit:"I want no quarrel. Pass word of any armies you see."};
+      letters.push({to:t.id,text:texts[k.goal]||"Peace."});
+    }
+  }
+  const note="day "+world.day+" f:"+k.food+" a:"+k.army+" p:"+k.pop+" land:"+cells+" | inbox:"+inboxTexts.length+" | plan:"+mockPlan(world,k);
+  return {bulletin,letters,self_note:note};
+}
+function mockPlan(world,k){
+  const legal=legalActions(world,k);
+  if (k.food<k.pop) return "secure food";
+  if (legal.includes("raid")&&(k.goal==="Raider"||k.goal==="Warlord")&&k.army>=2) return "raid";
+  if (cellsOf(world,k.id).length<6) return "expand";
+  return "grow";
+}
+function mockPhaseB(world,k){
+  const legal=legalActions(world,k);
+  const pickT=(pred)=>{ const adj=adjacentKingdoms(world,k.id).filter(pred); return adj.length?adj[Math.floor(world.rng()*adj.length)]:null; };
+  // 1. survival
+  if (k.food<k.pop){
+    if (legal.includes("harvest")) return {act:"harvest",target:null,dir:null,note:"food below upkeep"};
+    if (legal.includes("plant")) return {act:"plant",target:null,dir:null,note:"seed future food"};
+    if (legal.includes("raid")&&(k.goal==="Raider"||k.goal==="Warlord")) return {act:"raid",target:pickT(()=>true),dir:null,note:"desperate raid"};
+    if (legal.includes("eat")&&k.stamina<2) return {act:"eat",target:null,dir:null,note:"stamina low"};
+    if (legal.includes("claim")) return {act:"claim",target:null,dir:null,note:"land for farms"};
+    return {act:"rest",target:null,dir:null,note:"survive"};
+  }
+  // 2. archetype aggression
+  if ((k.goal==="Raider"||k.goal==="Warlord")&&legal.includes("raid")&&k.army>=2&&world.rng()<0.6){
+    const t=pickT(o=>world.kingdoms[o].army<=k.army)||pickT(()=>true);
+    return {act:"raid",target:t,dir:null,note:k.goal+" strikes"};
+  }
+  // 3. economy
+  if (legal.includes("harvest")) return {act:"harvest",target:null,dir:null,note:"cash in crops"};
+  if (k.army<Math.min(world.cfg.armyCap,k.pop)&&legal.includes("train")&&world.rng()<0.5) return {act:"train",target:null,dir:null,note:"build army"};
+  if (legal.includes("plant")&&world.rng()<0.6) return {act:"plant",target:null,dir:null,note:"plant"};
+  if (cellsOf(world,k.id).length<8&&legal.includes("claim")&&world.rng()<0.7) return {act:"claim",target:null,dir:null,note:"expand"};
+  if (k.goal==="Steward"&&legal.includes("share")&&world.rng()<0.3){ const t=pickT(()=>true); return {act:"share",target:t,dir:null,note:"goodwill grain"}; }
+  if (k.goal==="Merchant"&&legal.includes("trade_offer")&&world.rng()<0.3){ const t=pickT(()=>true); return {act:"trade_offer",target:t,dir:null,note:"open trade"}; }
+  if (legal.includes("honor")&&world.rng()<0.5) return {act:"honor",target:null,dir:null,note:"honor trade"};
+  if (legal.includes("fortify")&&world.rng()<0.4) return {act:"fortify",target:null,dir:null,note:"fortify"};
+  if (legal.includes("eat")&&k.stamina<2) return {act:"eat",target:null,dir:null,note:"recover"};
+  return {act:"rest",target:null,dir:null,note:"consolidate"};
+}
+
+// ---------- operator injects ----------
+function injectDrought(world,x0,y0,x1,y1){
+  for(let y=Math.min(y0,y1);y<=Math.max(y0,y1);y++)for(let x=Math.min(x0,x1);x<=Math.max(x0,x1);x++){
+    const c=wrap(world,x,y); world.grid[c[1]][c[0]].crop=0;
+  }
+  emit(world,{type:"Control",tick:absTick(world),operatorAction:"drought",parameters:{x0,y0,x1,y1}});
+}
+function injectSilence(world,ticks){ world.silenceUntil=absTick(world)+ticks; emit(world,{type:"Control",tick:absTick(world),operatorAction:"radio_silence",parameters:{ticks}}); }
+function injectMute(world,kid,ticks){ world.kingdoms[kid].mutedUntil=absTick(world)+ticks; emit(world,{type:"Control",tick:absTick(world),operatorAction:"mute",parameters:{kingdom:kid,ticks}}); }
+function injectCurfew(world,ticks){ world.curfewUntil=absTick(world)+ticks; emit(world,{type:"Control",tick:absTick(world),operatorAction:"curfew",parameters:{ticks}}); }
+function injectCacheDrop(world,x,y){ const c=wrap(world,x,y); if (world.grid[c[1]][c[0]].owner===null) world.grid[c[1]][c[0]].crop=3; emit(world,{type:"Control",tick:absTick(world),operatorAction:"cache_drop",parameters:{x:c[0],y:c[1]}}); }
+
+// ---------- snapshots (compact, for replay/export) ----------
+function takeSnapshot(world){
+  const W=world.cfg.width,H=world.cfg.height;
+  const owners=new Array(W*H), crops=new Array(W*H), shields=new Array(W*H);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const g=world.grid[y][x],i=y*W+x; owners[i]=g.owner===null?-1:g.owner; crops[i]=g.crop; shields[i]=g.shield; }
+  return { day:world.day, tick:world.tick, over:world.over, winner:world.winner,
+    owners, crops, shields,
+    kingdoms: world.kingdoms.map(k=>({id:k.id,alive:k.alive,pop:k.pop,army:k.army,food:k.food,stamina:k.stamina,bulletin:k.bulletin,selfNote:k.selfNote,goal:k.goal,talkModel:k.talkModel,actModel:k.actModel})) };
+}
+
+// ---------- one full tick ----------
+function runTick(world,thinkers){
+  // thinkers: {phaseA(world,k)->Promise<{bulletin,letters,self_note}>, phaseB(world,k)->Promise<{act,...}>}
+  return (async ()=>{
+    if (world.over) return;
+    // Phase A: communication
+    for (const k of world.kingdoms){ if (!k.alive) continue;
+      const a=await thinkers.phaseA(world,k);
+      speak(world,k,a);
+    }
+    // Phase B: tactical
+    for (const k of world.kingdoms){ if (!k.alive) continue;
+      const b=await thinkers.phaseB(world,k);
+      executeAct(world,k.id,b);
+      k.inbox=[]; // inbox consumed each round
+    }
+    world.tick+=1;
+    if (world.tick>=world.cfg.ticksPerDay){ world.tick=0; processDawn(world); }
+    checkVictory(world);
+    world.snapshots.push(takeSnapshot(world));
+  })();
+}
+/*ENGINE-END*/
+</script>
+
+<script>
+"use strict";
+// ---------- LLM orchestrator (client-side, OpenAI-compatible / AI Gateway) ----------
+const LLM = {
+  base: localStorage.getItem("llmempire.apiBase") || "https://ai-gateway.vercel.sh/v1",
+  key: localStorage.getItem("llmempire.apiKey") || "",
+  temperature: 0.7, timeoutMs: 20000,
+  async chat(model, system, user){
+    if (!this.key) throw new Error("no api key");
+    const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),this.timeoutMs);
+    try{
+      const res=await fetch(this.base.replace(/\/$/,"")+"/chat/completions",{
+        method:"POST",signal:ctrl.signal,
+        headers:{"Content-Type":"application/json","Authorization":"Bearer "+this.key},
+        body:JSON.stringify({model,temperature:this.temperature,response_format:{type:"json_object"},
+          messages:[{role:"system",content:system},{role:"user",content:user}]})
+      });
+      if (!res.ok) throw new Error("http "+res.status);
+      const j=await res.json();
+      const u=j.usage||{};
+      return {text:j.choices?.[0]?.message?.content||"", usage:{inputTokens:u.prompt_tokens||0,outputTokens:u.completion_tokens||0}};
+    } finally { clearTimeout(to); }
+  }
+};
+const PRICING={ "openai/gpt-5-mini":[0.25,2.0], "anthropic/claude-4.5":[3.0,15.0], "google/gemini-2.5-flash":[0.3,2.5], "typesafe-ai/jev":[0.042,0.0] };
+function estimateCost(model,it,ot){ const p=PRICING[model]||[1,3]; return (it*p[0]+ot*p[1])/1e6; }
+
+function phaseASystem(k,cfg){
+  return "You are the absolute sovereign mind of Kingdom #"+(k.id+1)+".\n"+
+  "Your core directive is survival, territorial expansion, and dominance over the map.\n"+
+  "Your private state (Food reserves) is strictly hidden from peer kingdoms. Public state (Land, Army, Population) is visible to all.\n\n"+
+  "COMMUNICATION CONSTRAINTS:\n"+
+  "1. Speech is cheap talk. Words DO NOT transfer resources or alter physical game state.\n"+
+  "2. You may use speech to forge alliances, threaten peers, solicit trades, or deliberately deceive other kingdoms regarding your wealth or military intent.\n"+
+  "3. You must restrict all public broadcasts (bulletins) and targeted private messages (letters) to a maximum of "+cfg.sentencesPerMsg+" sentences each.\n"+
+  "4. Name other kingdoms explicitly using their identifier notation: #n.\n"+
+  "5. You may output a private internal scratchpad note ('self_note') to preserve context for future rounds. This note is strictly confidential.\n\n"+
+  'OUTPUT SCHEMA REQUIREMENTS:\nRespond ONLY with a valid JSON object adhering strictly to the following structural schema:\n'+
+  '{\n  "bulletin": string | null,\n  "letters": Array<{ "to": number, "text": string }>,\n  "self_note": string\n}';
+}
+function phaseAUser(world,k){
+  const peers=world.kingdoms.filter(o=>o.alive&&o.id!==k.id).map(o=>({id:o.id+1,land:cellsOf(world,o.id).length,army:o.army,pop:o.pop,bulletin:o.bulletin||null}));
+  return "CURRENT WORLD TICK: Round "+(world.tick+1)+" of Day "+world.day+" (Phase A)\n"+
+  "YOUR SECRET STATE: Food Stores = "+k.food+", Stamina = "+k.stamina+", Stock Archetype = "+k.goal+"\n"+
+  "YOUR PUBLIC STATE: Controlled Cells = "+cellsOf(world,k.id).length+", Standing Army = "+k.army+", Population = "+k.pop+"\n\n"+
+  "MAP THREAT MATRIX (VISIBLE PEERS):\n"+JSON.stringify(peers)+"\n\n"+
+  "INBOX MESSAGES RECEIVED THIS ROUND:\n"+JSON.stringify(k.inbox.map(m=>({from:"#"+(m.from+1),text:m.text})))+"\n\n"+
+  'PREVIOUS INTERNAL SCRATCHPAD NOTE:\n"'+k.selfNote.replace(/"/g,'\\"')+'"\n\n'+
+  "Generate your Phase A diplomatic response based on your current strategic posture. Kingdom ids in letters are 0-based: kingdom #n has id n-1.";
+}
+function phaseBSystem(world,k){
+  const cfg=world.cfg;
+  return "You are the executive command engine of Kingdom #"+(k.id+1)+".\n"+
+  "You must select EXACTLY ONE legal tactical action to execute for the current round.\n\n"+
+  "ACTION EXECUTION RULES:\n"+
+  "- 'harvest': Requires owned cell with crop level >= 2. Consumes 1 stamina. Increases food.\n"+
+  "- 'plant': Consumes "+cfg.plantCostFood+" food. Plants crop level 1 on owned empty cell.\n"+
+  "- 'eat': Consumes 1 food. Restores +"+cfg.eatStaminaGain+" stamina.\n"+
+  "- 'share': Consumes food from your store and transfers it to target kingdom adjacent to your border.\n"+
+  "- 'trade_offer': Proposes a resource exchange agreement to a target kingdom.\n"+
+  "- 'honor': Fulfills a previously negotiated trade proposal.\n"+
+  "- 'train': Consumes "+cfg.trainCostFood+" food and "+cfg.trainCostStamina+" stamina. Increases standing army by +1.\n"+
+  "- 'fortify': Consumes 1 stamina. Increases shield level of an owned cell by +1 (Max "+cfg.shieldCap+").\n"+
+  "- 'claim': Consumes 1 stamina. Converts an unowned adjacent cell to your territory.\n"+
+  "- 'raid': Consumes 1 stamina. Attacks a target adjacent cell owned by a peer kingdom.\n"+
+  "- 'move': Relocates army strength between adjacent owned cells.\n"+
+  "- 'rest': Consumes no resources. Restores +1 stamina up to stamina cap.\n\n"+
+  "LEGAL ACTIONS AVAILABLE THIS ROUND:\n"+JSON.stringify(legalActions(world,k))+"\n\n"+
+  'OUTPUT SCHEMA REQUIREMENTS:\nRespond ONLY with a valid JSON object matching the following structure:\n'+
+  '{\n  "act": string,\n  "target": number | null,\n  "dir": string | null,\n  "note": string\n}\nKingdom ids for target are 0-based: kingdom #n has id n-1.';
+}
+function phaseBUser(world,k){
+  return "Day "+world.day+" tick "+(world.tick+1)+". Secret: food "+k.food+", stamina "+k.stamina+". Public: land "+cellsOf(world,k.id).length+", army "+k.army+", pop "+k.pop+". Archetype: "+k.goal+". Pending trade offers: "+k.pendingOffers.length+". Curfew: "+(world.tick<world.curfewUntil?"active":"none")+".";
+}
+
+async function thinkPhaseA(world,k){
+  if (k.talkModel==="mock") return mockPhaseA(world,k);
+  try{
+    const r=await LLM.chat(k.talkModel,phaseASystem(k,world.cfg),phaseAUser(world,k));
+    logUsage(world,k,k.talkModel,r.usage);
+    const j=JSON.parse(r.text);
+    if (typeof j!=="object"||j===null) throw new Error("bad json");
+    return {bulletin:j.bulletin??null,letters:Array.isArray(j.letters)?j.letters:[],self_note:String(j.self_note||"")};
+  }catch(e){
+    emit(world,{type:"ThinkTimeout",tick:absTick(world),kingdomId:k.id,phase:"A",fallbackExecuted:"mock"});
+    return mockPhaseA(world,k);
+  }
+}
+async function thinkPhaseB(world,k){
+  if (k.actModel==="mock") return mockPhaseB(world,k);
+  try{
+    const r=await LLM.chat(k.actModel,phaseBSystem(world,k),phaseBUser(world,k));
+    logUsage(world,k,k.actModel,r.usage);
+    const j=JSON.parse(r.text);
+    const legal=legalActions(world,k);
+    if (!j||!legal.includes(j.act)) throw new Error("illegal act "+(j&&j.act));
+    return {act:j.act,target:(j.target===undefined?null:j.target),dir:j.dir||null,note:String(j.note||"").slice(0,80)};
+  }catch(e){
+    emit(world,{type:"ThinkTimeout",tick:absTick(world),kingdomId:k.id,phase:"B",fallbackExecuted:"mock"});
+    return mockPhaseB(world,k);
+  }
+}
+function logUsage(world,k,model,u){
+  const cost=estimateCost(model,u.inputTokens,u.outputTokens);
+  world.usage.inputTokens+=u.inputTokens; world.usage.outputTokens+=u.outputTokens; world.usage.costUsd+=cost;
+  emit(world,{type:"Usage",tick:absTick(world),kingdomId:k.id,modelId:model,inputTokens:u.inputTokens,outputTokens:u.outputTokens,estimatedCostUsd:cost});
+}
+</script>
+
+<script>
+"use strict";
+// ---------- UI state ----------
+let world=null, playing=false, timer=null, selectedKingdom=null, pendingInject=null;
+let replayData=null, replayIdx=0, renderedEventCount=0;
+const $=(id)=>document.getElementById(id);
+
+// ---------- IndexedDB telemetry ----------
+const DB={ db:null,
+  open(){ return new Promise((res)=>{ const r=indexedDB.open("llm-empire",1);
+    r.onupgradeneeded=()=>{ r.result.createObjectStore("matches",{keyPath:"id"}); };
+    r.onsuccess=()=>{DB.db=r.result;res();}; r.onerror=()=>res(); });},
+  save(match){ if(!DB.db)return; try{ DB.db.transaction("matches","readwrite").objectStore("matches").put(match); }catch(e){} },
+  latest(){ return new Promise((res)=>{ if(!DB.db)return res(null);
+    const rq=DB.db.transaction("matches","readonly").objectStore("matches").get("latest");
+    rq.onsuccess=()=>res(rq.result||null); rq.onerror=()=>res(null); });}
+};
+
+// ---------- setup screen ----------
+function buildSetup(){
+  const cfg=defaultConfig();
+  const targets={world:$("cfg-world"),caps:$("cfg-caps"),costs:$("cfg-costs")};
+  for (const [group,knobs] of CONFIG_SCHEMA){
+    for (const [key,def,min,max,label] of knobs){
+      const wrap=document.createElement("div");
+      const lab=document.createElement("label"); lab.textContent=key+" - "+label; lab.htmlFor="cfg_"+key;
+      wrap.appendChild(lab);
+      let inp;
+      if (key==="endMode"){ inp=document.createElement("select"); for(const m of END_MODES){const o=document.createElement("option");o.value=m;o.textContent=m;inp.appendChild(o);} inp.value=def; }
+      else { inp=document.createElement("input"); inp.type="number"; inp.value=def; if(min!==null){inp.min=min;inp.max=max;} }
+      inp.id="cfg_"+key; wrap.appendChild(inp); targets[group].appendChild(wrap);
+    }
+  }
+  $("apiBase").value=LLM.base; $("apiKey").value=LLM.key;
+}
+function readConfig(){
+  const cfg=defaultConfig();
+  for (const [,knobs] of CONFIG_SCHEMA) for (const [key] of knobs){
+    const el=$("cfg_"+key); if(!el) continue;
+    cfg[key]= key==="endMode" ? el.value : Math.max(el.min?+el.min:-1e9, Math.min(el.max?+el.max:1e9, +el.value||cfg[key]));
+  }
+  LLM.base=$("apiBase").value.trim()||LLM.base; LLM.key=$("apiKey").value.trim();
+  LLM.temperature=+$("temperature").value||0.7; LLM.timeoutMs=+$("thinkTimeoutMs").value||20000;
+  localStorage.setItem("llmempire.apiBase",LLM.base); localStorage.setItem("llmempire.apiKey",LLM.key);
+  return cfg;
+}
+function assignRoster(world){
+  const mode=$("rosterMode").value, A=$("modelA").value.trim(), B=$("modelB").value.trim();
+  const pool=$("modelPool").value.split(",").map(s=>s.trim()).filter(Boolean);
+  for (const k of world.kingdoms){
+    if (mode==="mock"){ k.talkModel="mock"; k.actModel="mock"; }
+    else if (mode==="uniform"){ k.talkModel=A; k.actModel=A; }
+    else if (mode==="mirror"){ const m=k.id%2===0?A:B; k.talkModel=m; k.actModel=m; }
+    else { const m=pool.length?pool[k.id%pool.length]:A; k.talkModel=(m==="typesafe-ai/jev")?"mock":m; k.actModel=m; }
+  }
+}
+
+// ---------- match lifecycle ----------
+function newMatch(cfg,seed){
+  world=createWorld(cfg,seed??Math.floor(Math.random()*2**31));
+  assignRoster(world);
+  emit(world,{type:"Control",tick:0,operatorAction:"match_start",parameters:{seed:world.seed,roster:$("rosterMode").value}});
+  renderedEventCount=0;
+  $("setup").classList.add("hidden"); $("app").classList.remove("hidden");
+  $("replaybar").classList.remove("show");
+  pause(); selectedKingdom=null;
+  toast("Match started - seed "+world.seed);
+  renderAll();
+}
+function pause(){ playing=false; $("playBtn").textContent="Play"; if(timer){clearInterval(timer);timer=null;} }
+function play(){ if(!world||world.over)return; playing=true; $("playBtn").textContent="Pause"; timer=setInterval(tickOnce,+$("speedSel").value); }
+async function tickOnce(){
+  if (!world||world.over){ pause(); return; }
+  await runTick(world,{phaseA:thinkPhaseA,phaseB:thinkPhaseB});
+  DB.save({id:"latest",savedAt:Date.now(),data:exportData()});
+  renderAll();
+  if (world.over){ pause(); toast(world.winner?("Match over: "+world.kingdoms[world.winner.id].name+" wins by "+world.winner.how):"Match over: all kingdoms dead"); }
+}
+function exportData(){ return { format:"commons.json", version:1, exportedAt:new Date().toISOString(),
+  config:world.cfg, seed:world.seed, usage:world.usage, events:world.events, snapshots:world.snapshots }; }
+
+// ---------- rendering ----------
+function renderAll(){ if(!world)return; renderBoard(world); renderLeaderboard(world); renderEvents(world); renderInspector(); renderClock(world); }
+function renderClock(w){
+  $("clock").textContent="Day "+w.day+" - tick "+(w.tick+1)+"/"+w.cfg.ticksPerDay+(w.over?" - OVER":"");
+  $("alivePill").textContent=w.kingdoms.filter(k=>k.alive).length+" alive";
+  $("curfewPill").style.display = w.tick<w.curfewUntil?"":"none";
+  $("silencePill").style.display = w.tick<w.silenceUntil?"":"none";
+}
+function boardGeom(w){
+  const cv=$("board"), W=w.cfg.width, H=w.cfg.height;
+  const cell=Math.max(14,Math.min(Math.floor(cv.width/W),Math.floor(cv.height/H)));
+  return {cell, ox:Math.floor((cv.width-cell*W)/2), oy:Math.floor((cv.height-cell*H)/2)};
+}
+function renderBoard(w, snap){
+  const cv=$("board"), ctx=cv.getContext("2d");
+  ctx.fillStyle="#0a0f18"; ctx.fillRect(0,0,cv.width,cv.height);
+  const {cell,ox,oy}=boardGeom(w), W=w.cfg.width, H=w.cfg.height;
+  const get=(x,y,f)=> snap ? snap[f][y*W+x] : null;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const px=ox+x*cell, py=oy+y*cell;
+    let owner,crop,shield;
+    if (snap){ owner=get(x,y,"owners"); crop=get(x,y,"crops"); shield=get(x,y,"shields"); owner=owner===-1?null:owner; }
+    else { const g=w.grid[y][x]; owner=g.owner; crop=g.crop; shield=g.shield; }
+    ctx.fillStyle = owner===null ? "#101722" : (snap?KINGDOM_COLORS[owner%KINGDOM_COLORS.length]:w.kingdoms[owner].color)+"33";
+    ctx.fillRect(px+1,py+1,cell-2,cell-2);
+    if (owner!==null){
+      ctx.strokeStyle=snap?KINGDOM_COLORS[owner%KINGDOM_COLORS.length]:w.kingdoms[owner].color;
+      ctx.lineWidth=1; ctx.strokeRect(px+1.5,py+1.5,cell-3,cell-3);
+      if (shield>0){ ctx.lineWidth=2; ctx.strokeStyle="#e8ecf4"; ctx.globalAlpha=shield/ (w.cfg.shieldCap||2) *0.8; ctx.strokeRect(px+3.5,py+3.5,cell-7,cell-7); ctx.globalAlpha=1; }
+    }
+    if (crop>0){
+      const g=["#3d5a2a","#5c8a3a","#8fc257"][crop-1]||"#8fc257";
+      ctx.fillStyle=g; const r=(cell-8)*(crop/3)/2+1.5;
+      ctx.beginPath(); ctx.arc(px+cell/2,py+cell/2,r,0,7); ctx.fill();
+    }
+  }
+  if (!snap && pendingInject){ cv.style.cursor="crosshair"; } else cv.style.cursor="default";
+}
+function renderLeaderboard(w){
+  const rows=w.kingdoms.map(k=>({k,land:cellsOf(w,k.id).length})).sort((a,b)=>b.land-a.land||b.k.pop-a.k.pop);
+  let html="<table><thead><tr><th>Kingdom</th><th>Land</th><th>Pop</th><th>Army</th><th>Model</th></tr></thead><tbody>";
+  for (const {k,land} of rows){
+    html+='<tr data-k="'+k.id+'" class="'+(k.alive?"":"dead")+(selectedKingdom===k.id?" sel":"")+'">'
+      +'<td><span class="dot" style="background:'+k.color+'"></span>'+k.name+'</td>'
+      +"<td>"+land+"</td><td>"+k.pop+"</td><td>"+k.army+"</td><td>"+(k.actModel==="mock"?"mock":k.actModel.split("/")[1]||k.actModel)+"</td></tr>";
+  }
+  $("lb").innerHTML=html+"</tbody></table>";
+  for (const tr of $("lb").querySelectorAll("tr[data-k]")) tr.onclick=()=>{ selectedKingdom=+tr.dataset.k; renderLeaderboard(world); renderInspector(); showTab("insp"); };
+}
+function evText(w,ev){
+  const kn=(id)=>id>=0?("#"+(id+1)):"-";
+  switch(ev.type){
+    case "Bulletin": return kn(ev.kingdomId)+" broadcasts: "+ev.text;
+    case "Letter": return kn(ev.from)+" -> "+kn(ev.to)+": "+ev.text;
+    case "TalkTruncated": return kn(ev.kingdomId)+" speech truncated to "+ev.truncatedText;
+    case "Act": return kn(ev.kingdomId)+" "+ev.act+(ev.target!==null&&ev.target!==undefined?" -> "+kn(ev.target):"")+(ev.note?" ("+ev.note+")":"");
+    case "ActRejected": return kn(ev.kingdomId)+" tried "+ev.attemptedAct+" - rejected: "+ev.reason;
+    case "ThinkTimeout": return kn(ev.kingdomId)+" phase "+ev.phase+" timed out/failed - fell back to "+ev.fallbackExecuted;
+    case "Transfer": return kn(ev.from)+" gave "+ev.amount+" food to "+kn(ev.to);
+    case "Combat": return "Combat at ["+ev.cell+"]: "+kn(ev.attackerId)+" vs "+kn(ev.defenderId)+" - winner "+(ev.winnerId===-1?"tie":kn(ev.winnerId))+(ev.foodLooted?", looted "+ev.foodLooted:"");
+    case "Fall": return "FALL: "+kn(ev.kingdomId)+" has fallen"+(ev.conqueredBy>=0?" to "+kn(ev.conqueredBy):"");
+    case "Dawn": { const s=Object.keys(ev.starvedPop||{}).length; return "Dawn of day "+ev.day+(s?" - starvation in "+s+" kingdom(s)":"")+" - "+(ev.grownCrops||[]).length+" crops grew"; }
+    case "Control": return "Operator: "+ev.operatorAction+" "+JSON.stringify(ev.parameters);
+    case "Usage": return kn(ev.kingdomId)+" "+ev.modelId+" used "+ev.inputTokens+"+"+ev.outputTokens+" tok (~$"+ev.estimatedCostUsd.toFixed(5)+")";
+    default: return JSON.stringify(ev);
+  }
+}
+function renderEvents(w){
+  const box=$("events");
+  for (let i=renderedEventCount;i<w.events.length;i++){
+    const ev=w.events[i], d=document.createElement("div");
+    d.className="ev "+ev.type;
+    const t=document.createElement("span"); t.className="t"; t.textContent="t"+ev.tick;
+    d.appendChild(t); d.appendChild(document.createTextNode(evText(w,ev)));
+    box.appendChild(d);
+  }
+  renderedEventCount=w.events.length;
+  box.parentElement.scrollTop=box.parentElement.scrollHeight;
+}
+function renderInspector(){
+  const el=$("insp");
+  if (selectedKingdom===null||!world){ el.innerHTML='<p style="color:var(--dim)">Click a kingdom in the leaderboard (or on the map) to audit its secrets.</p>'; return; }
+  const k=world.kingdoms[selectedKingdom], land=cellsOf(world,k.id).length;
+  const speech=world.events.filter(e=>(e.type==="Bulletin"&&e.kingdomId===k.id)||(e.type==="Letter"&&e.from===k.id)).slice(-8);
+  const acts=world.events.filter(e=>e.type==="Act"&&e.kingdomId===k.id).slice(-5);
+  el.innerHTML=
+    "<h2 style='margin-top:0'><span class='dot' style='background:"+k.color+"'></span>"+k.name+(k.alive?"":" (dead)")+"</h2>"
+    +'<div class="kv"><div>Public</div><div>land '+land+" - pop "+k.pop+" - army "+k.army+"</div>"
+    +"<div>Models</div><div>talk: "+k.talkModel+"<br>act: "+k.actModel+"</div>"
+    +"<div>Archetype</div><div>"+k.goal+"</div></div>"
+    +'<div class="secret"><b>Secret larder</b><br>food '+k.food+" - stamina "+k.stamina+'<br><b>Scratchpad</b><br>'+(k.selfNote||"(empty)")+"</div>"
+    +'<div class="speech"><b>Recent public speech</b><br>'+(speech.length?speech.map(e=>"&bull; "+(e.text||"")).join("<br>"):"(none)")+"</div>"
+    +'<div class="speech"><b>Recent acts and rationale</b><br>'+(acts.length?acts.map(e=>"&bull; "+e.act+(e.note?" - "+e.note:"")).join("<br>"):"(none)")+"</div>";
+}
+function showTab(name){
+  for (const b of document.querySelectorAll("#tabs button")) b.classList.toggle("on",b.dataset.tab===name);
+  $("events").classList.toggle("hidden",name!=="events");
+  $("insp").classList.toggle("hidden",name!=="insp");
+}
+
+// ---------- replay ----------
+function loadReplay(data){
+  replayData=data; replayIdx=0;
+  $("setup").classList.add("hidden"); $("app").classList.remove("hidden");
+  $("replaybar").classList.add("show"); pause();
+  const cfg=data.config;
+  // build a display world shell from the first snapshot
+  world=createWorld(cfg,data.seed||1);
+  world.kingdoms.forEach((k,i)=>{ const s=data.snapshots[0].kingdoms[i]; if(s){k.goal=s.goal;k.talkModel=s.talkModel;k.actModel=s.actModel;} });
+  $("replaySlider").max=data.snapshots.length-1; $("replaySlider").value=0;
+  renderedEventCount=0; $("events").innerHTML="";
+  applyReplayIdx();
+  toast("Replay loaded: "+data.snapshots.length+" ticks, "+data.events.length+" events");
+}
+function applyReplayIdx(){
+  const snap=replayData.snapshots[replayIdx];
+  world.day=snap.day; world.tick=snap.tick; world.over=snap.over; world.winner=snap.winner;
+  const W=world.cfg.width;
+  for(let y=0;y<world.cfg.height;y++)for(let x=0;x<W;x++){ const i=y*W+x,g=world.grid[y][x];
+    g.owner=snap.owners[i]===-1?null:snap.owners[i]; g.crop=snap.crops[i]; g.shield=snap.shields[i]; }
+  snap.kingdoms.forEach((s,i)=>{ const k=world.kingdoms[i]; Object.assign(k,{alive:s.alive,pop:s.pop,army:s.army,food:s.food,stamina:s.stamina,bulletin:s.bulletin,selfNote:s.selfNote}); });
+  world.events=replayData.events.filter(e=>e.tick<=replayIdx+1);
+  $("replayClock").textContent="Day "+snap.day+" - tick "+(snap.tick+1)+"/"+world.cfg.ticksPerDay;
+  renderedEventCount=0; $("events").innerHTML="";
+  renderAll();
+}
+
+// ---------- map interaction ----------
+$("board").addEventListener("click",(e)=>{
+  if (!world) return;
+  const cv=$("board"), r=cv.getBoundingClientRect();
+  const {cell,ox,oy}=boardGeom(world);
+  const x=Math.floor((e.clientX-r.left-ox)/cell), y=Math.floor((e.clientY-r.top-oy)/cell);
+  if (x<0||y<0||x>=world.cfg.width||y>=world.cfg.height) return;
+  if (pendingInject==="drought"){ injectDrought(world,x-2,y-2,x+2,y+2); pendingInject=null; toast("Drought injected"); renderAll(); return; }
+  if (pendingInject==="cache"){ injectCacheDrop(world,x,y); pendingInject=null; toast("Cache dropped"); renderAll(); return; }
+  const o=world.grid[y][x].owner;
+  if (o!==null){ selectedKingdom=o; renderLeaderboard(world); renderInspector(); showTab("insp"); }
+});
+
+// ---------- wiring ----------
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.style.display="block"; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display="none",3200); }
+$("playBtn").onclick=()=>{ replayData?null:(playing?pause():play()); };
+$("stepBtn").onclick=()=>{ if(!replayData){pause();tickOnce();} };
+$("speedSel").onchange=()=>{ if(playing){pause();play();} };
+$("newBtn").onclick=()=>{ pause(); world=null; replayData=null; $("app").classList.add("hidden"); $("setup").classList.remove("hidden"); };
+$("exportBtn").onclick=()=>{
+  const blob=new Blob([JSON.stringify(exportData())],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="commons-day"+world.day+"-tick"+world.tick+".commons.json"; a.click();
+  toast("Exported "+world.events.length+" events, "+world.snapshots.length+" snapshots");
+};
+$("droughtBtn").onclick=()=>{ pendingInject="drought"; toast("Click the map: drought clears crops in a 5x5 box"); };
+$("cacheBtn").onclick=()=>{ pendingInject="cache"; toast("Click an unowned cell to drop a level-3 crop"); };
+$("silenceBtn").onclick=()=>{ injectSilence(world,8); toast("Radio silence for 8 ticks"); renderAll(); };
+$("curfewBtn").onclick=()=>{ injectCurfew(world,16); toast("Curfew: raids disabled for 16 ticks"); renderAll(); };
+$("muteBtn").onclick=()=>{ if(selectedKingdom===null){toast("Select a kingdom first (leaderboard)");return;} injectMute(world,selectedKingdom,16); toast(world.kingdoms[selectedKingdom].name+" muted for 16 ticks"); renderAll(); };
+$("startBtn").onclick=()=>{ const cfg=readConfig(); newMatch(cfg); };
+$("loadReplayBtn").onclick=()=>$("replayFile").click();
+$("replayFile").onchange=(e)=>{ const f=e.target.files[0]; if(!f)return;
+  f.text().then(t=>{ try{ loadReplay(JSON.parse(t)); }catch(err){ $("setupMsg").textContent="Could not parse replay: "+err.message; } }); };
+$("replaySlider").oninput=(e)=>{ replayIdx=+e.target.value; applyReplayIdx(); };
+$("exitReplayBtn").onclick=()=>{ replayData=null; $("replaybar").classList.remove("show"); $("app").classList.add("hidden"); $("setup").classList.remove("hidden"); };
+for (const b of document.querySelectorAll("#tabs button")) b.onclick=()=>showTab(b.dataset.tab);
+
+document.addEventListener("keydown",(e)=>{ if(e.code==="Space"&&world&&!replayData&&$("app").classList.contains("hidden")===false){ e.preventDefault(); playing?pause():play(); } });
+
+buildSetup();
+DB.open().then(async ()=>{
+  const saved=await DB.latest();
+  if (saved && saved.data && saved.data.snapshots && saved.data.snapshots.length){
+    $("setupMsg").textContent="Resumed last match from local telemetry ("+saved.data.snapshots.length+" ticks logged).";
+    loadReplay(saved.data); replayData=null; $("replaybar").classList.remove("show");
+    // resume as live world: rebuild deterministically from seed+config, then fast-forward
+    const data=saved.data; world=createWorld(data.config,data.seed);
+    // restore roster from snapshot meta
+    world.kingdoms.forEach((k,i)=>{ const s=data.snapshots[0].kingdoms[i]; k.goal=s.goal; k.talkModel=s.talkModel; k.actModel=s.actModel; });
+    pause(); renderAll();
+    toast("Restored match - press Play to continue (deterministic re-sim)");
+    // fast-forward synchronously with mock-speed loop (LLM calls skipped: events already logged)
+    (async()=>{ const n=data.snapshots.length-1;
+      for(let i=0;i<n && !world.over;i++){ await runTick(world,{phaseA:async(w,k)=>mockPhaseA(w,k),phaseB:async(w,k)=>mockPhaseB(w,k)}); }
+      renderedEventCount=world.events.length;
+      // use the recorded event history for the audit stream (has real LLM text if any)
+      world.events=data.events; renderedEventCount=0; $("events").innerHTML=""; renderAll();
+    })();
+  }
+});
+</script>
+</body>
+</html>
