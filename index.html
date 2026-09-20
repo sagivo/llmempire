@@ -211,6 +211,16 @@
     #toast{bottom:18px;border-radius:13px;background:#152238;box-shadow:0 12px 40px rgba(0,0,0,.5)}
   }
 
+  .roster-presets{margin-top:12px;padding:11px;border:1px solid rgba(126,154,200,.14);border-radius:12px;background:rgba(8,13,22,.45)}.roster-presets .key-row{grid-template-columns:minmax(0,1fr) auto auto}.roster-presets button{white-space:nowrap}
+  /* Turn action theater: each kingdom's choice stays legible even at 25x. */
+  #turnViz{position:absolute;z-index:7;left:18px;right:18px;bottom:98px;pointer-events:none;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
+  .turn-action{--kc:#63d8ff;display:flex;align-items:center;min-width:0;gap:6px;padding:7px 8px;border:1px solid color-mix(in srgb,var(--kc) 38%,transparent);border-radius:11px;background:rgba(6,11,19,.86);box-shadow:0 7px 22px rgba(0,0,0,.32),inset 3px 0 var(--kc);backdrop-filter:blur(12px);animation:actionIn .34s cubic-bezier(.2,.8,.2,1) both}
+  .turn-action:nth-child(2){animation-delay:.04s}.turn-action:nth-child(3){animation-delay:.08s}.turn-action:nth-child(4){animation-delay:.12s}
+  .turn-action .aicon{font-size:16px;filter:drop-shadow(0 0 8px var(--kc));animation:actionPop .6s ease both}.turn-action .awho{min-width:0}.turn-action b,.turn-action small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.turn-action b{font-size:9px;color:#eef6ff}.turn-action small{font-size:8px;color:#9aabc2;text-transform:uppercase;letter-spacing:.06em;margin-top:1px}
+  .map-action{position:absolute;z-index:6;width:34px;height:34px;margin:-17px 0 0 -17px;display:grid;place-items:center;border:1px solid var(--kc);border-radius:50%;background:rgba(7,12,21,.9);font-size:17px;box-shadow:0 0 0 0 color-mix(in srgb,var(--kc) 45%,transparent),0 0 22px color-mix(in srgb,var(--kc) 65%,transparent);animation:mapAction 1s ease-out both;pointer-events:none}
+  @keyframes actionIn{from{opacity:0;transform:translateY(9px) scale(.96)}to{opacity:1;transform:none}}@keyframes actionPop{0%{transform:scale(.4) rotate(-16deg)}55%{transform:scale(1.24) rotate(5deg)}100%{transform:none}}@keyframes mapAction{0%{opacity:0;transform:scale(.35)}25%{opacity:1;box-shadow:0 0 0 10px color-mix(in srgb,var(--kc) 20%,transparent),0 0 24px var(--kc)}100%{opacity:.88;transform:scale(1);box-shadow:0 0 0 22px transparent,0 0 12px color-mix(in srgb,var(--kc) 45%,transparent)}}
+  @media(min-width:760px){#turnViz{left:22px;right:22px;bottom:18px;max-width:720px;margin:auto}.turn-action b{font-size:11px}.turn-action small{font-size:9px}}
+
 </style>
 </head>
 <body>
@@ -222,7 +232,7 @@
     <nav class="home-nav"><div class="home-brand">LLM <i>Empire</i></div><div class="spacer"></div><button class="aboutOpen">About</button><button id="homeSettings">Settings</button></nav>
     <main class="hero">
       <div><div class="eyebrow">Multi-agent strategy lab</div><h1>Build kingdoms.<br><span>Watch minds collide.</span></h1><p class="hero-copy">Put language models in a living world of scarce food, shifting alliances and ruthless trade-offs. Then inspect every move, message, blunder and breakthrough.</p><div class="hero-actions"><button class="primary" id="quickStart">Start a quick match</button><button class="ghost" id="configureMatch">Configure match</button></div></div>
-      <div class="world-card"><div class="world-top"><span>World preview</span><span class="live-dot">● simulation ready</span></div><div class="mini-map"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="mini-stats"><div><b>12</b><span>Agents</span></div><div><b>24×16</b><span>World</span></div><div><b>∞</b><span>Stories</span></div></div></div>
+      <div class="world-card"><div class="world-top"><span>World preview</span><span class="live-dot">● simulation ready</span></div><div class="mini-map"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="mini-stats"><div><b>4</b><span>Agents</span></div><div><b>24×16</b><span>World</span></div><div><b>∞</b><span>Stories</span></div></div></div>
     </main>
     <section class="feature-grid"><div class="feature-card"><span class="feature-icon">⚔️</span><strong>Emergent strategy</strong><p>Models negotiate, bluff, cooperate and attack under pressure.</p></div><div class="feature-card"><span class="feature-icon">🧠</span><strong>Any model roster</strong><p>One model for everyone, or a different brain for each kingdom.</p></div><div class="feature-card"><span class="feature-icon">✨</span><strong>AI match analyst</strong><p>Surface brilliant moves, blunders and player tendencies.</p></div><div class="feature-card"><span class="feature-icon">🔒</span><strong>Your session only</strong><p>Matches and keys stay inside this browser.</p></div></section>
   </div>
@@ -291,6 +301,12 @@
         <div class="secure-note">Saved only in this browser. Never uploaded to the repo.</div>
       </div>
     </div>
+    <div class="roster-presets">
+      <label>Saved LLM setup</label>
+      <div class="key-row"><select id="llmPreset"><option value="">Current setup</option></select><button type="button" id="loadPresetBtn">Use</button></div>
+      <div class="key-row" style="margin-top:7px"><input type="text" id="presetName" maxlength="40" placeholder="Name this setup"><button type="button" id="savePresetBtn">Save</button><button type="button" id="deletePresetBtn">Delete</button></div>
+      <p class="note">Saves the default model, per-agent models and connection settings in this browser. The API key stays in its existing private browser storage.</p>
+    </div>
     <details id="overrideDetails">
       <summary>Set a different model for individual agents</summary>
       <p class="note">Leave an agent on “Use default” to run the model above.</p>
@@ -353,7 +369,7 @@
     <button id="exitReplayBtn">Exit replay</button>
   </div>
   <div id="main">
-    <div id="boardwrap"><div id="matchPulse"><div class="pulse-card leader"><span>Leading the world</span><b id="pulseLeader">-</b></div><div class="pulse-card shift"><span>Live</span><b id="pulseEvent">Waiting for first tick</b></div></div><canvas id="board" width="960" height="640"></canvas><div id="empirebar"></div></div>
+    <div id="boardwrap"><div id="matchPulse"><div class="pulse-card leader"><span>Leading the world</span><b id="pulseLeader">-</b></div><div class="pulse-card shift"><span>Live</span><b id="pulseEvent">Waiting for first tick</b></div></div><canvas id="board" width="960" height="640"></canvas><div id="mapActions" aria-hidden="true"></div><div id="turnViz" aria-live="polite"></div><div id="empirebar"></div></div>
     <div id="side">
       <div id="lb"></div>
       <div id="tabs">
@@ -382,7 +398,7 @@ function mulberry32(seed){let a=seed>>>0;return function(){a|=0;a=(a+0x6D2B79F5)
 const CONFIG_SCHEMA = [
   ["world", [
     ["width",24,8,48,"Grid width"],["height",16,8,32,"Grid height"],
-    ["playerCount",12,2,24,"Kingdoms spawned"],["ticksPerDay",8,4,12,"Ticks between Dawn cycles"],
+    ["playerCount",4,2,24,"Kingdoms spawned"],["ticksPerDay",8,4,12,"Ticks between Dawn cycles"],
     ["maxDays",30,5,200,"Hard day limit (timed mode)"],
     ["endMode","timed",null,null,"dominion | last_stand | timed | open"],
     ["dominionPct",40,25,80,"% of map cells for dominion victory"]
@@ -953,8 +969,18 @@ function buildSetup(){
   }
   $("apiBase").value=LLM.base; $("apiKey").value=LLM.key;
   $("modelA").value=localStorage.getItem("llmempire.defaultModel") || "mock";
-  buildAgentOverrides();
+  renderLLMPresets();
+  const preferred=localStorage.getItem("llmempire.defaultLLMPreset"),saved=getLLMPresets()[preferred];
+  if(saved){applyLLMSetup(saved);renderLLMPresets(preferred)} else buildAgentOverrides();
 }
+const LLM_PRESETS_KEY="llmempire.llmPresets";
+function getLLMPresets(){try{return JSON.parse(localStorage.getItem(LLM_PRESETS_KEY)||"{}")}catch(e){return {}}}
+function renderLLMPresets(selected){const el=$("llmPreset"),ps=getLLMPresets();el.innerHTML='<option value="">Current setup</option>'+Object.keys(ps).sort().map(n=>'<option value="'+htmlSafe(n)+'">'+htmlSafe(n)+'</option>').join("");if(selected&&ps[selected])el.value=selected;}
+function currentLLMSetup(){const overrides={};document.querySelectorAll(".agent-model input").forEach((el,i)=>{if(el.value.trim())overrides[i]=el.value.trim()});return {defaultModel:$("modelA").value.trim()||"mock",overrides,apiBase:$("apiBase").value.trim(),temperature:+$("temperature").value||.7,thinkTimeoutMs:+$("thinkTimeoutMs").value||20000};}
+function applyLLMSetup(setup){if(!setup)return;$("modelA").value=setup.defaultModel||"mock";$("apiBase").value=setup.apiBase||"https://ai-gateway.vercel.sh/v1";$("temperature").value=setup.temperature??.7;$("thinkTimeoutMs").value=setup.thinkTimeoutMs||20000;localStorage.setItem("llmempire.agentModels",JSON.stringify(setup.overrides||{}));buildAgentOverrides();}
+function saveLLMPreset(){const name=$("presetName").value.trim();if(!name){toast("Name the LLM setup first");return}const ps=getLLMPresets();ps[name]=currentLLMSetup();localStorage.setItem(LLM_PRESETS_KEY,JSON.stringify(ps));renderLLMPresets(name);localStorage.setItem("llmempire.defaultLLMPreset",name);toast("Saved “"+name+"” as the default LLM setup");}
+function loadLLMPreset(){const name=$("llmPreset").value,setup=getLLMPresets()[name];if(!setup){toast("Choose a saved setup");return}applyLLMSetup(setup);localStorage.setItem("llmempire.defaultLLMPreset",name);toast("Using “"+name+"” for future matches");}
+function deleteLLMPreset(){const name=$("llmPreset").value;if(!name){toast("Choose a saved setup");return}const ps=getLLMPresets();delete ps[name];localStorage.setItem(LLM_PRESETS_KEY,JSON.stringify(ps));if(localStorage.getItem("llmempire.defaultLLMPreset")===name)localStorage.removeItem("llmempire.defaultLLMPreset");renderLLMPresets();toast("Deleted “"+name+"”");}
 function readConfig(){
   const cfg=defaultConfig();
   for (const [,knobs] of CONFIG_SCHEMA) for (const [key] of knobs){
@@ -970,7 +996,7 @@ function readConfig(){
   return cfg;
 }
 function buildAgentOverrides(){
-  const host=$("agentOverrides"), count=Math.max(2,+($("cfg_playerCount")?.value||8));
+  const host=$("agentOverrides"), count=Math.max(2,+($("cfg_playerCount")?.value||4));
   let saved={}; try{saved=JSON.parse(localStorage.getItem("llmempire.agentModels")||"{}");}catch(e){}
   host.innerHTML="";
   for(let i=0;i<count;i++){
@@ -1004,9 +1030,12 @@ function pause(){ playing=false; $("playBtn").textContent="Play"; if(timer){clea
 function play(){ if(!world||world.over)return; playing=true; $("playBtn").textContent="Pause"; timer=setInterval(tickOnce,+$("speedSel").value); }
 async function tickOnce(){
   if (!world||world.over){ pause(); return; }
+  const eventStart=world.events.length;
   await runTick(world,{phaseA:thinkPhaseA,phaseB:thinkPhaseB});
+  const turnEvents=world.events.slice(eventStart);
   DB.save({id:"latest",savedAt:Date.now(),data:exportData()});
   renderAll();
+  showTurnActions(world,turnEvents);
   if (world.over){ pause(); toast(world.winner?("Match over: "+world.kingdoms[world.winner.id].name+" wins by "+world.winner.how):"Match over: all kingdoms dead"); }
 }
 function exportData(){ return { format:"commons.json", version:1, exportedAt:new Date().toISOString(),
@@ -1029,6 +1058,14 @@ function analysisList(items,kind){if(!items?.length)return '<p class="note">None
 function renderAnalysis(saved){const host=$("analysis");if(!saved?.report){host.innerHTML='<div class="analysis-empty">No AI analysis yet.</div>';return;}const r=saved.report;let out='<div id="analysisStatus">Analyzed with '+htmlSafe(saved.model)+' · '+htmlSafe(new Date(saved.createdAt).toLocaleString())+'</div><div class="analysis-card"><h3>Match read</h3><p>'+htmlSafe(r.summary||"")+'</p></div>';for(const p of(r.players||[]))out+='<div class="analysis-card"><h3>#'+htmlSafe(p.id)+' '+htmlSafe(p.name||"")+' · '+htmlSafe(p.style||"")+'</h3><p>'+htmlSafe((p.traits||[]).join(" · "))+'</p><h4>Brilliant moves</h4>'+analysisList(p.brilliantMoves,"brilliant")+'<h4>Blunders</h4>'+analysisList(p.blunders,"blunder")+'<h4>Diplomacy</h4><p>'+htmlSafe(p.diplomacy||"")+'</p><h4>Lesson</h4><p>'+htmlSafe(p.lesson||"")+'</p></div>';if(r.turningPoints?.length)out+='<div class="analysis-card"><h3>Turning points</h3>'+analysisList(r.turningPoints,"brilliant")+'</div>';if(r.metaInsights?.length)out+='<div class="analysis-card"><h3>Meta insights</h3><ul>'+r.metaInsights.map(x=>'<li>'+htmlSafe(x)+'</li>').join("")+'</ul></div>';host.innerHTML=out;}
 
 // ---------- rendering ----------
+const ACTION_VISUALS={harvest:["🌾","Harvest"],plant:["🌱","Plant"],eat:["🍞","Eat"],train:["⚔️","Train"],fortify:["🛡️","Fortify"],claim:["🧭","Expand"],raid:["💥","Attack"],share:["🎁","Share"],trade_offer:["🤝","Offer trade"],honor:["✅","Honor trade"],move:["➜","Move"],rest:["💤","Rest"]};
+function showTurnActions(w,events){
+  const acts=events.filter(e=>e.type==="Act"); if(!acts.length)return;
+  const viz=$("turnViz"), map=$("mapActions");
+  viz.innerHTML=acts.map(e=>{const k=w.kingdoms[e.kingdomId],v=ACTION_VISUALS[e.act]||["•",e.act];return '<div class="turn-action" style="--kc:'+k.color+'"><span class="aicon">'+v[0]+'</span><span class="awho"><b>#'+(k.id+1)+' '+htmlSafe(k.name)+'</b><small>'+htmlSafe(v[1])+'</small></span></div>';}).join("");
+  map.innerHTML=acts.map(e=>{const k=w.kingdoms[e.kingdomId],a=kingdomAnchor(w,k.id),v=ACTION_VISUALS[e.act]||["•",e.act];if(!a)return "";const g=boardGeom(w),cv=$("board"),left=(g.ox+(a[0]+.5)*g.cell)/cv.width*100,top=(g.oy+(a[1]+.5)*g.cell)/cv.height*100;return '<span class="map-action" title="'+htmlSafe(k.name+' · '+v[1])+'" style="--kc:'+k.color+';left:'+left+'%;top:'+top+'%">'+v[0]+'</span>';}).join("");
+  viz.getAnimations().forEach(a=>{a.cancel();a.play()}); map.getAnimations({subtree:true}).forEach(a=>{a.cancel();a.play()});
+}
 function renderAll(){ if(!world)return; renderBoard(world); renderLeaderboard(world); renderEmpires(world); renderEvents(world); renderInspector(); renderClock(world); if(world.aiAnalysis)renderAnalysis(world.aiAnalysis); }
 function renderClock(w){
   $("clock").textContent="Day "+w.day+" - tick "+(w.tick+1)+"/"+w.cfg.ticksPerDay+(w.over?" - OVER":"");
@@ -1233,6 +1270,10 @@ $("cacheBtn").onclick=()=>{ pendingInject="cache"; toast("Click an unowned cell 
 $("silenceBtn").onclick=()=>{ injectSilence(world,8); toast("Radio silence for 8 ticks"); renderAll(); };
 $("curfewBtn").onclick=()=>{ injectCurfew(world,16); toast("Curfew: raids disabled for 16 ticks"); renderAll(); };
 $("muteBtn").onclick=()=>{ if(selectedKingdom===null){toast("Select a kingdom first (leaderboard)");return;} injectMute(world,selectedKingdom,16); toast(world.kingdoms[selectedKingdom].name+" muted for 16 ticks"); renderAll(); };
+$("savePresetBtn").onclick=saveLLMPreset;
+$("loadPresetBtn").onclick=loadLLMPreset;
+$("deletePresetBtn").onclick=deleteLLMPreset;
+$("llmPreset").onchange=()=>{const n=$("llmPreset").value;if(n)$("presetName").value=n;};
 $("toggleKey").onclick=()=>{ const key=$("apiKey"); const reveal=key.type==="password"; key.type=reveal?"text":"password"; $("toggleKey").textContent=reveal?"Hide":"Show"; };
 document.addEventListener("change",e=>{ if(e.target.id==="cfg_playerCount") buildAgentOverrides(); });
 $("modelA").addEventListener("change",()=>{ if($("modelA").value.trim()==="mock") $("setupMsg").textContent="Mock mode runs locally with no key."; else $("setupMsg").textContent=$("apiKey").value.trim()?"Model ready.":"Add an API key to use this model."; });
