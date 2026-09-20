@@ -46,6 +46,18 @@
   #main{display:flex;flex:1;min-height:0}
   #boardwrap{flex:1;display:flex;align-items:center;justify-content:center;padding:10px;min-width:0}
   canvas{background:#0a0f18;border:1px solid var(--line);border-radius:8px;max-width:100%;max-height:100%}
+  #boardwrap{flex-direction:column;gap:8px}
+  #empirebar{display:flex;gap:8px;overflow-x:auto;width:100%;max-width:100%;padding:2px 2px 4px;scrollbar-width:none}
+  #empirebar::-webkit-scrollbar{display:none}
+  .ecard{flex:0 0 auto;min-width:118px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px;cursor:pointer}
+  .ecard.sel{border-color:var(--acc);background:#16233a}
+  .ecard.dead{opacity:.4}
+  .ecard .ename{display:flex;align-items:center;font-weight:600;font-size:12px;margin-bottom:5px;white-space:nowrap}
+  .estat{display:flex;justify-content:space-between;gap:10px;font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums;line-height:1.7}
+  .estat b{color:var(--txt);font-weight:600}
+  .estat.secret span{color:#a58bd0}
+  .ebar{height:3px;background:#1c2635;border-radius:2px;margin:1px 0 3px;overflow:hidden}
+  .ebar i{display:block;height:100%;border-radius:2px}
   #side{width:360px;min-width:300px;border-left:1px solid var(--line);background:var(--panel2);display:flex;flex-direction:column}
   #lb{max-height:220px;overflow:auto;padding:8px 10px;border-bottom:1px solid var(--line)}
   #lb table{width:100%;border-collapse:collapse;font-size:12px}
@@ -274,7 +286,7 @@
     <button id="exitReplayBtn">Exit replay</button>
   </div>
   <div id="main">
-    <div id="boardwrap"><canvas id="board" width="960" height="640"></canvas></div>
+    <div id="boardwrap"><canvas id="board" width="960" height="640"></canvas><div id="empirebar"></div></div>
     <div id="side">
       <div id="lb"></div>
       <div id="tabs">
@@ -949,7 +961,7 @@ function analysisList(items,kind){if(!items?.length)return '<p class="note">None
 function renderAnalysis(saved){const host=$("analysis");if(!saved?.report){host.innerHTML='<div class="analysis-empty">No AI analysis yet.</div>';return;}const r=saved.report;let out='<div id="analysisStatus">Analyzed with '+htmlSafe(saved.model)+' · '+htmlSafe(new Date(saved.createdAt).toLocaleString())+'</div><div class="analysis-card"><h3>Match read</h3><p>'+htmlSafe(r.summary||"")+'</p></div>';for(const p of(r.players||[]))out+='<div class="analysis-card"><h3>#'+htmlSafe(p.id)+' '+htmlSafe(p.name||"")+' · '+htmlSafe(p.style||"")+'</h3><p>'+htmlSafe((p.traits||[]).join(" · "))+'</p><h4>Brilliant moves</h4>'+analysisList(p.brilliantMoves,"brilliant")+'<h4>Blunders</h4>'+analysisList(p.blunders,"blunder")+'<h4>Diplomacy</h4><p>'+htmlSafe(p.diplomacy||"")+'</p><h4>Lesson</h4><p>'+htmlSafe(p.lesson||"")+'</p></div>';if(r.turningPoints?.length)out+='<div class="analysis-card"><h3>Turning points</h3>'+analysisList(r.turningPoints,"brilliant")+'</div>';if(r.metaInsights?.length)out+='<div class="analysis-card"><h3>Meta insights</h3><ul>'+r.metaInsights.map(x=>'<li>'+htmlSafe(x)+'</li>').join("")+'</ul></div>';host.innerHTML=out;}
 
 // ---------- rendering ----------
-function renderAll(){ if(!world)return; renderBoard(world); renderLeaderboard(world); renderEvents(world); renderInspector(); renderClock(world); if(world.aiAnalysis)renderAnalysis(world.aiAnalysis); }
+function renderAll(){ if(!world)return; renderBoard(world); renderLeaderboard(world); renderEmpires(world); renderEvents(world); renderInspector(); renderClock(world); if(world.aiAnalysis)renderAnalysis(world.aiAnalysis); }
 function renderClock(w){
   $("clock").textContent="Day "+w.day+" - tick "+(w.tick+1)+"/"+w.cfg.ticksPerDay+(w.over?" - OVER":"");
   $("alivePill").textContent=w.kingdoms.filter(k=>k.alive).length+" alive";
@@ -984,6 +996,24 @@ function renderBoard(w, snap){
       ctx.beginPath(); ctx.arc(px+cell/2,py+cell/2,r,0,7); ctx.fill();
     }
   }
+  const dispCell = cell * (cv.clientWidth ? cv.clientWidth / cv.width : 1);
+  if (!snap && dispCell >= 22){
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    for (const k of w.kingdoms){
+      if (!k.alive) continue;
+      const a=kingdomAnchor(w,k.id); if(!a) continue;
+      const cx=ox+a[0]*cell+cell/2, cy=oy+a[1]*cell+cell/2;
+      const label="\u2694"+k.army;
+      ctx.font="bold "+Math.max(10,Math.floor(cell*0.32))+"px -apple-system,Segoe UI,Roboto,sans-serif";
+      const tw=ctx.measureText(label).width+12, th=Math.max(15,Math.floor(cell*0.46));
+      ctx.beginPath();
+      ctx.roundRect(cx-tw/2, cy-th/2, tw, th, th/2);
+      ctx.fillStyle="rgba(6,10,16,.88)"; ctx.fill();
+      ctx.strokeStyle=k.color; ctx.lineWidth=1.5; ctx.stroke();
+      ctx.fillStyle="#f2f6fc";
+      ctx.fillText(label, cx, cy+0.5);
+    }
+  }
   if (!snap && pendingInject){ cv.style.cursor="crosshair"; } else cv.style.cursor="default";
 }
 function renderLeaderboard(w){
@@ -995,7 +1025,7 @@ function renderLeaderboard(w){
       +"<td>"+land+"</td><td>"+k.pop+"</td><td>"+k.army+"</td><td>"+(k.actModel==="mock"?"mock":k.actModel.split("/")[1]||k.actModel)+"</td></tr>";
   }
   $("lb").innerHTML=html+"</tbody></table>";
-  for (const tr of $("lb").querySelectorAll("tr[data-k]")) tr.onclick=()=>{ selectedKingdom=+tr.dataset.k; renderLeaderboard(world); renderInspector(); showTab("insp"); };
+  for (const tr of $("lb").querySelectorAll("tr[data-k]")) tr.onclick=()=>{ selectedKingdom=+tr.dataset.k; renderLeaderboard(world); renderEmpires(world); renderInspector(); showTab("insp"); };
 }
 function evText(w,ev){
   const kn=(id)=>id>=0?("#"+(id+1)):"-";
@@ -1014,6 +1044,24 @@ function evText(w,ev){
     case "Usage": return kn(ev.kingdomId)+" "+ev.modelId+" used "+ev.inputTokens+"+"+ev.outputTokens+" tok (~$"+ev.estimatedCostUsd.toFixed(5)+")";
     default: return JSON.stringify(ev);
   }
+}
+function renderEmpires(w){
+  const bar=$("empirebar"); if(!bar) return;
+  const rows=w.kingdoms.map(k=>({k,land:cellsOf(w,k.id).length})).sort((a,b)=>b.land-a.land||b.k.army-a.k.army);
+  const maxArmy=Math.max(1,...rows.map(r=>r.k.army));
+  let html="";
+  for (const {k,land} of rows){
+    html+='<div class="ecard'+(k.alive?"":" dead")+(selectedKingdom===k.id?" sel":"")+'" data-k="'+k.id+'">'
+      +'<div class="ename"><span class="dot" style="background:'+k.color+'"></span>'+htmlSafe(k.name)+'</div>'
+      +'<div class="estat"><span>\u2694 Army</span><b>'+k.army+'</b></div>'
+      +'<div class="ebar"><i style="width:'+Math.round(k.army/maxArmy*100)+'%;background:'+k.color+'"></i></div>'
+      +'<div class="estat"><span>\u25CF Pop</span><b>'+k.pop+'</b></div>'
+      +'<div class="estat"><span>\u25A6 Land</span><b>'+land+'</b></div>'
+      +'<div class="estat secret"><span>\uD83C\uDF3E Food</span><b>'+k.food+'</b></div>'
+      +'</div>';
+  }
+  bar.innerHTML=html;
+  for (const c of bar.querySelectorAll(".ecard")) c.onclick=()=>{ selectedKingdom=+c.dataset.k; renderLeaderboard(world); renderEmpires(world); renderInspector(); showTab("insp"); };
 }
 function renderEvents(w){
   const box=$("events");
