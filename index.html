@@ -1361,6 +1361,8 @@ document.addEventListener("keydown",(e)=>{ if(e.code==="Space"&&world&&!replayDa
 buildSetup();
 DB.open().then(async ()=>{
   const saved=await DB.latest();
+  // Do not let a slow local-storage restore overwrite a match the user just started.
+  if(world || $("home").classList.contains("hidden")) return;
   if (saved && saved.data && saved.data.snapshots && saved.data.snapshots.length){
     $("setupMsg").textContent="Resumed last match from local telemetry ("+saved.data.snapshots.length+" ticks logged).";
     loadReplay(saved.data); replayData=null; $("replaybar").classList.remove("show");
