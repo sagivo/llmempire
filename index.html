@@ -245,6 +245,17 @@
     #side{min-height:31dvh}.ev{padding-left:39px!important}
   }
 
+  /* Deep audit fixes */
+  #matchEnd{display:none}
+  #app.match-over #matchEnd{display:block;order:2;padding:10px 12px;border:1px solid rgba(99,216,255,.25);border-radius:12px;background:linear-gradient(135deg,rgba(29,47,73,.95),rgba(13,20,34,.95));font-weight:800;color:#f2f7ff}
+  @media(max-width:759px){
+    #topbar #toolsBtn.open:before{content:'×';font-size:24px;letter-spacing:0}
+    #boardwrap{gap:7px}.story-title{font-size:11px}.story-detail{line-height:1.3}
+    #sidebody{scrollbar-width:none}#sidebody::-webkit-scrollbar{display:none}
+    .agent-stats{display:grid;grid-template-columns:1fr 1fr;gap:5px 12px}
+    #replaybar{display:grid;grid-template-columns:auto 1fr auto;gap:7px;align-items:center}#replaybar input{grid-column:1/-1;grid-row:2}
+  }
+
 </style>
 </head>
 <body>
@@ -393,7 +404,7 @@
     <button id="exitReplayBtn">Exit replay</button>
   </div>
   <div id="main">
-    <div id="boardwrap"><div id="mapframe"><canvas id="board" width="960" height="640"></canvas><div id="matchPulse"><div class="pulse-card leader"><span>Leading the world</span><b id="pulseLeader">-</b></div><div class="pulse-card shift"><span>Live</span><b id="pulseEvent">Waiting for first tick</b></div></div><div id="mapActions" aria-hidden="true"></div></div><div id="liveStory"><div class="story-kicker">Live story</div><div class="story-title" id="storyTitle">The kingdoms are taking position</div><div class="story-detail" id="storyDetail">Press play to watch the first decisions unfold.</div></div><div id="turnViz" aria-live="polite"></div><div id="empirebar"></div></div>
+    <div id="boardwrap"><div id="mapframe"><canvas id="board" width="960" height="640"></canvas><div id="matchPulse"><div class="pulse-card leader"><span>Leading the world</span><b id="pulseLeader">-</b></div><div class="pulse-card shift"><span>Live</span><b id="pulseEvent">Waiting for first tick</b></div></div><div id="mapActions" aria-hidden="true"></div></div><div id="liveStory"><div class="story-kicker">Live story</div><div class="story-title" id="storyTitle">The kingdoms are taking position</div><div class="story-detail" id="storyDetail">Press play to watch the first decisions unfold.</div></div><div id="matchEnd"></div><div id="turnViz" aria-live="polite"></div><div id="empirebar"></div></div>
     <div id="side">
       <div id="lb"></div>
       <div id="tabs">
@@ -505,9 +516,8 @@ function legalActions(world,k){
   if (cells.some(c=>world.grid[c[1]][c[0]].crop===0) && k.food>=cfg.plantCostFood) acts.push("plant");
   if (k.food>=1 && k.stamina<=cfg.staminaCap-cfg.eatStaminaGain+1) acts.push("eat");
   if (cells.some(c=>neighbors4(world,c[0],c[1]).some(n=>world.grid[n[1]][n[0]].owner===null)) && k.stamina>=1) acts.push("claim");
-  if (world.tick<world.curfewUntil ? false : true){} // curfew check below
-  const raidCells=[];
-  if (world.tick>=world.curfewUntil && k.stamina>=1 && k.army>=1){
+    const raidCells=[];
+  if (absTick(world)>=world.curfewUntil && k.stamina>=1 && k.army>=1){
     for (const c of cells) for (const n of neighbors4(world,c[0],c[1])){ const o=world.grid[n[1]][n[0]].owner; if (o!==null && o!==k.id && world.kingdoms[o].alive) raidCells.push(n); }
     if (raidCells.length) acts.push("raid");
   }
@@ -693,7 +703,7 @@ function truncateSentences(text,n){
 }
 function speak(world,k,phaseA){
   const cfg=world.cfg;
-  if (world.tick<world.silenceUntil) return; // radio silence
+  if (absTick(world)<world.silenceUntil) return; // radio silence
   let bulletin=phaseA.bulletin, letters=phaseA.letters||[];
   if (bulletin && k.mutedUntil>absTick(world)) bulletin=null;
   if (bulletin){
@@ -811,7 +821,7 @@ function injectDrought(world,x0,y0,x1,y1){
 function injectSilence(world,ticks){ world.silenceUntil=absTick(world)+ticks; emit(world,{type:"Control",tick:absTick(world),operatorAction:"radio_silence",parameters:{ticks}}); }
 function injectMute(world,kid,ticks){ world.kingdoms[kid].mutedUntil=absTick(world)+ticks; emit(world,{type:"Control",tick:absTick(world),operatorAction:"mute",parameters:{kingdom:kid,ticks}}); }
 function injectCurfew(world,ticks){ world.curfewUntil=absTick(world)+ticks; emit(world,{type:"Control",tick:absTick(world),operatorAction:"curfew",parameters:{ticks}}); }
-function injectCacheDrop(world,x,y){ const c=wrap(world,x,y); if (world.grid[c[1]][c[0]].owner===null) world.grid[c[1]][c[0]].crop=3; emit(world,{type:"Control",tick:absTick(world),operatorAction:"cache_drop",parameters:{x:c[0],y:c[1]}}); }
+function injectCacheDrop(world,x,y){ const c=wrap(world,x,y); if(world.grid[c[1]][c[0]].owner!==null)return false; world.grid[c[1]][c[0]].crop=3; emit(world,{type:"Control",tick:absTick(world),operatorAction:"cache_drop",parameters:{x:c[0],y:c[1]}}); return true; }
 
 // ---------- snapshots (compact, for replay/export) ----------
 function takeSnapshot(world){
@@ -920,7 +930,7 @@ function phaseBSystem(world,k){
   '{\n  "act": string,\n  "target": number | null,\n  "dir": string | null,\n  "note": string\n}\nKingdom ids for target are 0-based: kingdom #n has id n-1.';
 }
 function phaseBUser(world,k){
-  return "Day "+world.day+" tick "+(world.tick+1)+". Secret: food "+k.food+", stamina "+k.stamina+". Public: land "+cellsOf(world,k.id).length+", army "+k.army+", pop "+k.pop+". Archetype: "+k.goal+". Pending trade offers: "+k.pendingOffers.length+". Curfew: "+(world.tick<world.curfewUntil?"active":"none")+".";
+  return "Day "+world.day+" tick "+(world.tick+1)+". Secret: food "+k.food+", stamina "+k.stamina+". Public: land "+cellsOf(world,k.id).length+", army "+k.army+", pop "+k.pop+". Archetype: "+k.goal+". Pending trade offers: "+k.pendingOffers.length+". Curfew: "+(absTick(world)<world.curfewUntil?"active":"none")+".";
 }
 
 async function thinkPhaseA(world,k){
@@ -1043,6 +1053,7 @@ function assignRoster(world){
 
 // ---------- match lifecycle ----------
 function newMatch(cfg,seed){
+  replayData=null; pendingInject=null; eventView="highlights"; showTab("world");
   world=createWorld(cfg,seed??Math.floor(Math.random()*2**31));
   assignRoster(world);
   emit(world,{type:"Control",tick:0,operatorAction:"match_start",parameters:{seed:world.seed,roster:"custom",defaultModel:$("modelA").value.trim()||"mock"}});
@@ -1053,8 +1064,9 @@ function newMatch(cfg,seed){
   toast("Match started - seed "+world.seed);
   renderAll();
 }
-function pause(){ playing=false; $("playBtn").textContent="Play"; if(timer){clearInterval(timer);timer=null;} }
-function play(){ if(!world||world.over)return; playing=true; $("playBtn").textContent="Pause"; timer=setInterval(tickOnce,+$("speedSel").value); }
+function pause(){ playing=false; $("playBtn").textContent="Play"; $("playBtn").classList.remove("playing"); if(timer){clearTimeout(timer);timer=null;} }
+function scheduleTick(){ if(!playing)return; timer=setTimeout(async()=>{await tickOnce();scheduleTick();},+$("speedSel").value); }
+function play(){ if(!world||world.over||playing)return; playing=true; $("playBtn").textContent="Pause"; $("playBtn").classList.add("playing"); scheduleTick(); }
 async function tickOnce(){
   if (!world||world.over){ pause(); return; }
   const eventStart=world.events.length;
@@ -1063,7 +1075,7 @@ async function tickOnce(){
   DB.save({id:"latest",savedAt:Date.now(),data:exportData()});
   renderAll();
   showTurnActions(world,turnEvents);
-  if (world.over){ pause(); toast(world.winner?("Match over: "+world.kingdoms[world.winner.id].name+" wins by "+world.winner.how):"Match over: all kingdoms dead"); }
+  if (world.over){ pause(); showTab("world"); toast(world.winner?("Match over: "+world.kingdoms[world.winner.id].name+" wins by "+world.winner.how.replace("_"," ")):"Match over: all kingdoms fell"); }
 }
 function exportData(){ return { format:"commons.json", version:1, exportedAt:new Date().toISOString(),
   config:world.cfg, seed:world.seed, usage:world.usage, events:world.events, snapshots:world.snapshots, aiAnalysis:world.aiAnalysis||null }; }
@@ -1102,7 +1114,7 @@ function renderWorldTab(w){
     +(notable.length?'<div class="agent-section"><label>Latest shifts</label>'+notable.map(e=>'<div class="agent-action"><span>'+eventIcon(e.type)+'</span><span>'+htmlSafe(evText(w,e))+'</span></div>').join('')+'</div>':'')
     +'<div class="analysis-empty" style="padding-top:8px">Tap a kingdom on the map or in the agent strip to follow its story.</div>';
 }
-function renderAll(){ if(!world)return; renderBoard(world); renderLeaderboard(world); renderEmpires(world); renderEvents(world); renderInspector(); renderClock(world); renderWorldTab(world); if(world.aiAnalysis)renderAnalysis(world.aiAnalysis); }
+function renderAll(){ if(!world)return; $("app").classList.toggle("match-over",world.over); const end=$("matchEnd"); if(world.over) end.textContent=world.winner?("🏆 "+world.kingdoms[world.winner.id].name+" wins by "+world.winner.how.replace("_"," ")+"."):"Every kingdom has fallen."; renderBoard(world); renderLeaderboard(world); renderEmpires(world); renderEvents(world); renderInspector(); renderClock(world); renderWorldTab(world); if(world.aiAnalysis)renderAnalysis(world.aiAnalysis); }
 function storyFor(w,ev){
   if(!ev)return {title:"The kingdoms are taking position",detail:"Press play to watch the first decisions unfold."};
   const name=id=>id>=0&&w.kingdoms[id]?w.kingdoms[id].name:"A kingdom";
@@ -1119,8 +1131,8 @@ function storyFor(w,ev){
 function renderClock(w){
   $("clock").textContent="Day "+w.day+" - tick "+(w.tick+1)+"/"+w.cfg.ticksPerDay+(w.over?" - OVER":"");
   $("alivePill").textContent=w.kingdoms.filter(k=>k.alive).length+" alive";
-  $("curfewPill").style.display = w.tick<w.curfewUntil?"":"none";
-  $("silencePill").style.display = w.tick<w.silenceUntil?"":"none";
+  $("curfewPill").style.display = absTick(w)<w.curfewUntil?"":"none";
+  $("silencePill").style.display = absTick(w)<w.silenceUntil?"":"none";
   const ranked=w.kingdoms.map(k=>({k,land:cellsOf(w,k.id).length})).sort((a,b)=>b.land-a.land||b.k.army-a.k.army);
   if($("pulseLeader")&&ranked[0]) $("pulseLeader").textContent=ranked[0].k.name+" · "+ranked[0].land+" land · ⚔ "+ranked[0].k.army;
   const shift=[...w.events].reverse().find(e=>["Combat","Fall","Dawn","Transfer","Letter","Bulletin","ActRejected"].includes(e.type)||(e.type==="Control"&&e.operatorAction!=="match_start"));
@@ -1238,7 +1250,7 @@ function renderInspector(){
   const acts=world.events.filter(e=>e.type==="Act"&&e.kingdomId===k.id).slice(-4).reverse();
   const latest=acts[0],v=latest?(ACTION_VISUALS[latest.act]||["•",latest.act]):["…","Waiting"];
   el.innerHTML='<div class="agent-hero"><h2><span class="dot" style="background:'+k.color+'"></span>'+htmlSafe(k.name)+(k.alive?'':' (fallen)')+'</h2><div class="agent-stats"><span>👥 '+k.pop+' pop</span><span>⚔ '+k.army+' army</span><span>▦ '+land+' land</span><span>🌾 '+k.food+' food</span></div></div>'+
-  '<div class="agent-section"><label>Current plan</label><p>'+(htmlSafe(k.selfNote||k.goal||"Watching the board before committing."))+'</p></div>'+
+  '<div class="agent-section"><label>Current plan</label><p>'+(htmlSafe((()=>{const note=k.selfNote||k.goal||"Watching the board before committing.";const m=note.match(/plan:([^|]+)/);return m?m[1].trim().replace(/^./,c=>c.toUpperCase()):note;})()))+'</p></div>'+
   '<div class="agent-section"><label>Latest action</label><div class="agent-action"><span>'+v[0]+'</span><span><b>'+htmlSafe(v[1])+'</b>'+(latest?.note?'<br>'+htmlSafe(latest.note):'')+'</span></div></div>'+
   '<div class="agent-section"><label>Recent conversation</label>'+(speech.length?speech.map(e=>'<div class="agent-action"><span>💬</span><span>'+htmlSafe(e.type==="Letter"?('#'+(e.from+1)+' → #'+(e.to+1)+': '+e.text):e.text)+'</span></div>').join(''):'<p>No messages yet.</p>')+'</div>'+
   '<div class="agent-section"><label>Memory and belief</label><p>'+htmlSafe(k.selfNote||"No private memory recorded yet.")+'</p></div><button class="watch-btn" id="watchAgent">👁 Watch '+htmlSafe(k.name)+'</button>';
@@ -1251,8 +1263,19 @@ function showTab(name){
 }
 
 // ---------- replay ----------
+function validateReplay(data){
+  if(!data||data.format!=="commons.json"||!data.config||!Array.isArray(data.snapshots)||!data.snapshots.length||!Array.isArray(data.events))throw new Error("Not a valid LLM Empire replay");
+  const n=data.config.width*data.config.height;
+  if(!data.snapshots.every(s=>Array.isArray(s.owners)&&s.owners.length===n&&Array.isArray(s.kingdoms)&&s.kingdoms.length===data.config.playerCount))throw new Error("Replay data is incomplete or incompatible");
+}
+function restoreSnapshot(snap){
+  world.day=snap.day;world.tick=snap.tick;world.over=snap.over;world.winner=snap.winner;
+  const W=world.cfg.width;
+  for(let y=0;y<world.cfg.height;y++)for(let x=0;x<W;x++){const i=y*W+x,g=world.grid[y][x];g.owner=snap.owners[i]===-1?null:snap.owners[i];g.crop=snap.crops[i];g.shield=snap.shields[i];}
+  snap.kingdoms.forEach((s,i)=>{const k=world.kingdoms[i];Object.assign(k,{alive:s.alive,pop:s.pop,army:s.army,food:s.food,stamina:s.stamina,bulletin:s.bulletin,selfNote:s.selfNote,goal:s.goal||k.goal,talkModel:s.talkModel||k.talkModel,actModel:s.actModel||k.actModel});});
+}
 function loadReplay(data){
-  replayData=data; replayIdx=0;
+  validateReplay(data); replayData=data; replayIdx=0;
   $("home").classList.add("hidden"); $("setup").classList.add("hidden"); $("app").classList.remove("hidden");
   $("replaybar").classList.add("show"); pause();
   const cfg=data.config;
@@ -1266,13 +1289,10 @@ function loadReplay(data){
 }
 function applyReplayIdx(){
   const snap=replayData.snapshots[replayIdx];
-  world.day=snap.day; world.tick=snap.tick; world.over=snap.over; world.winner=snap.winner;
-  const W=world.cfg.width;
-  for(let y=0;y<world.cfg.height;y++)for(let x=0;x<W;x++){ const i=y*W+x,g=world.grid[y][x];
-    g.owner=snap.owners[i]===-1?null:snap.owners[i]; g.crop=snap.crops[i]; g.shield=snap.shields[i]; }
-  snap.kingdoms.forEach((s,i)=>{ const k=world.kingdoms[i]; Object.assign(k,{alive:s.alive,pop:s.pop,army:s.army,food:s.food,stamina:s.stamina,bulletin:s.bulletin,selfNote:s.selfNote}); });
-  world.events=replayData.events.filter(e=>e.tick<=replayIdx+1);
-  $("replayClock").textContent="Day "+snap.day+" - tick "+(snap.tick+1)+"/"+world.cfg.ticksPerDay;
+  restoreSnapshot(snap);
+  const maxTick=Math.max(0,(snap.day-1)*world.cfg.ticksPerDay+snap.tick);
+  world.events=replayData.events.filter(e=>e.tick===undefined||e.tick<maxTick);
+  $("replayClock").textContent=snap.over?"Match over":"Day "+snap.day+" - tick "+(snap.tick+1)+"/"+world.cfg.ticksPerDay;
   renderedEventCount=0; $("events").innerHTML="";
   renderAll();
 }
@@ -1282,10 +1302,11 @@ $("board").addEventListener("click",(e)=>{
   if (!world) return;
   const cv=$("board"), r=cv.getBoundingClientRect();
   const {cell,ox,oy}=boardGeom(world);
-  const x=Math.floor((e.clientX-r.left-ox)/cell), y=Math.floor((e.clientY-r.top-oy)/cell);
+  const sx=cv.width/r.width,sy=cv.height/r.height;
+  const x=Math.floor(((e.clientX-r.left)*sx-ox)/cell), y=Math.floor(((e.clientY-r.top)*sy-oy)/cell);
   if (x<0||y<0||x>=world.cfg.width||y>=world.cfg.height) return;
   if (pendingInject==="drought"){ injectDrought(world,x-2,y-2,x+2,y+2); pendingInject=null; toast("Drought injected"); renderAll(); return; }
-  if (pendingInject==="cache"){ injectCacheDrop(world,x,y); pendingInject=null; toast("Cache dropped"); renderAll(); return; }
+  if (pendingInject==="cache"){ if(injectCacheDrop(world,x,y)){pendingInject=null;toast("Food cache dropped");renderAll();}else toast("Choose an empty, unowned cell"); return; }
   const o=world.grid[y][x].owner;
   if (o!==null){ selectedKingdom=o; renderLeaderboard(world); renderInspector(); showTab("insp"); }
 });
@@ -1293,7 +1314,8 @@ $("board").addEventListener("click",(e)=>{
 // ---------- wiring ----------
 const operatorDrawer=$("operatorDrawer");
 if(operatorDrawer){["analyzeBtn","exportBtn","newBtn"].forEach(id=>operatorDrawer.appendChild($(id)));const ab=document.querySelector("#topbar .aboutOpen");if(ab)operatorDrawer.appendChild(ab);}
-$("toolsBtn").onclick=()=>{operatorDrawer.classList.toggle("show");$("toolsBtn").textContent=operatorDrawer.classList.contains("show")?"Close":"Tools";};
+$("toolsBtn").onclick=()=>{operatorDrawer.classList.toggle("show");$("toolsBtn").classList.toggle("open",operatorDrawer.classList.contains("show"));};
+operatorDrawer.addEventListener("click",()=>{operatorDrawer.classList.remove("show");$("toolsBtn").classList.remove("open");});
 $("highlightsBtn").onclick=()=>{eventView="highlights";$("highlightsBtn").classList.add("on");$("allEventsBtn").classList.remove("on");renderEvents(world);};
 $("allEventsBtn").onclick=()=>{eventView="all";$("allEventsBtn").classList.add("on");$("highlightsBtn").classList.remove("on");renderEvents(world);};
 for(const group of document.querySelectorAll("#setup .cols>div")){const h=group.querySelector("h2");if(h)h.onclick=()=>{if(matchMedia("(max-width:759px)").matches)group.classList.toggle("collapsed");};}
@@ -1305,7 +1327,7 @@ function toast(msg){ const t=$("toast"); t.textContent=msg; t.style.display="blo
 $("playBtn").onclick=()=>{ replayData?null:(playing?pause():play()); };
 $("stepBtn").onclick=()=>{ if(!replayData){pause();tickOnce();} };
 $("speedSel").onchange=()=>{ if(playing){pause();play();} };
-$("newBtn").onclick=()=>{ pause(); world=null; replayData=null; showScreen("setup"); };
+$("newBtn").onclick=()=>{ pause(); world=null; replayData=null; pendingInject=null; operatorDrawer.classList.remove("show"); showScreen("setup"); };
 $("analyzeBtn").onclick=analyzeMatch;
 $("exportBtn").onclick=()=>{
   const blob=new Blob([JSON.stringify(exportData())],{type:"application/json"});
@@ -1328,7 +1350,7 @@ $("modelA").addEventListener("change",()=>{ if($("modelA").value.trim()==="mock"
 $("startBtn").onclick=()=>{ const cfg=readConfig(); newMatch(cfg); };
 $("loadReplayBtn").onclick=()=>$("replayFile").click();
 $("replayFile").onchange=(e)=>{ const f=e.target.files[0]; if(!f)return;
-  f.text().then(t=>{ try{ loadReplay(JSON.parse(t)); }catch(err){ $("setupMsg").textContent="Could not parse replay: "+err.message; } }); };
+  f.text().then(t=>{ try{ loadReplay(JSON.parse(t)); }catch(err){ $("setupMsg").textContent="Could not load replay: "+err.message; } finally { e.target.value=""; } }); };
 $("replaySlider").oninput=(e)=>{ replayIdx=+e.target.value; applyReplayIdx(); };
 $("exitReplayBtn").onclick=()=>{ replayData=null; $("replaybar").classList.remove("show"); $("app").classList.add("hidden"); $("setup").classList.remove("hidden"); };
 document.querySelectorAll("#observe [data-power]").forEach(b=>b.onclick=()=>{const m={drought:"droughtBtn",silence:"silenceBtn",curfew:"curfewBtn",cache:"cacheBtn",mute:"muteBtn"};$(m[b.dataset.power]).click();});
@@ -1346,15 +1368,12 @@ DB.open().then(async ()=>{
     const data=saved.data; world=createWorld(data.config,data.seed);
     // restore roster from snapshot meta
     world.kingdoms.forEach((k,i)=>{ const s=data.snapshots[0].kingdoms[i]; k.goal=s.goal; k.talkModel=s.talkModel; k.actModel=s.actModel; });
-    pause(); renderAll();
-    toast("Restored match - press Play to continue (deterministic re-sim)");
-    // fast-forward synchronously with mock-speed loop (LLM calls skipped: events already logged)
-    (async()=>{ const n=data.snapshots.length-1;
-      for(let i=0;i<n && !world.over;i++){ await runTick(world,{phaseA:async(w,k)=>mockPhaseA(w,k),phaseB:async(w,k)=>mockPhaseB(w,k)}); }
-      renderedEventCount=world.events.length;
-      // use the recorded event history for the audit stream (has real LLM text if any)
-      world.events=data.events; renderedEventCount=0; $("events").innerHTML=""; renderAll();
-    })();
+    pause();
+    // Restore the recorded state exactly. Re-simulating would corrupt matches that used real models.
+    restoreSnapshot(data.snapshots[data.snapshots.length-1]);
+    world.events=data.events; world.snapshots=data.snapshots; world.usage=data.usage||world.usage; world.aiAnalysis=data.aiAnalysis||null;
+    renderedEventCount=0; $("events").innerHTML=""; renderAll();
+    toast(world.over?"Restored finished match":"Restored match - press Play to continue");
   }
 });
 </script>
