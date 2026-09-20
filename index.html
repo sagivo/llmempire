@@ -809,8 +809,11 @@ function buildAgentOverrides(){
   host.innerHTML="";
   for(let i=0;i<count;i++){
     const row=document.createElement("label"); row.className="agent-model";
-    row.innerHTML='<span><i class="dot" style="background:'+KINGDOM_COLORS[i%KINGDOM_COLORS.length]+'"></i>Agent #'+(i+1)+'</span><input type="text" list="modelOptions" placeholder="Use default" value="'+escapeHtml(saved[i]||"")+'">';
-    host.appendChild(row);
+    const name=document.createElement("span"), dot=document.createElement("i"), input=document.createElement("input");
+    dot.className="dot"; dot.style.background=KINGDOM_COLORS[i%KINGDOM_COLORS.length];
+    name.append(dot,document.createTextNode("Agent #"+(i+1)));
+    input.type="text"; input.setAttribute("list","modelOptions"); input.placeholder="Use default"; input.value=saved[i]||"";
+    row.append(name,input); host.appendChild(row);
   }
 }
 function assignRoster(world){
