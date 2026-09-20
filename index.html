@@ -163,6 +163,54 @@
   }
   @media(min-width:760px){#toolsBtn{display:none}#operatorDrawer{display:flex!important}#matchPulse{display:none}}
 
+
+  /* Mobile command deck: the world is the hero, controls and intel orbit it. */
+  @media(max-width:759px){
+    :root{--glass:rgba(12,18,31,.78);--hair:rgba(154,184,232,.14);--cyan:#63d8ff;--violet:#9a7cff}
+    body{background:#060910;font-size:13px}
+    #app{height:100dvh;background:radial-gradient(90% 55% at 50% 8%,rgba(56,103,178,.22),transparent 70%),#060910;overflow:hidden}
+    #topbar{height:62px;flex:0 0 62px;display:grid;grid-template-columns:52px 46px 64px 1fr 48px;gap:7px;padding:9px 10px;background:rgba(7,11,19,.82);border:0;border-bottom:1px solid var(--hair);backdrop-filter:blur(20px)}
+    #topbar button,#topbar select{height:44px;min-height:44px;border-radius:13px;border:1px solid var(--hair);background:rgba(23,32,51,.8);font-weight:750;font-size:12px;padding:0 8px;box-shadow:inset 0 1px rgba(255,255,255,.035)}
+    #topbar #playBtn{font-size:0;background:linear-gradient(135deg,#65d8ff,#8d73ff);border:0;box-shadow:0 8px 24px rgba(93,144,255,.3)}
+    #topbar #playBtn:before{content:'▶';font-size:17px;color:#07101d}
+    #topbar #playBtn.playing:before{content:'Ⅱ'}
+    #topbar #stepBtn{font-size:0}#topbar #stepBtn:before{content:'▶|';font-size:14px;color:#c9d6e8}
+    #topbar select{width:64px!important;appearance:none;text-align:center;color:#dce8f7}
+    #topbar .clock{min-width:0;text-align:center;font-size:10px;line-height:1.15;white-space:normal;color:#93a5bd;font-weight:650;letter-spacing:.01em}
+    #topbar #toolsBtn{font-size:0}#topbar #toolsBtn:before{content:'•••';font-size:18px;letter-spacing:2px;color:#dce8f7}
+    #operatorDrawer{position:absolute;top:62px;left:8px;right:8px;z-index:30;border:1px solid rgba(142,174,225,.2);border-radius:16px;padding:9px;background:rgba(10,15,25,.94);box-shadow:0 20px 60px rgba(0,0,0,.55);backdrop-filter:blur(22px)}
+    #operatorDrawer button{border-radius:11px;background:#182337;border-color:#273750;min-height:40px}
+    #main{position:relative;display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
+    #boardwrap{position:relative;display:flex;flex-direction:column;justify-content:flex-start;flex:0 0 auto;height:60%;min-height:0;padding:10px 10px 0;gap:8px;background:transparent}
+    #board{width:100%;height:auto;aspect-ratio:3/2;border-radius:18px;border:1px solid rgba(125,162,220,.18);background:#09101c;box-shadow:0 22px 50px rgba(0,0,0,.34),0 0 0 1px rgba(76,129,211,.04);order:1}
+    #matchPulse{display:flex;position:absolute;z-index:5;left:18px;right:18px;top:18px;padding:0;gap:0;border:0;background:transparent;pointer-events:none}
+    .pulse-card{border:0;background:none;padding:0;min-width:0;border-radius:0}
+    .pulse-card.leader{flex:0 0 auto;max-width:55%;padding:7px 10px;border-radius:12px;background:rgba(7,12,21,.82);border:1px solid rgba(125,171,235,.18);box-shadow:0 8px 25px rgba(0,0,0,.3);backdrop-filter:blur(14px)}
+    .pulse-card.leader span{color:#63d8ff;font-size:8px;font-weight:800;letter-spacing:.14em}.pulse-card.leader b{font-size:11px;margin-top:1px}
+    .pulse-card.shift{display:none}
+    #empirebar{order:2;width:100%;height:82px;min-height:82px;gap:7px;padding:0 1px 7px;scroll-snap-type:x proximity;overflow-x:auto}
+    .ecard{position:relative;scroll-snap-align:start;flex:0 0 142px;min-width:142px;height:74px;padding:9px 10px;border:1px solid rgba(143,172,221,.13);border-radius:14px;background:linear-gradient(145deg,rgba(22,31,49,.94),rgba(11,17,29,.96));box-shadow:0 8px 24px rgba(0,0,0,.2)}
+    .ecard.sel{border-color:var(--cyan);background:linear-gradient(145deg,rgba(33,54,79,.98),rgba(14,24,43,.98));box-shadow:0 0 0 1px rgba(99,216,255,.18),0 8px 28px rgba(31,117,180,.2)}
+    .ecard .ename{font-size:11px;margin:0 0 7px;padding-right:30px;overflow:hidden;text-overflow:ellipsis}.ecard .dot{width:8px;height:8px;border-radius:50%;box-shadow:0 0 10px currentColor}
+    .ecard .estat{display:inline-flex;justify-content:flex-start;gap:3px;margin-right:7px;font-size:9px;line-height:1.3}.ecard .estat span{font-size:0}.ecard .estat:nth-of-type(1) span:after{content:'⚔';font-size:10px}.ecard .estat:nth-of-type(2) span:after{content:'●';font-size:8px}.ecard .estat:nth-of-type(3) span:after{content:'▦';font-size:10px}.ecard .estat:nth-of-type(4) span:after{content:'✦';font-size:10px;color:#d7b659}.ecard .estat b{font-size:10px}
+    .ecard .ebar{position:absolute;left:10px;right:10px;bottom:7px;height:3px;margin:0;background:#1d293b}
+    #side{position:relative;flex:1;min-height:0;width:100%;border:0;border-radius:22px 22px 0 0;background:linear-gradient(180deg,#101827,#0a101c);box-shadow:0 -14px 50px rgba(0,0,0,.38);overflow:hidden}
+    #tabs{height:48px;position:relative;top:auto;padding:5px 9px;border:0;background:rgba(13,20,33,.95);gap:4px}
+    #tabs button{position:relative;min-height:38px;padding:0;border:0;border-radius:11px;color:#72849d;font-size:11px;font-weight:750}
+    #tabs button.on{color:#eef6ff;border:0;background:#1b2940;box-shadow:inset 0 0 0 1px rgba(130,169,225,.13)}
+    #tabs button.on:after{content:'';position:absolute;left:32%;right:32%;bottom:2px;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--cyan),var(--violet))}
+    #sidebody{height:calc(100% - 48px);padding:4px 10px 20px;overflow:auto;overscroll-behavior:contain}
+    #eventMode{position:sticky;top:0;z-index:3;height:38px;padding:4px 0 5px;background:linear-gradient(180deg,#0f1725 76%,transparent);gap:5px}
+    #eventMode button{min-height:28px;height:28px;padding:0 10px;border-radius:14px;border:1px solid transparent;background:transparent;color:#7789a2;font-size:10px;font-weight:750}
+    #eventMode button.on{background:#20304a;border-color:#2e4568;color:#dceaff}
+    .ev{position:relative;margin:3px 0;padding:8px 9px 8px 40px;border:0!important;border-radius:10px!important;background:rgba(20,30,47,.7)!important;color:#c9d5e6;font-size:11px;line-height:1.35;white-space:normal}
+    .ev .t{position:absolute;left:9px;top:9px;margin:0;color:#637692;font-size:8px;font-weight:800;letter-spacing:.05em}
+    .ev.Combat,.ev.Fall{background:linear-gradient(90deg,rgba(154,54,73,.19),rgba(20,30,47,.72))!important;color:#f1d5dc}.ev.Dawn{background:linear-gradient(90deg,rgba(159,120,45,.15),rgba(20,30,47,.72))!important}.ev.Transfer{background:linear-gradient(90deg,rgba(52,137,104,.14),rgba(20,30,47,.72))!important}
+    #lb{display:none}
+    #replaybar{position:absolute;z-index:25;top:62px;left:8px;right:8px;border-radius:14px}
+    #toast{bottom:18px;border-radius:13px;background:#152238;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+  }
+
 </style>
 </head>
 <body>
@@ -297,7 +345,7 @@
     <button id="newBtn">New match</button>
   </div>
   <div id="operatorDrawer" aria-label="Operator tools"></div>
-  <div id="matchPulse"><div class="pulse-card"><span>Leader</span><b id="pulseLeader">-</b></div><div class="pulse-card"><span>Latest shift</span><b id="pulseEvent">Waiting for first tick</b></div></div>
+
   <div id="replaybar">
     <span>REPLAY</span>
     <input type="range" id="replaySlider" min="0" max="0" value="0" style="flex:1">
@@ -305,7 +353,7 @@
     <button id="exitReplayBtn">Exit replay</button>
   </div>
   <div id="main">
-    <div id="boardwrap"><canvas id="board" width="960" height="640"></canvas><div id="empirebar"></div></div>
+    <div id="boardwrap"><div id="matchPulse"><div class="pulse-card leader"><span>Leading the world</span><b id="pulseLeader">-</b></div><div class="pulse-card shift"><span>Live</span><b id="pulseEvent">Waiting for first tick</b></div></div><canvas id="board" width="960" height="640"></canvas><div id="empirebar"></div></div>
     <div id="side">
       <div id="lb"></div>
       <div id="tabs">
@@ -1092,7 +1140,7 @@ function renderEvents(w){
   const box=$("events");
   const important=new Set(["Combat","Fall","Dawn","Transfer","Control","ThinkTimeout"]);
   const source=(eventView==="highlights"?w.events.filter(e=>important.has(e.type)):w.events).slice(-120);
-  box.innerHTML=source.length?source.map(ev=>'<div class="ev '+ev.type+(important.has(ev.type)?' important':'')+'"><span class="t">t'+ev.tick+'</span>'+htmlSafe(evText(w,ev))+'</div>').join(""):'<div class="empty-feed">No major events yet. Let the match run or use an operator tool.</div>';
+  box.innerHTML=source.length?source.map(ev=>'<div class="ev '+ev.type+(important.has(ev.type)?' important':'')+'"><span class="t">'+(ev.tick!==undefined?'T'+ev.tick:'DAY '+(ev.day||w.day))+'</span>'+htmlSafe(evText(w,ev))+'</div>').join(""):'<div class="empty-feed">No major events yet. Let the match run or use an operator tool.</div>';
   renderedEventCount=w.events.length;
 }
 function renderInspector(){
@@ -1222,3 +1270,4 @@ DB.open().then(async ()=>{
 </script>
 </body>
 </html>
+
