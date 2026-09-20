@@ -23,10 +23,20 @@
   .hidden{display:none !important}
 
   /* Setup screen */
-  #setup{max-width:980px;margin:24px auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:22px 26px}
-  #setup .cols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 24px}
+  #setup{max-width:980px;margin:0 auto;background:var(--panel);min-height:100dvh;padding:18px 16px 96px}
+  #setup .cols{display:grid;grid-template-columns:1fr;gap:0 18px}
   #setup .note{color:var(--dim);font-size:12px;margin-top:4px}
-  #setup .row{display:flex;gap:10px;align-items:end;margin-top:16px}
+  #setup .row{display:flex;gap:10px;align-items:center;margin-top:16px;flex-wrap:wrap}
+  .setup-card{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:12px}
+  .llm-grid{display:grid;grid-template-columns:1fr;gap:10px}
+  .key-row{display:grid;grid-template-columns:1fr auto;gap:8px}
+  .key-row button{min-width:64px}
+  #agentOverrides{display:grid;grid-template-columns:1fr;gap:8px;margin-top:10px}
+  .agent-model{display:grid;grid-template-columns:82px 1fr;align-items:center;gap:8px}
+  .agent-model span{font-size:12px;color:var(--dim)}
+  details summary{cursor:pointer;color:var(--txt);padding:5px 0;font-weight:600}
+  .secure-note{display:flex;gap:6px;align-items:flex-start;color:var(--dim);font-size:11px;margin-top:6px}
+  .secure-note:before{content:"🔒"}
 
   /* Main layout */
   #app{display:flex;flex-direction:column;height:100vh}
@@ -66,6 +76,29 @@
   #replaybar{display:none;align-items:center;gap:8px;padding:6px 12px;background:#171226;border-bottom:1px solid #332550}
   #replaybar.show{display:flex}
   #toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#1b2536;border:1px solid var(--acc);border-radius:8px;padding:8px 14px;display:none;z-index:50}
+  /* Mobile-first: controls are thumb-sized, content stacks, and the map stays above the fold. */
+  button,select,input[type=text],input[type=number],input[type=password]{min-height:42px;font-size:14px}
+  #topbar{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none;padding:8px;gap:6px}
+  #topbar::-webkit-scrollbar{display:none}
+  #topbar button,#topbar select{flex:0 0 auto}
+  #main{flex-direction:column;overflow:auto}
+  #boardwrap{flex:0 0 48dvh;min-height:310px;padding:8px}
+  #side{width:100%;min-width:0;min-height:48dvh;border-left:0;border-top:1px solid var(--line)}
+  #lb{max-height:180px}
+  #tabs{position:sticky;top:0;background:var(--panel2);z-index:4}
+  #tabs button{min-height:44px}
+  #toast{bottom:76px;width:calc(100% - 24px);text-align:center}
+  @media (min-width:760px){
+    #setup{margin:24px auto;min-height:0;border:1px solid var(--line);border-radius:12px;padding:22px 26px}
+    #setup .cols{grid-template-columns:1fr 1fr 1fr;gap:0 24px}
+    .llm-grid{grid-template-columns:1fr 1fr}
+    #agentOverrides{grid-template-columns:1fr 1fr}
+    #main{flex-direction:row;overflow:hidden}
+    #boardwrap{flex:1;min-height:0;height:auto}
+    #side{width:360px;min-width:300px;min-height:0;border-top:0;border-left:1px solid var(--line)}
+    #topbar{flex-wrap:wrap;overflow:visible}
+    #toast{bottom:16px;width:auto}
+  }
 </style>
 </head>
 <body>
@@ -73,42 +106,54 @@
 <!-- ============ SETUP SCREEN ============ -->
 <div id="setup">
   <h1>LLM Empire <span class="pill">Commons: a multi-agent war lab</span></h1>
-  <p class="note">Kingdoms compete for land, food and power on a toroidal grid. Speech is cheap talk: it moves no resources. Secrets (food, stamina, plans) stay hidden from rivals but visible to you, the operator. Default roster is the deterministic mock engine - no API key needed. Add an OpenAI-compatible endpoint (e.g. Vercel AI Gateway) to let real models talk and act.</p>
+  <p class="note">Kingdoms compete for land, food and power on a toroidal grid. Speech is cheap talk: it moves no resources. Secrets (food, stamina, plans) stay hidden from rivals but visible to you, the operator. Start with the local mock engine, or plug in a Vercel AI Gateway model and key. One model runs every agent by default; individual agents can be overridden below.</p>
   <div class="cols">
     <div id="cfg-world"><h2>World setup</h2></div>
     <div id="cfg-caps"><h2>Capacities</h2></div>
     <div id="cfg-costs"><h2>Action costs &amp; comms</h2></div>
   </div>
-  <h2>Roster</h2>
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 24px">
-    <div>
-      <label>Roster preset</label>
-      <select id="rosterMode">
-        <option value="mock">mock - deterministic local policy (no network)</option>
-        <option value="uniform">uniform - every kingdom runs one model</option>
-        <option value="mixed">mixed - models and archetypes per kingdom</option>
-        <option value="mirror">mirror - even ids Model A, odd ids Model B</option>
-      </select>
-      <label>Model A (uniform / mirror even / mixed pool)</label>
-      <input type="text" id="modelA" value="openai/gpt-5-mini">
-      <label>Model B (mirror odd / mixed pool)</label>
-      <input type="text" id="modelB" value="anthropic/claude-4.5">
+  <div class="setup-card">
+    <h2 style="margin-top:0">LLM roster</h2>
+    <div class="llm-grid">
+      <div>
+        <label>Default model for every agent</label>
+        <input type="text" id="modelA" list="modelOptions" value="mock" placeholder="provider/model-name" autocomplete="off">
+        <datalist id="modelOptions">
+          <option value="mock">Local mock - no API key</option>
+          <option value="openai/gpt-5-mini"></option>
+          <option value="openai/gpt-5"></option>
+          <option value="anthropic/claude-sonnet-4"></option>
+          <option value="anthropic/claude-3.7-sonnet"></option>
+          <option value="google/gemini-2.5-flash"></option>
+          <option value="google/gemini-2.5-pro"></option>
+          <option value="xai/grok-3-mini"></option>
+          <option value="deepseek/deepseek-r1"></option>
+          <option value="meta/llama-4-maverick"></option>
+        </datalist>
+        <p class="note">Pick a common Vercel AI Gateway model or type any <b>provider/model</b> ID.</p>
+      </div>
+      <div>
+        <label>API key</label>
+        <div class="key-row"><input type="password" id="apiKey" value="" autocomplete="off" placeholder="Enter your AI Gateway key"><button type="button" id="toggleKey">Show</button></div>
+        <div class="secure-note">Saved only in this browser. Never uploaded to the repo.</div>
+      </div>
     </div>
-    <div>
-      <label>Mixed pool, comma separated</label>
-      <input type="text" id="modelPool" value="openai/gpt-5-mini, anthropic/claude-4.5, google/gemini-2.5-flash, typesafe-ai/jev">
-      <label>Temperature</label>
-      <input type="number" id="temperature" value="0.7" step="0.1" min="0" max="2">
-      <label>Think timeout per agent (ms)</label>
-      <input type="number" id="thinkTimeoutMs" value="20000" step="1000" min="2000">
-    </div>
-    <div>
-      <label>API base URL (OpenAI-compatible)</label>
-      <input type="text" id="apiBase" value="https://ai-gateway.vercel.sh/v1">
-      <label>API key (stored only in this browser)</label>
-      <input type="password" id="apiKey" value="">
-      <p class="note">Without a key, non-mock rosters fall back to the mock policy for that call and log a ThinkTimeout event.</p>
-    </div>
+    <details id="overrideDetails">
+      <summary>Set a different model for individual agents</summary>
+      <p class="note">Leave an agent on “Use default” to run the model above.</p>
+      <div id="agentOverrides"></div>
+    </details>
+    <details>
+      <summary>Advanced connection settings</summary>
+      <div class="llm-grid">
+        <div><label>API base URL (OpenAI-compatible)</label><input type="text" id="apiBase" value="https://ai-gateway.vercel.sh/v1"></div>
+        <div><label>Temperature</label><input type="number" id="temperature" value="0.7" step="0.1" min="0" max="2"></div>
+        <div><label>Think timeout per agent (ms)</label><input type="number" id="thinkTimeoutMs" value="20000" step="1000" min="2000"></div>
+      </div>
+    </details>
+    <select id="rosterMode" class="hidden"><option value="uniform" selected>uniform</option></select>
+    <input type="text" id="modelB" class="hidden" value="">
+    <input type="text" id="modelPool" class="hidden" value="">
   </div>
   <div class="row">
     <button class="primary" id="startBtn" style="font-size:14px;padding:10px 22px">Start match</button>
@@ -741,6 +786,8 @@ function buildSetup(){
     }
   }
   $("apiBase").value=LLM.base; $("apiKey").value=LLM.key;
+  $("modelA").value=localStorage.getItem("llmempire.defaultModel") || "mock";
+  buildAgentOverrides();
 }
 function readConfig(){
   const cfg=defaultConfig();
@@ -751,24 +798,32 @@ function readConfig(){
   LLM.base=$("apiBase").value.trim()||LLM.base; LLM.key=$("apiKey").value.trim();
   LLM.temperature=+$("temperature").value||0.7; LLM.timeoutMs=+$("thinkTimeoutMs").value||20000;
   localStorage.setItem("llmempire.apiBase",LLM.base); localStorage.setItem("llmempire.apiKey",LLM.key);
+  localStorage.setItem("llmempire.defaultModel",$("modelA").value.trim()||"mock");
+  const overrides={}; document.querySelectorAll(".agent-model input").forEach((el,i)=>{ if(el.value.trim()) overrides[i]=el.value.trim(); });
+  localStorage.setItem("llmempire.agentModels",JSON.stringify(overrides));
   return cfg;
 }
-function assignRoster(world){
-  const mode=$("rosterMode").value, A=$("modelA").value.trim(), B=$("modelB").value.trim();
-  const pool=$("modelPool").value.split(",").map(s=>s.trim()).filter(Boolean);
-  for (const k of world.kingdoms){
-    if (mode==="mock"){ k.talkModel="mock"; k.actModel="mock"; }
-    else if (mode==="uniform"){ k.talkModel=A; k.actModel=A; }
-    else if (mode==="mirror"){ const m=k.id%2===0?A:B; k.talkModel=m; k.actModel=m; }
-    else { const m=pool.length?pool[k.id%pool.length]:A; k.talkModel=(m==="typesafe-ai/jev")?"mock":m; k.actModel=m; }
+function buildAgentOverrides(){
+  const host=$("agentOverrides"), count=Math.max(2,+($("cfg_kingdoms")?.value||8));
+  let saved={}; try{saved=JSON.parse(localStorage.getItem("llmempire.agentModels")||"{}");}catch(e){}
+  host.innerHTML="";
+  for(let i=0;i<count;i++){
+    const row=document.createElement("label"); row.className="agent-model";
+    row.innerHTML='<span><i class="dot" style="background:'+KINGDOM_COLORS[i%KINGDOM_COLORS.length]+'"></i>Agent #'+(i+1)+'</span><input type="text" list="modelOptions" placeholder="Use default" value="'+escapeHtml(saved[i]||"")+'">';
+    host.appendChild(row);
   }
+}
+function assignRoster(world){
+  const fallback=$("modelA").value.trim()||"mock";
+  const picks=[...document.querySelectorAll(".agent-model input")];
+  for(const k of world.kingdoms){ const model=(picks[k.id]?.value.trim()||fallback); k.talkModel=model; k.actModel=model; }
 }
 
 // ---------- match lifecycle ----------
 function newMatch(cfg,seed){
   world=createWorld(cfg,seed??Math.floor(Math.random()*2**31));
   assignRoster(world);
-  emit(world,{type:"Control",tick:0,operatorAction:"match_start",parameters:{seed:world.seed,roster:$("rosterMode").value}});
+  emit(world,{type:"Control",tick:0,operatorAction:"match_start",parameters:{seed:world.seed,roster:"custom",defaultModel:$("modelA").value.trim()||"mock"}});
   renderedEventCount=0;
   $("setup").classList.add("hidden"); $("app").classList.remove("hidden");
   $("replaybar").classList.remove("show");
@@ -945,6 +1000,9 @@ $("cacheBtn").onclick=()=>{ pendingInject="cache"; toast("Click an unowned cell 
 $("silenceBtn").onclick=()=>{ injectSilence(world,8); toast("Radio silence for 8 ticks"); renderAll(); };
 $("curfewBtn").onclick=()=>{ injectCurfew(world,16); toast("Curfew: raids disabled for 16 ticks"); renderAll(); };
 $("muteBtn").onclick=()=>{ if(selectedKingdom===null){toast("Select a kingdom first (leaderboard)");return;} injectMute(world,selectedKingdom,16); toast(world.kingdoms[selectedKingdom].name+" muted for 16 ticks"); renderAll(); };
+$("toggleKey").onclick=()=>{ const key=$("apiKey"); const reveal=key.type==="password"; key.type=reveal?"text":"password"; $("toggleKey").textContent=reveal?"Hide":"Show"; };
+$("cfg_kingdoms").addEventListener("change",buildAgentOverrides);
+$("modelA").addEventListener("change",()=>{ if($("modelA").value.trim()==="mock") $("setupMsg").textContent="Mock mode runs locally with no key."; else $("setupMsg").textContent=$("apiKey").value.trim()?"Model ready.":"Add an API key to use this model."; });
 $("startBtn").onclick=()=>{ const cfg=readConfig(); newMatch(cfg); };
 $("loadReplayBtn").onclick=()=>$("replayFile").click();
 $("replayFile").onchange=(e)=>{ const f=e.target.files[0]; if(!f)return;
