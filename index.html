@@ -67,6 +67,7 @@
   .ev.Dawn{border-color:var(--warn)}
   .ev.Transfer{border-color:var(--good)}
   .ev.Control{border-color:#e0d24f}
+  .analysis-empty{color:var(--dim);padding:18px 6px;text-align:center}.analysis-card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;margin:8px 0}.analysis-card h3{font-size:13px;margin:0 0 7px}.analysis-card h4{font-size:11px;color:var(--dim);text-transform:uppercase;margin:9px 0 3px}.analysis-card ul{margin:3px 0;padding-left:18px}.analysis-card li{margin:3px 0}.analysis-brilliant{border-left:3px solid var(--good)}.analysis-blunder{border-left:3px solid var(--bad)}#analysisStatus{color:var(--dim);font-size:11px;margin:6px 0}
   #insp .kv{display:grid;grid-template-columns:110px 1fr;gap:2px 8px;font-size:12px;margin:6px 0}
   #insp .kv div:nth-child(odd){color:var(--dim)}
   #insp .secret{background:#241a2e;border:1px solid #4a3560;border-radius:6px;padding:6px 8px;margin:6px 0}
@@ -184,6 +185,7 @@
     <button id="muteBtn" title="Select a kingdom in the leaderboard first">Mute selected</button>
     <button id="curfewBtn" title="Disable raids for 16 ticks">Curfew 16t</button>
     <button id="cacheBtn" title="Click, then click an unowned cell to drop a level-3 crop">Cache drop</button>
+    <button id="analyzeBtn">✨ Analyze logs</button>
     <button id="exportBtn">Export .commons.json</button>
     <button id="newBtn">New match</button>
   </div>
@@ -198,12 +200,14 @@
     <div id="side">
       <div id="lb"></div>
       <div id="tabs">
-        <button data-tab="events" class="on">Event stream</button>
+        <button data-tab="events" class="on">Events</button>
         <button data-tab="insp">Inspector</button>
+        <button data-tab="analysis">AI analysis</button>
       </div>
       <div id="sidebody">
         <div id="events"></div>
         <div id="insp" class="hidden"></div>
+        <div id="analysis" class="hidden"><div class="analysis-empty">Run a match, then tap “Analyze logs” for player tendencies, brilliant moves, blunders and strategic insights.</div></div>
       </div>
     </div>
   </div>
@@ -844,10 +848,26 @@ async function tickOnce(){
   if (world.over){ pause(); toast(world.winner?("Match over: "+world.kingdoms[world.winner.id].name+" wins by "+world.winner.how):"Match over: all kingdoms dead"); }
 }
 function exportData(){ return { format:"commons.json", version:1, exportedAt:new Date().toISOString(),
-  config:world.cfg, seed:world.seed, usage:world.usage, events:world.events, snapshots:world.snapshots }; }
+  config:world.cfg, seed:world.seed, usage:world.usage, events:world.events, snapshots:world.snapshots, aiAnalysis:world.aiAnalysis||null }; }
+
+// ---------- AI match analyst ----------
+function analysisLogPayload(w){return {match:{seed:w.seed,config:w.cfg,day:w.day,tick:w.tick,over:w.over,winner:w.winner},players:w.kingdoms.map(k=>({id:k.id+1,name:k.name,model:k.actModel,alive:k.alive,final:{land:cellsOf(w,k.id).length,pop:k.pop,army:k.army,food:k.food,stamina:k.stamina}})),events:w.events,snapshots:w.snapshots};}
+function htmlSafe(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function parseJsonLoose(text){try{return JSON.parse(text);}catch(e){const a=text.indexOf("{"),b=text.lastIndexOf("}");if(a>=0&&b>a)return JSON.parse(text.slice(a,b+1));throw new Error("The model returned an unreadable report");}}
+async function analyzeMatch(){
+ if(!world){toast("Start a match first");return;} if(!LLM.key){toast("Add an API key in New match → LLM roster first");return;}
+ const chosen=$("modelA").value.trim(), model=chosen!=="mock"?chosen:(world.kingdoms.find(k=>k.actModel!=="mock")?.actModel||""); if(!model){toast("Choose an AI model first");return;}
+ const btn=$("analyzeBtn");btn.disabled=true;btn.textContent="Analyzing every log…";showTab("analysis");$("analysis").innerHTML='<div class="analysis-empty"><span class="pill">AI analyst working</span><p>Reading the full event history and per-tick snapshots…</p></div>';
+ const system='You are a rigorous strategy-game analyst. Analyze the complete LLM Empire match log. Attribute behavior only when the evidence supports it. Identify how every player plays, recurring tendencies, pivotal brilliant moves, costly blunders, diplomacy patterns, and practical lessons. A brilliant move changes survival, territory, resources, alliances, or the final result. A blunder has a concrete avoidable cost. Cite day/tick and event evidence. Return strict JSON with keys: summary (string), players (array of {id,name,style,traits:string[],brilliantMoves:array of {when,move,why},blunders:array of {when,move,why},diplomacy,lesson}), turningPoints (array of {when,title,detail}), metaInsights (string[]). Cover every player, including weak or eliminated players. Do not invent hidden motives.';
+ try{const result=await LLM.chat(model,system,JSON.stringify(analysisLogPayload(world)));world.aiAnalysis={model,createdAt:new Date().toISOString(),report:parseJsonLoose(result.text)};renderAnalysis(world.aiAnalysis);DB.save({id:"latest",savedAt:Date.now(),data:exportData()});toast("AI analysis ready");}
+ catch(err){$("analysis").innerHTML='<div class="analysis-empty">Analysis failed: '+htmlSafe(err.message||String(err))+'<br><small>Check the model name, API key and connection settings.</small></div>';toast("Analysis failed");}
+ finally{btn.disabled=false;btn.textContent="✨ Analyze logs";}
+}
+function analysisList(items,kind){if(!items?.length)return '<p class="note">None found in the evidence.</p>';return items.map(x=>'<div class="analysis-card analysis-'+kind+'"><b>'+htmlSafe(x.when||"")+'</b> '+htmlSafe(x.move||x.title||"")+'<p>'+htmlSafe(x.why||x.detail||"")+'</p></div>').join("");}
+function renderAnalysis(saved){const host=$("analysis");if(!saved?.report){host.innerHTML='<div class="analysis-empty">No AI analysis yet.</div>';return;}const r=saved.report;let out='<div id="analysisStatus">Analyzed with '+htmlSafe(saved.model)+' · '+htmlSafe(new Date(saved.createdAt).toLocaleString())+'</div><div class="analysis-card"><h3>Match read</h3><p>'+htmlSafe(r.summary||"")+'</p></div>';for(const p of(r.players||[]))out+='<div class="analysis-card"><h3>#'+htmlSafe(p.id)+' '+htmlSafe(p.name||"")+' · '+htmlSafe(p.style||"")+'</h3><p>'+htmlSafe((p.traits||[]).join(" · "))+'</p><h4>Brilliant moves</h4>'+analysisList(p.brilliantMoves,"brilliant")+'<h4>Blunders</h4>'+analysisList(p.blunders,"blunder")+'<h4>Diplomacy</h4><p>'+htmlSafe(p.diplomacy||"")+'</p><h4>Lesson</h4><p>'+htmlSafe(p.lesson||"")+'</p></div>';if(r.turningPoints?.length)out+='<div class="analysis-card"><h3>Turning points</h3>'+analysisList(r.turningPoints,"brilliant")+'</div>';if(r.metaInsights?.length)out+='<div class="analysis-card"><h3>Meta insights</h3><ul>'+r.metaInsights.map(x=>'<li>'+htmlSafe(x)+'</li>').join("")+'</ul></div>';host.innerHTML=out;}
 
 // ---------- rendering ----------
-function renderAll(){ if(!world)return; renderBoard(world); renderLeaderboard(world); renderEvents(world); renderInspector(); renderClock(world); }
+function renderAll(){ if(!world)return; renderBoard(world); renderLeaderboard(world); renderEvents(world); renderInspector(); renderClock(world); if(world.aiAnalysis)renderAnalysis(world.aiAnalysis); }
 function renderClock(w){
   $("clock").textContent="Day "+w.day+" - tick "+(w.tick+1)+"/"+w.cfg.ticksPerDay+(w.over?" - OVER":"");
   $("alivePill").textContent=w.kingdoms.filter(k=>k.alive).length+" alive";
@@ -944,6 +964,7 @@ function showTab(name){
   for (const b of document.querySelectorAll("#tabs button")) b.classList.toggle("on",b.dataset.tab===name);
   $("events").classList.toggle("hidden",name!=="events");
   $("insp").classList.toggle("hidden",name!=="insp");
+  $("analysis").classList.toggle("hidden",name!=="analysis");
 }
 
 // ---------- replay ----------
@@ -953,7 +974,7 @@ function loadReplay(data){
   $("replaybar").classList.add("show"); pause();
   const cfg=data.config;
   // build a display world shell from the first snapshot
-  world=createWorld(cfg,data.seed||1);
+  world=createWorld(cfg,data.seed||1); world.aiAnalysis=data.aiAnalysis||null;
   world.kingdoms.forEach((k,i)=>{ const s=data.snapshots[0].kingdoms[i]; if(s){k.goal=s.goal;k.talkModel=s.talkModel;k.actModel=s.actModel;} });
   $("replaySlider").max=data.snapshots.length-1; $("replaySlider").value=0;
   renderedEventCount=0; $("events").innerHTML="";
@@ -992,6 +1013,7 @@ $("playBtn").onclick=()=>{ replayData?null:(playing?pause():play()); };
 $("stepBtn").onclick=()=>{ if(!replayData){pause();tickOnce();} };
 $("speedSel").onchange=()=>{ if(playing){pause();play();} };
 $("newBtn").onclick=()=>{ pause(); world=null; replayData=null; $("app").classList.add("hidden"); $("setup").classList.remove("hidden"); };
+$("analyzeBtn").onclick=analyzeMatch;
 $("exportBtn").onclick=()=>{
   const blob=new Blob([JSON.stringify(exportData())],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
