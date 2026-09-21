@@ -1357,7 +1357,8 @@ function renderInspector(){
 }
 function showTab(name){
   for(const b of document.querySelectorAll("#tabs button"))b.classList.toggle("on",b.dataset.tab===name);
-  for(const id of ["worldview","events","insp","observe","analysis"])$(id)?.classList.toggle("hidden",id!==name);
+  const pane={world:"worldview",insp:"insp",events:"events",observe:"observe",analysis:"analysis"}[name]||name;
+  for(const id of ["worldview","events","insp","observe","analysis"])$(id)?.classList.toggle("hidden",id!==pane);
   $("eventMode").classList.toggle("hidden",name!=="events");
 }
 
