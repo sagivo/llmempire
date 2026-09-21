@@ -1154,7 +1154,8 @@ function showTurnActions(w,events){
   const acts=events.filter(e=>e.type==="Act"); if(!acts.length)return;
   const viz=$("turnViz"), map=$("mapActions");
   viz.textContent=acts.map(e=>{const k=w.kingdoms[e.kingdomId],v=ACTION_VISUALS[e.act]||["•",e.act];return "Player "+(k.id+1)+" "+k.name+": "+v[1];}).join(". ");
-  map.innerHTML=acts.map(e=>{const k=w.kingdoms[e.kingdomId],a=kingdomAnchor(w,k.id),v=ACTION_VISUALS[e.act]||["•",e.act];if(!a)return "";const g=boardGeom(w),cv=$("board");let left=Math.max(7,Math.min(93,((g.ox+(a[0]+.5)*g.cell)*mapView.s+mapView.tx)/cv.width*100)),top=Math.max(9,Math.min(82,((g.oy+(a[1]+.5)*g.cell)*mapView.s+mapView.ty)/cv.height*100));if(top<26&&left<62)top=26;return '<span class="map-action" title="'+htmlSafe(k.name+' · '+v[1])+'" style="--kc:'+k.color+';left:'+left+'%;top:'+top+'%"><span class="map-action-icon">'+v[0]+'</span><span class="map-action-who">'+(k.id+1)+'</span><span class="map-action-label">'+htmlSafe(v[1])+'</span></span>';}).join("");
+  map.innerHTML=acts.map(e=>{const k=w.kingdoms[e.kingdomId],a=kingdomAnchor(w,k.id),v=ACTION_VISUALS[e.act]||["•",e.act];if(!a)return "";return '<span class="map-action" data-ax="'+a[0]+'" data-ay="'+a[1]+'" title="'+htmlSafe(k.name+' · '+v[1])+'" style="--kc:'+k.color+'"><span class="map-action-icon">'+v[0]+'</span><span class="map-action-who">'+(k.id+1)+'</span><span class="map-action-label">'+htmlSafe(v[1])+'</span></span>';}).join("");
+  positionMapActions();
   map.getAnimations({subtree:true}).forEach(a=>{a.cancel();a.play()});
 }
 function renderWorldTab(w){
@@ -1277,7 +1278,19 @@ function renderBoard(w, snap){
     }
   }
   ctx.setTransform(1,0,0,1,0,0);
+  positionMapActions();
   if (!snap && pendingInject){ cv.style.cursor="crosshair"; } else cv.style.cursor=mapView.s>1?"grab":"default";
+}
+function positionMapActions(){
+  const map=$("mapActions"); if(!map||!world)return;
+  const g=boardGeom(world),cv=$("board");
+  for(const el of map.querySelectorAll(".map-action")){
+    const ax=+el.dataset.ax, ay=+el.dataset.ay;
+    let left=Math.max(7,Math.min(93,((g.ox+(ax+.5)*g.cell)*mapView.s+mapView.tx)/cv.width*100));
+    let top=Math.max(9,Math.min(82,((g.oy+(ay+.5)*g.cell)*mapView.s+mapView.ty)/cv.height*100));
+    if(top<26&&left<62)top=26;
+    el.style.left=left+"%"; el.style.top=top+"%";
+  }
 }
 function renderLeaderboard(w){
   const rows=w.kingdoms.map(k=>({k,land:cellsOf(w,k.id).length})).sort((a,b)=>b.land-a.land||b.k.pop-a.k.pop);
