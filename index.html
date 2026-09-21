@@ -262,6 +262,46 @@
     #replaybar input{grid-column:1/-1;grid-row:2;width:100%;height:18px;margin:0}
   }
 
+
+  /* ===== Genre pass: Polytopia-style map-first spectator UX ===== */
+  #sheetGrab{display:none}
+  #mapstage{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;width:100%;position:relative;overflow:hidden}
+  #mapframe{position:relative}
+  .ecard .edot{display:none}
+  @media(max-width:759px){
+    /* Slim HUD: one row, thumb-sized, nothing wasted */
+    #topbar{height:52px;flex:0 0 52px;padding:6px 8px;grid-template-columns:48px 42px 62px 1fr 44px;gap:6px}
+    #topbar button,#topbar select{height:40px;min-height:40px;border-radius:11px}
+    #topbar .clock{font-size:9px}
+    /* The map is the hero: it owns every pixel the sheet is not using */
+    #boardwrap{flex:1 1 auto;min-height:0;padding:0;gap:0}
+    #mapframe{width:auto;height:auto;order:initial}
+    #board{display:block;width:auto;height:auto;aspect-ratio:auto;max-width:none;max-height:none;border-radius:0;border:0;box-shadow:none;order:initial}
+    #matchEnd{margin:6px 10px 0}
+    /* Bottom sheet: grabber + tabs always visible, snaps between watch mode and intel mode */
+    #side{flex:0 0 44dvh;min-height:0;transition:flex-basis .24s ease;display:flex;flex-direction:column}
+    #app.sheet-peek #side{flex-basis:132px}
+    #app.sheet-peek #sidebody{overflow:hidden}
+    #sheetGrab{display:grid;place-items:center;height:16px;flex:0 0 16px;cursor:grab;touch-action:none}
+    #sheetGrab i{width:38px;height:4px;border-radius:2px;background:#2d3d57}
+    #tabs{flex:0 0 48px}
+    #sidebody{flex:1 1 auto;height:auto;min-height:0}
+    /* Faction ribbon: Polytopia-style color chips, one glance = the whole table */
+    #empirebar{order:3;height:62px;min-height:62px;align-items:center;gap:6px;padding:2px 8px 8px}
+    .ecard{position:static;scroll-snap-align:start;flex:0 0 auto;display:flex;align-items:center;gap:8px;width:auto;min-width:0;height:50px;padding:5px 12px 5px 7px;border-radius:13px}
+    .ecard .edot{display:grid;flex:0 0 30px;width:30px;height:30px;border-radius:50%;background:var(--kc,#63d8ff);place-items:center;font-size:14px;color:rgba(7,14,24,.92);box-shadow:0 0 0 2px rgba(255,255,255,.14),0 2px 8px rgba(0,0,0,.4)}
+    .ecard .emeta{display:flex;flex-direction:column;gap:1px;min-width:0;font-style:normal}
+    .ecard .emeta b{font-size:11px;font-weight:750;color:#e8eff9;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .ecard .emeta i{font-style:normal;font-size:9px;color:#8ba0bb;white-space:nowrap;font-variant-numeric:tabular-nums}
+    .ecard.sel{border-color:var(--kc);background:linear-gradient(145deg,rgba(33,54,79,.98),rgba(14,24,43,.98));box-shadow:0 0 0 1px var(--kc),0 6px 18px rgba(0,0,0,.35)}
+    .ecard.dead .emeta b{text-decoration:line-through}
+  }
+  @media(min-width:760px){
+    #side{flex:0 0 360px}
+    #boardwrap{padding:10px}
+    #board{display:block}
+  }
+
 </style>
 </head>
 <body>
@@ -410,9 +450,10 @@
     <button id="exitReplayBtn">Exit replay</button>
   </div>
   <div id="main">
-    <div id="boardwrap"><div id="mapframe"><canvas id="board" width="960" height="640"></canvas><div id="mapActions" aria-hidden="true"></div></div><div id="matchEnd"></div><div id="turnViz" aria-live="polite"></div><div id="empirebar"></div></div>
+    <div id="boardwrap"><div id="mapstage"><div id="mapframe"><canvas id="board" width="960" height="640"></canvas><div id="mapActions" aria-hidden="true"></div></div></div><div id="matchEnd"></div><div id="turnViz" aria-live="polite"></div><div id="empirebar"></div></div>
     <div id="side">
       <div id="lb"></div>
+      <div id="sheetGrab" aria-hidden="true"><i></i></div>
       <div id="tabs">
         <button data-tab="world" class="on">World</button>
         <button data-tab="insp">Agents</button>
@@ -1067,6 +1108,7 @@ function newMatch(cfg,seed){
   $("home").classList.add("hidden"); $("setup").classList.add("hidden"); $("app").classList.remove("hidden");
   $("replaybar").classList.remove("show");
   pause(); selectedKingdom=null;
+  resetMapView(); setSheet("peek",true); setTimeout(layoutBoard,80);
   toast("Match started - seed "+world.seed);
   renderAll();
 }
@@ -1108,7 +1150,7 @@ function showTurnActions(w,events){
   const acts=events.filter(e=>e.type==="Act"); if(!acts.length)return;
   const viz=$("turnViz"), map=$("mapActions");
   viz.textContent=acts.map(e=>{const k=w.kingdoms[e.kingdomId],v=ACTION_VISUALS[e.act]||["•",e.act];return "Player "+(k.id+1)+" "+k.name+": "+v[1];}).join(". ");
-  map.innerHTML=acts.map(e=>{const k=w.kingdoms[e.kingdomId],a=kingdomAnchor(w,k.id),v=ACTION_VISUALS[e.act]||["•",e.act];if(!a)return "";const g=boardGeom(w),cv=$("board");let left=Math.max(7,Math.min(93,(g.ox+(a[0]+.5)*g.cell)/cv.width*100)),top=Math.max(9,Math.min(82,(g.oy+(a[1]+.5)*g.cell)/cv.height*100));if(top<26&&left<62)top=26;return '<span class="map-action" title="'+htmlSafe(k.name+' · '+v[1])+'" style="--kc:'+k.color+';left:'+left+'%;top:'+top+'%"><span class="map-action-icon">'+v[0]+'</span><span class="map-action-who">'+(k.id+1)+'</span><span class="map-action-label">'+htmlSafe(v[1])+'</span></span>';}).join("");
+  map.innerHTML=acts.map(e=>{const k=w.kingdoms[e.kingdomId],a=kingdomAnchor(w,k.id),v=ACTION_VISUALS[e.act]||["•",e.act];if(!a)return "";const g=boardGeom(w),cv=$("board");let left=Math.max(7,Math.min(93,((g.ox+(a[0]+.5)*g.cell)*mapView.s+mapView.tx)/cv.width*100)),top=Math.max(9,Math.min(82,((g.oy+(a[1]+.5)*g.cell)*mapView.s+mapView.ty)/cv.height*100));if(top<26&&left<62)top=26;return '<span class="map-action" title="'+htmlSafe(k.name+' · '+v[1])+'" style="--kc:'+k.color+';left:'+left+'%;top:'+top+'%"><span class="map-action-icon">'+v[0]+'</span><span class="map-action-who">'+(k.id+1)+'</span><span class="map-action-label">'+htmlSafe(v[1])+'</span></span>';}).join("");
   map.getAnimations({subtree:true}).forEach(a=>{a.cancel();a.play()});
 }
 function renderWorldTab(w){
@@ -1152,9 +1194,36 @@ function boardGeom(w){
   const cell=Math.max(14,Math.min(Math.floor(cv.width/W),Math.floor(cv.height/H)));
   return {cell, ox:Math.floor((cv.width-cell*W)/2), oy:Math.floor((cv.height-cell*H)/2)};
 }
+const mapView={s:1,tx:0,ty:0};
+function resetMapView(){mapView.s=1;mapView.tx=0;mapView.ty=0;}
+function clampPan(){
+  const cv=$("board"); if(!world)return;
+  const g=boardGeom(world), W=world.cfg.width, H=world.cfg.height;
+  const mw=g.cell*W*mapView.s, mh=g.cell*H*mapView.s;
+  const bx=g.ox*mapView.s, by=g.oy*mapView.s;
+  mapView.tx=Math.min(cv.width/2-bx,Math.max(cv.width/2-bx-mw,mapView.tx));
+  mapView.ty=Math.min(cv.height/2-by,Math.max(cv.height/2-by-mh,mapView.ty));
+}
+function layoutBoard(){
+  const stage=$("mapstage"),cv=$("board"); if(!stage||!cv)return;
+  const r=stage.getBoundingClientRect(); if(r.width<40||r.height<40)return;
+  const sc=Math.min(r.width/cv.width,r.height/cv.height);
+  cv.style.width=Math.max(80,Math.floor(cv.width*sc))+"px";
+  cv.style.height=Math.max(54,Math.floor(cv.height*sc))+"px";
+}
+let sheetMode="half";
+function setSheet(m,skipLayout){
+  sheetMode=m; const app=$("app"); if(!app)return;
+  app.classList.toggle("sheet-peek",m==="peek");
+  if(!skipLayout)setTimeout(layoutBoard,270);
+}
 function renderBoard(w, snap){
   const cv=$("board"), ctx=cv.getContext("2d");
-  ctx.fillStyle="#0a0f18"; ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.setTransform(1,0,0,1,0,0);
+  const bg=ctx.createLinearGradient(0,0,0,cv.height);
+  bg.addColorStop(0,"#0c1424"); bg.addColorStop(1,"#070b13");
+  ctx.fillStyle=bg; ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.setTransform(mapView.s,0,0,mapView.s,mapView.tx,mapView.ty);
   const {cell,ox,oy}=boardGeom(w), W=w.cfg.width, H=w.cfg.height;
   const get=(x,y,f)=> snap ? snap[f][y*W+x] : null;
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){
@@ -1162,39 +1231,41 @@ function renderBoard(w, snap){
     let owner,crop,shield;
     if (snap){ owner=get(x,y,"owners"); crop=get(x,y,"crops"); shield=get(x,y,"shields"); owner=owner===-1?null:owner; }
     else { const g=w.grid[y][x]; owner=g.owner; crop=g.crop; shield=g.shield; }
-    ctx.fillStyle = owner===null ? "#101722" : (snap?KINGDOM_COLORS[owner%KINGDOM_COLORS.length]:w.kingdoms[owner].color)+"33";
-    ctx.fillRect(px+1,py+1,cell-2,cell-2);
-    if (owner!==null){
-      ctx.strokeStyle=snap?KINGDOM_COLORS[owner%KINGDOM_COLORS.length]:w.kingdoms[owner].color;
-      ctx.lineWidth=1; ctx.strokeRect(px+1.5,py+1.5,cell-3,cell-3);
-      if (shield>0){ ctx.lineWidth=2; ctx.strokeStyle="#e8ecf4"; ctx.globalAlpha=shield/ (w.cfg.shieldCap||2) *0.8; ctx.strokeRect(px+3.5,py+3.5,cell-7,cell-7); ctx.globalAlpha=1; }
+    if (owner===null){
+      ctx.fillStyle="#151f2e"; ctx.fillRect(px+0.5,py+0.5,cell-1,cell-1);
+    } else {
+      const col=snap?KINGDOM_COLORS[owner%KINGDOM_COLORS.length]:w.kingdoms[owner].color;
+      ctx.globalAlpha=0.6; ctx.fillStyle=col; ctx.fillRect(px,py,cell,cell); ctx.globalAlpha=1;
+      ctx.strokeStyle=col; ctx.lineWidth=1.2; ctx.strokeRect(px+0.6,py+0.6,cell-1.2,cell-1.2);
+      if (shield>0){ ctx.lineWidth=2; ctx.strokeStyle="#e8ecf4"; ctx.globalAlpha=shield/ (w.cfg.shieldCap||2) *0.85; ctx.strokeRect(px+3,py+3,cell-6,cell-6); ctx.globalAlpha=1; }
     }
     if (crop>0){
-      const g=["#3d5a2a","#5c8a3a","#8fc257"][crop-1]||"#8fc257";
+      const g=["#4c8a34","#7fbc4c","#b9e37f"][crop-1]||"#b9e37f";
       ctx.fillStyle=g; const r=(cell-8)*(crop/3)/2+1.5;
       ctx.beginPath(); ctx.arc(px+cell/2,py+cell/2,r,0,7); ctx.fill();
     }
   }
-  const dispCell = cell * (cv.clientWidth ? cv.clientWidth / cv.width : 1);
+  const dispCell = cell * mapView.s * (cv.clientWidth ? cv.clientWidth / cv.width : 1);
   if (!snap && dispCell >= 10){
     ctx.textAlign="center"; ctx.textBaseline="middle";
     for (const k of w.kingdoms){
       if (!k.alive) continue;
       const a=kingdomAnchor(w,k.id); if(!a) continue;
       const cx=ox+a[0]*cell+cell/2, cy=oy+a[1]*cell+cell/2;
-      const strengthAsset=k.army<=0?"○":k.army===1?"♟":k.army<=3?"⚔":k.army<=6?"♜":"♛";
+      const strengthAsset=k.army<=0?"\u25CB":k.army===1?"\u265F":k.army<=3?"\u2694":k.army<=6?"\u265C":"\u265B";
       const label=dispCell<22?strengthAsset:(strengthAsset+" "+k.army);
       ctx.font="bold "+Math.max(dispCell<22?8:10,Math.floor(cell*(dispCell<22?0.44:0.32)))+"px -apple-system,Segoe UI,Roboto,sans-serif";
       const tw=ctx.measureText(label).width+(dispCell<22?7:12), th=Math.max(dispCell<22?12:15,Math.floor(cell*(dispCell<22?0.7:0.46)));
       ctx.beginPath();
       ctx.roundRect(cx-tw/2, cy-th/2, tw, th, th/2);
-      ctx.fillStyle="rgba(6,10,16,.88)"; ctx.fill();
-      ctx.strokeStyle=k.color; ctx.lineWidth=1.5; ctx.stroke();
-      ctx.fillStyle="#f2f6fc";
+      ctx.fillStyle=k.color; ctx.fill();
+      ctx.strokeStyle="rgba(255,255,255,.42)"; ctx.lineWidth=1; ctx.stroke();
+      ctx.fillStyle="rgba(7,14,24,.94)";
       ctx.fillText(label, cx, cy+0.5);
     }
   }
-  if (!snap && pendingInject){ cv.style.cursor="crosshair"; } else cv.style.cursor="default";
+  ctx.setTransform(1,0,0,1,0,0);
+  if (!snap && pendingInject){ cv.style.cursor="crosshair"; } else cv.style.cursor=mapView.s>1?"grab":"default";
 }
 function renderLeaderboard(w){
   const rows=w.kingdoms.map(k=>({k,land:cellsOf(w,k.id).length})).sort((a,b)=>b.land-a.land||b.k.pop-a.k.pop);
@@ -1228,20 +1299,15 @@ function evText(w,ev){
 function renderEmpires(w){
   const bar=$("empirebar"); if(!bar) return;
   const rows=w.kingdoms.map(k=>({k,land:cellsOf(w,k.id).length})).sort((a,b)=>b.land-a.land||b.k.army-a.k.army);
-  const maxArmy=Math.max(1,...rows.map(r=>r.k.army));
   let html="";
   for (const {k,land} of rows){
-    html+='<div class="ecard'+(k.alive?"":" dead")+(selectedKingdom===k.id?" sel":"")+'" data-k="'+k.id+'">'
-      +'<div class="ename"><span class="dot" style="background:'+k.color+'"></span>'+htmlSafe(k.name)+'</div>'
-      +'<div class="estats"><div class="estat"><span>\u2694 Army</span><b>'+k.army+'</b></div>'
-      +'<div class="estat"><span>\u25CF Pop</span><b>'+k.pop+'</b></div>'
-      +'<div class="estat"><span>\u25A6 Land</span><b>'+land+'</b></div>'
-      +'<div class="estat secret"><span>\uD83C\uDF3E Food</span><b>'+k.food+'</b></div></div>'
-      +'<div class="ebar"><i style="width:'+Math.round(k.army/maxArmy*100)+'%;background:'+k.color+'"></i></div>'
-      +'</div>';
+    const glyph=k.army<=0?"\u25CB":k.army===1?"\u265F":k.army<=3?"\u2694":k.army<=6?"\u265C":"\u265B";
+    html+='<div class="ecard'+(k.alive?"":" dead")+(selectedKingdom===k.id?" sel":"")+'" data-k="'+k.id+'" style="--kc:'+k.color+'">'
+      +'<span class="edot">'+glyph+'</span>'
+      +'<span class="emeta"><b>'+htmlSafe(k.name)+'</b><i>\u2694'+k.army+' \u00B7 \uD83D\uDC65'+k.pop+' \u00B7 \u25A6'+land+'</i></span></div>';
   }
   bar.innerHTML=html;
-  for (const c of bar.querySelectorAll(".ecard")) c.onclick=()=>{ selectedKingdom=+c.dataset.k; renderLeaderboard(world); renderEmpires(world); renderInspector(); showTab("insp"); };
+  for (const c of bar.querySelectorAll(".ecard")) c.onclick=()=>{ selectedKingdom=+c.dataset.k; renderLeaderboard(world); renderEmpires(world); renderInspector(); showTab("insp"); setSheet("half"); };
 }
 function eventIcon(t){return ({Combat:"⚔️",Fall:"🔥",Dawn:"🌅",Transfer:"🤝",Control:"⚡",ThinkTimeout:"⏱️",Letter:"💬",Bulletin:"📣",Act:"•"})[t]||"•";}
 function renderEvents(w){
@@ -1285,7 +1351,7 @@ function restoreSnapshot(snap){
 function loadReplay(data){
   validateReplay(data); replayData=data; replayIdx=0;
   $("home").classList.add("hidden"); $("setup").classList.add("hidden"); $("app").classList.remove("hidden");
-  $("replaybar").classList.add("show"); pause();
+  $("replaybar").classList.add("show"); pause(); resetMapView(); setSheet("peek",true); setTimeout(layoutBoard,80);
   const cfg=data.config;
   // build a display world shell from the first snapshot
   world=createWorld(cfg,data.seed||1); world.aiAnalysis=data.aiAnalysis||null;
@@ -1306,18 +1372,65 @@ function applyReplayIdx(){
 }
 
 // ---------- map interaction ----------
+let suppressMapClick=false;
 $("board").addEventListener("click",(e)=>{
   if (!world) return;
+  if (suppressMapClick){ suppressMapClick=false; return; }
   const cv=$("board"), r=cv.getBoundingClientRect();
   const {cell,ox,oy}=boardGeom(world);
   const sx=cv.width/r.width,sy=cv.height/r.height;
-  const x=Math.floor(((e.clientX-r.left)*sx-ox)/cell), y=Math.floor(((e.clientY-r.top)*sy-oy)/cell);
+  let px=(e.clientX-r.left)*sx, py=(e.clientY-r.top)*sy;
+  px=(px-mapView.tx)/mapView.s; py=(py-mapView.ty)/mapView.s;
+  const x=Math.floor((px-ox)/cell), y=Math.floor((py-oy)/cell);
   if (x<0||y<0||x>=world.cfg.width||y>=world.cfg.height) return;
   if (pendingInject==="drought"){ injectDrought(world,x-2,y-2,x+2,y+2); pendingInject=null; toast("Drought injected"); renderAll(); return; }
   if (pendingInject==="cache"){ if(injectCacheDrop(world,x,y)){pendingInject=null;toast("Food cache dropped");renderAll();}else toast("Choose an empty, unowned cell"); return; }
   const o=world.grid[y][x].owner;
-  if (o!==null){ selectedKingdom=o; renderLeaderboard(world); renderInspector(); showTab("insp"); }
+  if (o!==null){ selectedKingdom=o; renderLeaderboard(world); renderEmpires(world); renderInspector(); showTab("insp"); setSheet("half"); }
 });
+// Genre-standard map gestures: drag to pan, pinch or wheel to zoom, double-tap to refit.
+(function(){
+  const cv=$("board"); cv.style.touchAction="none";
+  const ptrs=new Map(); let pinch=null, moved=false;
+  const toBacking=(cx,cy)=>{const r=cv.getBoundingClientRect();return [(cx-r.left)*cv.width/r.width,(cy-r.top)*cv.height/r.height];};
+  cv.addEventListener("pointerdown",e=>{
+    if(!world)return;
+    cv.setPointerCapture(e.pointerId);
+    ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY}); moved=false;
+    if(ptrs.size===2){const p=[...ptrs.values()];pinch={d:Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)||1,s:mapView.s,tx:mapView.tx,ty:mapView.ty,c:toBacking((p[0].x+p[1].x)/2,(p[0].y+p[1].y)/2)};}
+  });
+  cv.addEventListener("pointermove",e=>{
+    if(!world||!ptrs.has(e.pointerId))return;
+    const prev=ptrs.get(e.pointerId);
+    ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY,sx:prev.sx,sy:prev.sy});
+    if(!moved&&Math.hypot(e.clientX-prev.sx,e.clientY-prev.sy)>8)moved=true;
+    if(ptrs.size===2&&pinch){
+      const p=[...ptrs.values()];
+      const nd=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)||1;
+      const ns=Math.min(4,Math.max(1,pinch.s*nd/pinch.d));
+      const m=toBacking((p[0].x+p[1].x)/2,(p[0].y+p[1].y)/2);
+      mapView.tx=m[0]-(pinch.c[0]-pinch.tx)*(ns/pinch.s);
+      mapView.ty=m[1]-(pinch.c[1]-pinch.ty)*(ns/pinch.s);
+      mapView.s=ns; clampPan(); moved=true; renderBoard(world);
+    } else if(ptrs.size===1&&mapView.s>1&&moved){
+      const r=cv.getBoundingClientRect();
+      mapView.tx+=(e.clientX-prev.x)*cv.width/r.width;
+      mapView.ty+=(e.clientY-prev.y)*cv.height/r.height;
+      clampPan(); renderBoard(world);
+    }
+  });
+  const up=e=>{ if(ptrs.has(e.pointerId)){ptrs.delete(e.pointerId); if(moved)suppressMapClick=true; if(ptrs.size<2)pinch=null;} };
+  cv.addEventListener("pointerup",up); cv.addEventListener("pointercancel",up);
+  cv.addEventListener("dblclick",e=>{ if(!world)return; e.preventDefault(); resetMapView(); renderBoard(world); });
+  cv.addEventListener("wheel",e=>{
+    if(!world)return; e.preventDefault();
+    const m=toBacking(e.clientX,e.clientY);
+    const ns=Math.min(4,Math.max(1,mapView.s*(e.deltaY<0?1.15:1/1.15)));
+    mapView.tx=m[0]-(m[0]-mapView.tx)*(ns/mapView.s);
+    mapView.ty=m[1]-(m[1]-mapView.ty)*(ns/mapView.s);
+    mapView.s=ns; clampPan(); renderBoard(world);
+  },{passive:false});
+})();
 
 // ---------- wiring ----------
 const operatorDrawer=$("operatorDrawer");
@@ -1362,7 +1475,19 @@ $("replayFile").onchange=(e)=>{ const f=e.target.files[0]; if(!f)return;
 $("replaySlider").oninput=(e)=>{ replayIdx=+e.target.value; applyReplayIdx(); };
 $("exitReplayBtn").onclick=()=>{ replayData=null; $("replaybar").classList.remove("show"); $("app").classList.add("hidden"); $("setup").classList.remove("hidden"); };
 document.querySelectorAll("#observe [data-power]").forEach(b=>b.onclick=()=>{const m={drought:"droughtBtn",silence:"silenceBtn",curfew:"curfewBtn",cache:"cacheBtn",mute:"muteBtn"};$(m[b.dataset.power]).click();});
-for (const b of document.querySelectorAll("#tabs button")) b.onclick=()=>showTab(b.dataset.tab);
+for (const b of document.querySelectorAll("#tabs button")) b.onclick=()=>{ const wasOn=b.classList.contains("on"); showTab(b.dataset.tab); if(wasOn) setSheet(sheetMode==="peek"?"half":"peek"); else setSheet("half"); };
+(function(){
+  const grab=$("sheetGrab"), side=$("side"); if(!grab||!side)return;
+  let drag=null;
+  grab.style.touchAction="none";
+  grab.addEventListener("pointerdown",e=>{ if(!matchMedia("(max-width:759px)").matches)return; grab.setPointerCapture(e.pointerId); drag={y:e.clientY,h:side.getBoundingClientRect().height,moved:false}; side.style.transition="none"; });
+  grab.addEventListener("pointermove",e=>{ if(!drag)return; const dy=e.clientY-drag.y; if(Math.abs(dy)>4)drag.moved=true; const mainH=$("main").getBoundingClientRect().height; const h=Math.min(mainH*0.72,Math.max(96,drag.h-dy)); side.style.flexBasis=h+"px"; layoutBoard(); });
+  const endDrag=()=>{ if(!drag)return; side.style.transition=""; side.style.flexBasis=""; if(!drag.moved){ setSheet(sheetMode==="peek"?"half":"peek"); } else { setSheet(side.getBoundingClientRect().height<240?"peek":"half"); } drag=null; };
+  grab.addEventListener("pointerup",endDrag); grab.addEventListener("pointercancel",endDrag);
+})();
+window.addEventListener("resize",layoutBoard);
+window.addEventListener("orientationchange",()=>setTimeout(layoutBoard,120));
+$("side").addEventListener("transitionend",e=>{ if(e.propertyName==="flex-basis")layoutBoard(); });
 
 document.addEventListener("keydown",(e)=>{ if(e.code==="Space"&&world&&!replayData&&$("app").classList.contains("hidden")===false){ e.preventDefault(); playing?pause():play(); } });
 
