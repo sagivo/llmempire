@@ -267,7 +267,11 @@
   #sheetGrab{display:none}
   #mapstage{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;width:100%;position:relative;overflow:hidden}
   #mapframe{position:relative}
-  .ecard .edot{display:none}
+  .ecard .edot{display:grid;flex:0 0 26px;width:26px;height:26px;border-radius:50%;background:var(--kc,#63d8ff);place-items:center;font-size:12px;color:rgba(7,14,24,.92);box-shadow:0 0 0 2px rgba(255,255,255,.14),0 2px 8px rgba(0,0,0,.4)}
+  .ecard .emeta{display:flex;flex-direction:column;gap:1px;min-width:0;font-style:normal}
+  .ecard .emeta b{font-size:11px;font-weight:750;color:#e8eff9;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ecard .emeta i{font-style:normal;font-size:9px;color:#8ba0bb;white-space:nowrap;font-variant-numeric:tabular-nums}
+  @media(min-width:760px){.ecard{display:flex;align-items:center;gap:8px;width:auto;min-width:0;height:44px;padding:4px 12px 4px 6px}}
   @media(max-width:759px){
     /* Slim HUD: one row, thumb-sized, nothing wasted */
     #topbar{height:52px;flex:0 0 52px;padding:6px 8px;grid-template-columns:48px 42px 62px 1fr 44px;gap:6px}
@@ -1230,6 +1234,7 @@ function renderBoard(w, snap){
   ctx.fillStyle=gr; ctx.fillRect(0,0,cv.width,cv.height);
   ctx.setTransform(mapView.s,0,0,mapView.s,mapView.tx,mapView.ty);
   const {cell,ox,oy}=boardGeom(w), W=w.cfg.width, H=w.cfg.height;
+  ctx.fillStyle="#0c1524"; ctx.fillRect(ox,oy,W*cell,H*cell);
   const get=(x,y,f)=> snap ? snap[f][y*W+x] : null;
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){
     const px=ox+x*cell, py=oy+y*cell;
@@ -1250,6 +1255,8 @@ function renderBoard(w, snap){
       ctx.beginPath(); ctx.arc(px+cell/2,py+cell/2,r,0,7); ctx.fill();
     }
   }
+  ctx.strokeStyle="rgba(125,162,220,.3)"; ctx.lineWidth=1.5;
+  ctx.strokeRect(ox-0.75,oy-0.75,W*cell+1.5,H*cell+1.5);
   const dispCell = cell * mapView.s * (cv.clientWidth ? cv.clientWidth / cv.width : 1);
   if (!snap && dispCell >= 10){
     ctx.textAlign="center"; ctx.textBaseline="middle";
@@ -1309,7 +1316,7 @@ function renderEmpires(w){
     const glyph=k.army<=0?"\u25CB":k.army===1?"\u265F":k.army<=3?"\u2694":k.army<=6?"\u265C":"\u265B";
     html+='<div class="ecard'+(k.alive?"":" dead")+(selectedKingdom===k.id?" sel":"")+'" data-k="'+k.id+'" style="--kc:'+k.color+'">'
       +'<span class="edot">'+glyph+'</span>'
-      +'<span class="emeta"><b>'+htmlSafe(k.name)+'</b><i>\u2694'+k.army+' \u00B7 \uD83D\uDC65'+k.pop+' \u00B7 \u25A6'+land+'</i></span></div>';
+      +'<span class="emeta"><b>'+htmlSafe(k.name)+'</b><i>\u2694'+k.army+' \u00B7 \u25CF'+k.pop+' \u00B7 \u25A6'+land+'</i></span></div>';
   }
   bar.innerHTML=html;
   for (const c of bar.querySelectorAll(".ecard")) c.onclick=()=>{ selectedKingdom=+c.dataset.k; renderLeaderboard(world); renderEmpires(world); renderInspector(); showTab("insp"); setSheet("half"); };
