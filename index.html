@@ -1207,9 +1207,11 @@ function clampPan(){
 function layoutBoard(){
   const stage=$("mapstage"),cv=$("board"); if(!stage||!cv)return;
   const r=stage.getBoundingClientRect(); if(r.width<40||r.height<40)return;
-  const sc=Math.min(r.width/cv.width,r.height/cv.height);
-  cv.style.width=Math.max(80,Math.floor(cv.width*sc))+"px";
-  cv.style.height=Math.max(54,Math.floor(cv.height*sc))+"px";
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  const bw=Math.max(120,Math.round(r.width*dpr)), bh=Math.max(90,Math.round(r.height*dpr));
+  cv.style.width=Math.floor(r.width)+"px"; cv.style.height=Math.floor(r.height)+"px";
+  if(cv.width!==bw||cv.height!==bh){ cv.width=bw; cv.height=bh; }
+  if(world)renderBoard(world);
 }
 let sheetMode="half";
 function setSheet(m,skipLayout){
@@ -1223,6 +1225,9 @@ function renderBoard(w, snap){
   const bg=ctx.createLinearGradient(0,0,0,cv.height);
   bg.addColorStop(0,"#0c1424"); bg.addColorStop(1,"#070b13");
   ctx.fillStyle=bg; ctx.fillRect(0,0,cv.width,cv.height);
+  const gr=ctx.createRadialGradient(cv.width/2,cv.height/2,10,cv.width/2,cv.height/2,Math.max(cv.width,cv.height)*0.62);
+  gr.addColorStop(0,"rgba(70,120,200,.10)"); gr.addColorStop(1,"rgba(70,120,200,0)");
+  ctx.fillStyle=gr; ctx.fillRect(0,0,cv.width,cv.height);
   ctx.setTransform(mapView.s,0,0,mapView.s,mapView.tx,mapView.ty);
   const {cell,ox,oy}=boardGeom(w), W=w.cfg.width, H=w.cfg.height;
   const get=(x,y,f)=> snap ? snap[f][y*W+x] : null;
