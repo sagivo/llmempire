@@ -1847,6 +1847,9 @@ function renderBoard(w, snap){
   const dispCss=cell*mapView.s*(cv.clientWidth?cv.clientWidth/cv.width:1);
   const get=(x,y,f)=> snap ? snap[f][y*W+x] : null;
   const poly=(pts,fill)=>{ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i][0],pts[i][1]);ctx.closePath();ctx.fillStyle=fill;ctx.fill();};
+  // Labels are a separate overlay pass. Drawing them inside the tile loop let a later
+  // neighbouring hex paint over the badge, which looked like the number pill was clipped.
+  const valuePills=[];
   // Treat the world as a physical atlas board, not a loose strip of tiles.
   const pad=Math.max(6,cell*.28), radius=Math.max(8,cell*.45), bx=ox-pad, by=oy-pad, bw=boardGeom(w).boardW+pad*2, bh=boardGeom(w).boardH+pad*2;
   ctx.save();ctx.shadowColor=MAPC.boardShadow;ctx.shadowBlur=Math.max(10,cell*.8);ctx.shadowOffsetY=Math.max(5,cell*.35);
@@ -1875,8 +1878,7 @@ function renderBoard(w, snap){
       const label=String(val),fs=Math.max(7,cell*.26);
       ctx.font="900 "+fs+"px Nunito,Segoe UI,sans-serif";
       const tw=ctx.measureText(label).width+cell*.18,th=fs+cell*.14,lx=px+cell-tw-cell*.05,ly=py+cell-th-cell*.05;
-      ctx.fillStyle=MAPC.labelBg;ctx.beginPath();if(ctx.roundRect)ctx.roundRect(lx,ly,tw,th,Math.max(2,cell*.08));else ctx.rect(lx,ly,tw,th);ctx.fill();
-      ctx.fillStyle=ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(label,lx+tw/2,ly+th/2+cell*.01);
+      valuePills.push({label,ink,fs,tw,th,lx,ly});
     };
     if(cell>12){
       const cx=px+cell*.5,cy=py+cell*.46;
@@ -1991,6 +1993,12 @@ function renderBoard(w, snap){
       else if(terrain==="field"&&crop>0)pill(crop,MAPC.crop);
     }
     if(shield>0){ctx.strokeStyle=MAPC.shield;ctx.lineWidth=Math.max(2,cell*.075);ctx.globalAlpha=.5+.2*shield;hexPath(ctx,hcx,hcy,cell*.33);ctx.stroke();ctx.globalAlpha=1;}
+  }
+  // Badge overlay: always above every neighbouring hex and terrain model.
+  for(const p of valuePills){
+    ctx.font="900 "+p.fs+"px Nunito,Segoe UI,sans-serif";
+    ctx.fillStyle=MAPC.labelBg;ctx.beginPath();if(ctx.roundRect)ctx.roundRect(p.lx,p.ly,p.tw,p.th,Math.max(2,cell*.08));else ctx.rect(p.lx,p.ly,p.tw,p.th);ctx.fill();
+    ctx.fillStyle=p.ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(p.label,p.lx+p.tw/2,p.ly+p.th/2+cell*.01);
   }
   // Polytopia-style perspective: owned land plus its one full edge-adjacent hex ring is visible.
   // View-all is the operator default; a kingdom view hides both terrain detail and army tokens outside sight.
@@ -2194,14 +2202,25 @@ $("board").addEventListener("click",(e)=>{
   if (o!==null){ selectedKingdom=o; renderLeaderboard(world); renderEmpires(world); renderInspector(); showTab("insp"); focusKingdom(o,true); setSheet("half"); }
 });
 // Genre-standard map gestures: drag to pan, pinch or wheel to zoom, double-tap to refit.
+// During a gesture the already-painted canvas moves on the compositor. Repainting hundreds
+// of detailed hexes for every raw pointer event was the source of mobile zoom jank.
 (function(){
-  const cv=$("board"); cv.style.touchAction="none"; cv.addEventListener("contextmenu",e=>e.preventDefault());
-  const ptrs=new Map(); let pinch=null, moved=false;
+  const cv=$("board"); cv.style.touchAction="none"; cv.style.transformOrigin="0 0"; cv.style.willChange="transform"; cv.addEventListener("contextmenu",e=>e.preventDefault());
+  const ptrs=new Map(); let pinch=null, moved=false, previewBase=null, wheelTimer=0;
   const toBacking=(cx,cy)=>{const r=cv.getBoundingClientRect();return [(cx-r.left)*cv.width/r.width,(cy-r.top)*cv.height/r.height];};
+  const beginPreview=()=>{if(!previewBase)previewBase={s:mapView.s,tx:mapView.tx,ty:mapView.ty};};
+  const paintPreview=()=>{
+    if(!previewBase)return;
+    const r=cv.getBoundingClientRect(),a=mapView.s/previewBase.s;
+    const bx=(mapView.tx-a*previewBase.tx)*(r.width/cv.width),by=(mapView.ty-a*previewBase.ty)*(r.height/cv.height);
+    cv.style.transform=`matrix(${a},0,0,${a},${bx},${by})`;
+  };
+  const commitPreview=()=>{if(!previewBase)return;previewBase=null;cv.style.transform="";renderBoard(world);};
   cv.addEventListener("pointerdown",e=>{
     if(!world)return;
+    clearTimeout(wheelTimer);commitPreview();
     cv.setPointerCapture(e.pointerId);
-    ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY}); moved=false;
+    ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY}); moved=false; beginPreview();
     if(ptrs.size===2){const p=[...ptrs.values()];pinch={d:Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)||1,s:mapView.s,tx:mapView.tx,ty:mapView.ty,c:toBacking((p[0].x+p[1].x)/2,(p[0].y+p[1].y)/2)};}
   });
   cv.addEventListener("pointermove",e=>{
@@ -2210,30 +2229,21 @@ $("board").addEventListener("click",(e)=>{
     ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY,sx:prev.sx,sy:prev.sy});
     if(!moved&&Math.hypot(e.clientX-prev.sx,e.clientY-prev.sy)>8)moved=true;
     if(ptrs.size===2&&pinch){
-      const p=[...ptrs.values()];
-      const nd=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)||1;
-      const ns=Math.min(4,Math.max(1,pinch.s*nd/pinch.d));
+      const p=[...ptrs.values()],nd=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)||1,ns=Math.min(4,Math.max(1,pinch.s*nd/pinch.d));
       const m=toBacking((p[0].x+p[1].x)/2,(p[0].y+p[1].y)/2);
-      mapView.tx=m[0]-(pinch.c[0]-pinch.tx)*(ns/pinch.s);
-      mapView.ty=m[1]-(pinch.c[1]-pinch.ty)*(ns/pinch.s);
-      mapView.s=ns; clampPan(); moved=true; renderBoard(world);
-    } else if(ptrs.size===1&&mapView.s>1&&moved){
-      const r=cv.getBoundingClientRect();
-      mapView.tx+=(e.clientX-prev.x)*cv.width/r.width;
-      mapView.ty+=(e.clientY-prev.y)*cv.height/r.height;
-      clampPan(); renderBoard(world);
+      mapView.tx=m[0]-(pinch.c[0]-pinch.tx)*(ns/pinch.s);mapView.ty=m[1]-(pinch.c[1]-pinch.ty)*(ns/pinch.s);mapView.s=ns;clampPan();moved=true;paintPreview();
+    }else if(ptrs.size===1&&mapView.s>1&&moved){
+      const r=cv.getBoundingClientRect();mapView.tx+=(e.clientX-prev.x)*cv.width/r.width;mapView.ty+=(e.clientY-prev.y)*cv.height/r.height;clampPan();paintPreview();
     }
   });
-  const up=e=>{ if(ptrs.has(e.pointerId)){ptrs.delete(e.pointerId); if(moved)suppressMapClickUntil=performance.now()+300; if(ptrs.size<2)pinch=null;} };
-  cv.addEventListener("pointerup",up); cv.addEventListener("pointercancel",up);
-  cv.addEventListener("dblclick",e=>{ if(!world)return; e.preventDefault(); resetMapView(); renderBoard(world); });
+  const up=e=>{if(ptrs.has(e.pointerId)){ptrs.delete(e.pointerId);if(moved)suppressMapClickUntil=performance.now()+300;if(ptrs.size<2)pinch=null;if(ptrs.size===0)commitPreview();}};
+  cv.addEventListener("pointerup",up);cv.addEventListener("pointercancel",up);
+  cv.addEventListener("dblclick",e=>{if(!world)return;e.preventDefault();previewBase=null;cv.style.transform="";resetMapView();renderBoard(world);});
   cv.addEventListener("wheel",e=>{
-    if(!world)return; e.preventDefault();
-    const m=toBacking(e.clientX,e.clientY);
-    const ns=Math.min(4,Math.max(1,mapView.s*(e.deltaY<0?1.15:1/1.15)));
-    mapView.tx=m[0]-(m[0]-mapView.tx)*(ns/mapView.s);
-    mapView.ty=m[1]-(m[1]-mapView.ty)*(ns/mapView.s);
-    mapView.s=ns; clampPan(); renderBoard(world);
+    if(!world)return;e.preventDefault();beginPreview();
+    const m=toBacking(e.clientX,e.clientY),ns=Math.min(4,Math.max(1,mapView.s*(e.deltaY<0?1.15:1/1.15)));
+    mapView.tx=m[0]-(m[0]-mapView.tx)*(ns/mapView.s);mapView.ty=m[1]-(m[1]-mapView.ty)*(ns/mapView.s);mapView.s=ns;clampPan();paintPreview();
+    clearTimeout(wheelTimer);wheelTimer=setTimeout(commitPreview,90);
   },{passive:false});
 })();
 
