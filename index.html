@@ -687,7 +687,7 @@ const CONFIG_SCHEMA = [
 ];
 const END_MODES = ["dominion","last_stand","timed","open"];
 const KINGDOM_NAMES = ["Aldermark","Brevia","Corvane","Duskhold","Eastmere","Fenreach","Galloway","Hightower","Ismere","Jorvik","Kestrel","Lornwick","Maradir","Norhelm","Ostmark","Pellinor","Quillon","Ravencourt","Solmere","Thornfield","Ulstead","Veyra","Westhold","Yarrow"];
-const KINGDOM_COLORS = ["#d93f4c","#287fd2","#6936c7","#e29a22","#7e55b8","#008da8","#c94f91","#6c922b","#e46435","#4e5fc4","#9a9e22","#2476a8","#bd6d24","#4f8d35","#9a47ad","#087f78","#ce3e76","#719c46","#6650ad","#008b9e","#d98221","#80654e","#5c7480","#96a52d"];
+const KINGDOM_COLORS = ["#d93f4c","#0057b8","#e3a20b","#8126a6","#008f7a","#c23b91","#694b2d","#e65f24","#007c9e","#a94d24","#4f7f22","#9b275f","#503397","#0070b5","#c15f7e","#9a6500","#2f6f55","#8d3e2b","#3f658a","#80507b","#607a00","#b12f2a","#555bb0","#785d21"];
 const factionColor=id=>KINGDOM_COLORS[((Number(id)||0)%KINGDOM_COLORS.length+KINGDOM_COLORS.length)%KINGDOM_COLORS.length];
 const STOCK_GOALS = ["Raider","Steward","Schemer","Merchant","Warlord","Hermit"];
 
@@ -1890,7 +1890,6 @@ DB.open().then(async ()=>{
 </script>
 </body>
 </html>
-
 
 
 
