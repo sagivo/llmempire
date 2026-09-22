@@ -33,18 +33,29 @@ Single-file static app: open `index.html`, or deploy the repo to any static host
 
 ## Rules implemented
 
-- Pop cap = popBaseCap + popPerCell x land. Dawn upkeep: food >= pop feeds and
-  grows pop by 1 (capped); otherwise food is consumed, pop drops 1, army deserts
-  to enforce army <= min(armyCap, pop).
-- Crops grow +1 per Dawn to level 3. Harvest needs crop >= 2 and 1 stamina,
-  yields min(2, 1 + floor(pop/3)).
-- Combat: attacker power = army + (stamina>=3); defender power = army + 1 +
-  shield + (stamina>=3). Winner takes the cell and loots up to raidLootMax food;
-  ties cost both sides 1 army and 1 food. Losing your last cell is a Fall.
-- Letters respect Chebyshev range and per-tick caps; speech is truncated to the
-  sentence limit with TalkTruncated events.
-- Victory: dominion (>= dominionPct% of cells, in dominion/timed modes),
-  last stand, timed (maxDays, scored by land/pop/food), or open.
+- Kingdoms start with 12 food, 8 minerals, 2 population, 1 army, 1 house and
+  4 stamina. Stamina recovers +3 each Dawn to a cap of 6.
+- Fields grow one crop stage each Dawn to level 3. Harvesting a ready field
+  costs 1 stamina and yields 3 food. Mines refill one ore each Dawn to a cap
+  of 5; mining costs 1 stamina and yields up to 3 minerals.
+- Every person eats 1 food per Dawn. Population grows by 1 when fully fed and
+  shrinks on a deficit. Houses cost 2 minerals and support 4 people each, with
+  up to 3 houses per tile. Building costs 1 stamina.
+- Training 1 army costs 2 minerals and 1 stamina. In timed and open modes,
+  every soldier also costs 1 mineral per Dawn; unpaid upkeep causes desertion.
+  Army cannot exceed population or the army cap.
+- Armies are placed units and may split or merge. Conquering any tile, even an
+  empty one, requires an army group on the frontier and costs 1 stamina.
+  Attacks cost 1 stamina; houses normally give defenders +2 and mines +1.
+- Dominion and last stand use war pacing: population cannot starve below 2,
+  army upkeep is waived, an army that reaches zero raises a 1-unit militia at
+  Dawn, attackers get +1, and passive terrain, house and shield defense is
+  removed. Dominion wins at 25% of the map. Capturing a capital eliminates its
+  kingdom and transfers all remaining territory to the attacker.
+- Letters respect range and per-tick caps; speech is truncated to the sentence
+  limit with TalkTruncated events.
+- Victory: dominion, last stand, timed (day limit, scored by land, population,
+  food and related resources), or open.
 
 ## Dev
 
