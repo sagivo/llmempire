@@ -528,7 +528,7 @@
 /*ENGINE-BEGIN*/
 "use strict";
 // ---------- deterministic RNG ----------
-function mulberry32(seed){let a=seed>>>0;return function(){a|=0;a=(a+0x6D2B79F5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296;};}
+function mulberry32(seed){let a=seed>>>0;const rand=function(){a|=0;a=(a+0x6D2B79F5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296;};rand.getState=()=>a>>>0;rand.setState=v=>{a=(Number(v)||0)>>>0;};return rand;}
 
 // ---------- config schema (defaults per Commons spec) ----------
 const CONFIG_SCHEMA = [
@@ -610,11 +610,12 @@ function popCap(world,k){const ss=settlementCells(world,k.id);return ss.reduce((
 function syncSettlementPop(world,k){const ss=settlementCells(world,k.id);if(!ss.length)return;let left=k.pop;ss.forEach(([x,y],i)=>{const st=world.grid[y][x].settlement,slots=ss.length-i;st.pop=Math.min(st.cap,Math.max(i===ss.length-1?left:1,Math.ceil(left/slots)));left=Math.max(0,left-st.pop);});}
 function normalizeArmyGroups(world,k){
   const home=settlementCells(world,k.id)[0]||cellsOf(world,k.id)[0];
+  const hadGroups=Array.isArray(k.armyGroups)&&k.armyGroups.length>0;
   if(!Array.isArray(k.armyGroups))k.armyGroups=[];
   if(!k.armyGroups.length&&k.army>0&&home)k.armyGroups=[{id:"g1",x:k.armyPos?.x??home[0],y:k.armyPos?.y??home[1],size:k.army,intent:k.armyIntent||"capital garrison"}];
   k.armyGroups=k.armyGroups.filter(g=>g&&g.size>0&&world.grid[g.y]?.[g.x]?.owner===k.id).map((g,i)=>({id:g.id||("g"+(i+1)),x:g.x,y:g.y,size:Math.floor(g.size),intent:g.intent||"reserve"}));
   let total=k.armyGroups.reduce((n,g)=>n+g.size,0);
-  if(total<k.army&&home){const g=k.armyGroups[0];if(g)g.size+=k.army-total;else k.armyGroups=[{id:"g1",x:home[0],y:home[1],size:k.army,intent:"capital garrison"}];}
+  if(total<k.army&&home&&!hadGroups){const g=k.armyGroups[0];if(g)g.size+=k.army-total;else k.armyGroups=[{id:"g1",x:home[0],y:home[1],size:k.army,intent:"capital garrison"}];}
   if(total>k.army){let excess=total-k.army;for(let i=k.armyGroups.length-1;i>=0&&excess;i--){const cut=Math.min(excess,k.armyGroups[i].size);k.armyGroups[i].size-=cut;excess-=cut;}k.armyGroups=k.armyGroups.filter(g=>g.size>0);}
   k.army=k.armyGroups.reduce((n,g)=>n+g.size,0);const first=k.armyGroups[0];k.armyPos=first?{x:first.x,y:first.y}:null;k.armyIntent=first?.intent||null;return k.armyGroups;
 }
@@ -624,6 +625,7 @@ function moveReachable(world,k,group){const max=world.cfg.armyMoveRange||3,q=[[[
 function chooseArmyPost(world,k,intent,group){const pool=moveReachable(world,k,group),score=([x,y])=>{const g=world.grid[y][x];let v=0;if(intent==="village")v+=g.settlement?100:0;if(intent==="mine")v+=g.terrain==="mine"?100:0;if(intent==="border")v+=neighbors4(world,x,y).some(([nx,ny])=>world.grid[ny][nx].owner!==k.id)?80:0;v+=g.shield*3;return v;};return pool.slice().sort((a,b)=>score(b)-score(a))[0]||[group.x,group.y];}
 function armyAt(world,k,x,y){return normalizeArmyGroups(world,k).filter(g=>g.x===x&&g.y===y).reduce((n,g)=>n+g.size,0);}
 function groupAt(world,k,x,y){return normalizeArmyGroups(world,k).find(g=>g.x===x&&g.y===y);}
+function nextGroupId(k){const used=new Set((k.armyGroups||[]).map(g=>g.id));let n=1;while(used.has("g"+n))n++;return "g"+n;}
 function loseArmy(world,k,amount,x=null,y=null){normalizeArmyGroups(world,k);let left=amount;const order=(x===null?k.armyGroups:[...k.armyGroups].sort((a,b)=>(a.x===x&&a.y===y?-1:b.x===x&&b.y===y?1:0)));for(const g of order){const cut=Math.min(left,g.size);g.size-=cut;left-=cut;if(!left)break;}k.armyGroups=k.armyGroups.filter(g=>g.size>0);k.army=k.armyGroups.reduce((n,g)=>n+g.size,0);normalizeArmyGroups(world,k);}
 
 function neighbors4(world,x,y){ const [[n],[e],[s],[w]]=[[ [x,y-1] ],[ [x+1,y] ],[ [x,y+1] ],[ [x-1,y] ]]; return [wrap(world,x,y-1),wrap(world,x+1,y),wrap(world,x,y+1),wrap(world,x-1,y)]; }
@@ -655,7 +657,7 @@ function legalActions(world,k){
   if (adj.length) acts.push("trade_offer");
   if (k.pendingOffers.length && k.food>=2) acts.push("honor");
   acts.push("rest");
-  acts.push("move");
+  if(k.army>0&&normalizeArmyGroups(world,k).length)acts.push("move");
   return acts;
 }
 function adjacentKingdoms(world,kid){
@@ -694,7 +696,7 @@ function executeAct(world,kid,action,events){
       emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"eat",target:null,dir:null,note:action.note||""});
       break;}
     case "train":{
-      k.metal-=cfg.trainCostMetal; k.stamina-=cfg.trainCostStamina; k.army=Math.min(Math.min(cfg.armyCap,k.pop),k.army+1); normalizeArmyGroups(world,k);
+      normalizeArmyGroups(world,k); k.metal-=cfg.trainCostMetal; k.stamina-=cfg.trainCostStamina; const post=k.armyGroups[0]; if(post){post.size+=1;}else{const home=settlementCells(world,k.id)[0]||cellsOf(world,k.id)[0];if(home)k.armyGroups=[{id:"g1",x:home[0],y:home[1],size:1,intent:"capital garrison"}];} k.army=k.armyGroups.reduce((n,g)=>n+g.size,0); normalizeArmyGroups(world,k);
       emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"train",target:null,dir:null,note:action.note||""});
       break;}
     case "fortify":{
@@ -755,12 +757,12 @@ function executeAct(world,kid,action,events){
     case "move":{
       const intent=["village","mine","border"].includes(action.placement)?action.placement:"border",groups=normalizeArmyGroups(world,k);
       let source=groups.find(g=>g.id===action.group_id)||groups.slice().sort((a,b)=>b.size-a.size)[0],from=source?{x:source.x,y:source.y}:null,dest=source?chooseArmyPost(world,k,intent,source):null;
-      if(source&&dest){let amount=Math.max(1,Math.min(source.size,Math.floor(action.amount||Math.ceil(source.size/2))));let moved=source;if(amount<source.size){source.size-=amount;moved={id:"g"+(Date.now()%100000)+Math.floor(world.rng()*999),x:source.x,y:source.y,size:amount,intent};k.armyGroups.push(moved);}moved.x=dest[0];moved.y=dest[1];moved.intent=intent;const same=k.armyGroups.filter(g=>g!==moved&&g.x===moved.x&&g.y===moved.y);for(const g of same){moved.size+=g.size;k.armyGroups.splice(k.armyGroups.indexOf(g),1);}normalizeArmyGroups(world,k);}
+      if(source&&dest){let amount=Math.max(1,Math.min(source.size,Math.floor(action.amount||Math.ceil(source.size/2))));let moved=source;if(amount<source.size){source.size-=amount;moved={id:nextGroupId(k),x:source.x,y:source.y,size:amount,intent};k.armyGroups.push(moved);}moved.x=dest[0];moved.y=dest[1];moved.intent=intent;const same=k.armyGroups.filter(g=>g!==moved&&g.x===moved.x&&g.y===moved.y);for(const g of same){moved.size+=g.size;k.armyGroups.splice(k.armyGroups.indexOf(g),1);}normalizeArmyGroups(world,k);}
       emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"move",target:null,dir:null,placement:intent,amount:action.amount||null,from,to:dest?{x:dest[0],y:dest[1]}:from,note:action.note||("deploy to "+intent)});
       break;}
     case "rest":
       k.stamina=Math.min(cfg.staminaCap,k.stamina+1);
-    k.army=Math.min(k.army,Math.min(cfg.armyCap,k.pop)); // desertion: A <= min(armyCap, pop)
+    k.army=Math.min(k.army,Math.min(cfg.armyCap,k.pop)); normalizeArmyGroups(world,k); // desertion: A <= min(armyCap, pop)
       emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"rest",target:null,dir:null,note:action.note||""});
       break;
   }
@@ -802,7 +804,7 @@ function processDawn(world){
   }
   for (let y=0;y<cfg.height;y++)for(let x=0;x<cfg.width;x++){ const c=world.grid[y][x]; if (c.terrain==="field"&&c.crop>0&&c.crop<3){c.crop+=1;grown.push([x,y]);} if(c.terrain==="mine"&&c.ore<3&&world.rng()<.18)c.ore+=1; }
   world.day+=1;
-  emit(world,{type:"Dawn",day:world.day,starvedPop,unsupportedArmy,grownCrops:grown});
+  emit(world,{type:"Dawn",tick:absTick(world)-1,day:world.day,starvedPop,unsupportedArmy,grownCrops:grown});
 }
 
 function absTick(world){ return (world.day-1)*world.cfg.ticksPerDay + world.tick; }
@@ -872,7 +874,7 @@ function mockPhaseA(world,k){
   else if (k.goal==="Steward") bulletin= roll<0.4 ? (larger.length?"I seek peace with "+larger[0]+". Grain for calm borders.":"Harvests are strong. Trade is open to all.") : null;
   else if (k.goal==="Schemer") bulletin= roll<0.45 ? (larger.length?larger[0]+" is the real threat here, not me. I am barely scraping by.":"Rumors of my wealth are exaggerated.") : null;
   else if (k.goal==="Merchant") bulletin= roll<0.4 ? "Fair trades, two for two, neighbors first. Prosperity over ashes." : null;
-  else if (k.goal==="Warlord") bulletin= roll<0.5 ? (weak.length?"Kneel, "+weak[0]+".":"Borders are suggestions.") : null;
+  else if (k.goal==="Warlord") bulletin= roll<0.5 ? (smaller.length?"Kneel, "+smaller[0]+".":"Borders are suggestions.") : null;
   else bulletin= roll<0.25 ? "The "+k.name.split(" #")[0]+" endures." : null;
   const letters=[];
   if (rng()<0.35 && others.length){
@@ -975,9 +977,9 @@ function takeSnapshot(world){
   const W=world.cfg.width,H=world.cfg.height;
   const owners=new Array(W*H), crops=new Array(W*H), shields=new Array(W*H), terrains=new Array(W*H), ores=new Array(W*H), settlements=new Array(W*H);
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const g=world.grid[y][x],i=y*W+x; owners[i]=g.owner===null?-1:g.owner; crops[i]=g.crop; shields[i]=g.shield;terrains[i]=g.terrain;ores[i]=g.ore||0;settlements[i]=g.settlement?{...g.settlement}:null; }
-  return { day:world.day, tick:world.tick, over:world.over, winner:world.winner,
+  return { day:world.day, tick:world.tick, over:world.over, winner:world.winner, rngState:world.rng.getState?.(), curfewUntil:world.curfewUntil, silenceUntil:world.silenceUntil,
     owners, crops, shields, terrains, ores, settlements,
-    kingdoms: world.kingdoms.map(k=>({id:k.id,alive:k.alive,pop:k.pop,army:k.army,armyGroups:normalizeArmyGroups(world,k).map(g=>({...g})),armyPos:k.armyPos?{...k.armyPos}:null,armyIntent:k.armyIntent||null,food:k.food,metal:k.metal,stamina:k.stamina,bulletin:k.bulletin,selfNote:k.selfNote,goal:k.goal,talkModel:k.talkModel,actModel:k.actModel})) };
+    kingdoms: world.kingdoms.map(k=>({id:k.id,alive:k.alive,pop:k.pop,army:k.army,armyGroups:normalizeArmyGroups(world,k).map(g=>({...g})),armyPos:k.armyPos?{...k.armyPos}:null,armyIntent:k.armyIntent||null,food:k.food,metal:k.metal,stamina:k.stamina,bulletin:k.bulletin,selfNote:k.selfNote,goal:k.goal,talkModel:k.talkModel,actModel:k.actModel,mutedUntil:k.mutedUntil,pendingOffers:k.pendingOffers.map(o=>({...o}))})) };
 }
 
 // ---------- one full tick ----------
@@ -1506,10 +1508,10 @@ function validateReplay(data){
   if(!data.snapshots.every(s=>Array.isArray(s.owners)&&s.owners.length===n&&Array.isArray(s.kingdoms)&&s.kingdoms.length===data.config.playerCount))throw new Error("Replay data is incomplete or incompatible");
 }
 function restoreSnapshot(snap){
-  world.day=snap.day;world.tick=snap.tick;world.over=snap.over;world.winner=snap.winner;
+  world.day=snap.day;world.tick=snap.tick;world.over=snap.over;world.winner=snap.winner;world.curfewUntil=snap.curfewUntil||0;world.silenceUntil=snap.silenceUntil||0;if(snap.rngState!==undefined)world.rng.setState?.(snap.rngState);
   const W=world.cfg.width;
   for(let y=0;y<world.cfg.height;y++)for(let x=0;x<W;x++){const i=y*W+x,g=world.grid[y][x];g.owner=snap.owners[i]===-1?null:snap.owners[i];g.crop=snap.crops[i];g.shield=snap.shields[i];g.terrain=snap.terrains?.[i]||g.terrain||"plain";g.ore=snap.ores?.[i]||0;g.settlement=snap.settlements?.[i]||null;}
-  snap.kingdoms.forEach((s,i)=>{const k=world.kingdoms[i];Object.assign(k,{alive:s.alive,pop:s.pop,army:s.army,armyGroups:s.armyGroups||null,armyPos:s.armyPos||null,armyIntent:s.armyIntent||"capital garrison",food:s.food,metal:s.metal??world.cfg.startMetal??defaultConfig().startMetal,stamina:s.stamina,bulletin:s.bulletin,selfNote:s.selfNote,goal:s.goal||k.goal,talkModel:s.talkModel||k.talkModel,actModel:s.actModel||k.actModel});});
+  snap.kingdoms.forEach((s,i)=>{const k=world.kingdoms[i];Object.assign(k,{alive:s.alive,pop:s.pop,army:s.army,armyGroups:s.armyGroups||null,armyPos:s.armyPos||null,armyIntent:s.armyIntent||"capital garrison",food:s.food,metal:s.metal??world.cfg.startMetal??defaultConfig().startMetal,stamina:s.stamina,bulletin:s.bulletin,selfNote:s.selfNote,goal:s.goal||k.goal,talkModel:s.talkModel||k.talkModel,actModel:s.actModel||k.actModel,mutedUntil:s.mutedUntil||0,pendingOffers:Array.isArray(s.pendingOffers)?s.pendingOffers.map(o=>({...o})):[]});normalizeArmyGroups(world,k);});
 }
 function loadReplay(data){
   validateReplay(data); replayData=data; replayIdx=0;
@@ -1677,6 +1679,7 @@ DB.open().then(async ()=>{
 </script>
 </body>
 </html>
+
 
 
 
