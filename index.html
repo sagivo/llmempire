@@ -1848,66 +1848,108 @@ function renderBoard(w, snap){
     if(cell>12){
       const cx=px+cell*.5,cy=py+cell*.46;
       ctx.save();
+      // Reference-style icons (Polytopia screenshot): chunky low-poly models. Every shape is
+      // built from a light left facet and a dark right facet over the THEME CONFIG palette,
+      // with a soft ground shadow so each icon sits on the tile like a toy piece.
+      const shadow=(ex,ey,erx,ery)=>{ctx.save();ctx.globalAlpha=.30;ctx.fillStyle=MAPC.buildingShadow;ctx.beginPath();ctx.ellipse(ex,ey,erx,ery,0,0,Math.PI*2);ctx.fill();ctx.restore();};
+      const halfTri=(ax,ay,hw,by,side)=>side<0?[[ax,ay],[ax-hw,by],[ax,by]]:[[ax,ay],[ax,by],[ax+hw,by]];
+      // faceted upright triangle: light left face, dark right face
+      const ftri=(ax,ay,hw,by,L,R)=>{poly(halfTri(ax,ay,hw,by,-1),L);poly(halfTri(ax,ay,hw,by,1),R||L);};
+      // single-hue facet: base hue with glint/shade overlays supplying the two faces
+      const ftri1=(ax,ay,hw,by,base)=>{ftri(ax,ay,hw,by,base,base);poly(halfTri(ax,ay,hw,by,-1),MAPC.tileGlint);poly(halfTri(ax,ay,hw,by,1),MAPC.tileShade);poly(halfTri(ax,ay,hw,by,1),MAPC.tileShade);};
+      // faceted gem: bright top-left sparkle, dark underside
+      const fgem=(gx,gy,s)=>{
+        poly([[gx,gy-s],[gx-s*.7,gy],[gx+s*.7,gy]],MAPC.ore);
+        poly([[gx-s*.7,gy],[gx,gy+s],[gx,gy]],MAPC.ore);
+        poly([[gx,gy],[gx+s*.7,gy],[gx,gy+s]],MAPC.oreGem);
+        poly([[gx,gy-s],[gx-s*.7,gy],[gx,gy]],MAPC.oreRing);
+      };
+      // chunky two-tier pine
+      const tree=(tx,by,s)=>{
+        shadow(tx,by+s*.04,s*.42,s*.09);
+        ctx.fillStyle=MAPC.treeTrunk;ctx.fillRect(tx-s*.07,by-s*.30,s*.14,s*.32);
+        ftri(tx,by-s*1.04,s*.34,by-s*.50,MAPC.treeLight,MAPC.treeDark);
+        ftri(tx,by-s*.66,s*.48,by-s*.14,MAPC.treeLight,MAPC.treeDark);
+      };
+      // a blade cluster (grass or wheat) with optional grain heads at the tips
+      const blade=(tx,by,s,L,R,headc)=>{
+        ftri(tx,by-s,s*.15,by,L,R);
+        ftri(tx-s*.18,by-s*.70,s*.13,by,L,R);
+        ftri(tx+s*.18,by-s*.70,s*.13,by,L,R);
+        if(headc){dia(tx,by-s,s*.14,headc);dia(tx-s*.18,by-s*.70,s*.11,headc);dia(tx+s*.18,by-s*.70,s*.11,headc);}
+      };
+      // tilled soil mound with ridge lines
+      const soil=(sx,sy,sw)=>{
+        ctx.fillStyle=MAPC.cropBand;ctx.beginPath();ctx.ellipse(sx,sy,sw,sw*.30,0,0,Math.PI*2);ctx.fill();
+        ctx.strokeStyle=MAPC.fieldLine;ctx.lineWidth=Math.max(1,cell*.03);ctx.lineCap="round";
+        ctx.beginPath();ctx.moveTo(sx-sw*.62,sy-sw*.02);ctx.lineTo(sx+sw*.62,sy-sw*.02);ctx.moveTo(sx-sw*.40,sy+sw*.14);ctx.lineTo(sx+sw*.40,sy+sw*.14);ctx.stroke();
+      };
       if(terrain==="forest"){
-        // stand of flat pines
-        const pine=(tx,ty,s,canopy)=>{poly([[tx,ty-s],[tx-s*.62,ty],[tx+s*.62,ty]],canopy);ctx.fillStyle=MAPC.treeTrunk;ctx.fillRect(tx-s*.08,ty,s*.16,s*.34);};
-        pine(cx-cell*.20,cy+cell*.10,cell*.17,MAPC.treeDark);
-        pine(cx+cell*.20,cy+cell*.10,cell*.17,MAPC.treeDark);
-        pine(cx,cy-cell*.02,cell*.22,MAPC.treeLight);
+        // a stand of chunky low-poly pines
+        tree(cx,cy+cell*.16,cell*.46);
+        tree(cx-cell*.24,cy+cell*.24,cell*.34);
+        tree(cx+cell*.24,cy+cell*.24,cell*.34);
       }else if(terrain==="hill"){
-        poly([[cx-cell*.34,cy+cell*.22],[cx,cy-cell*.24],[cx+cell*.34,cy+cell*.22]],MAPC.hillEdge);
-        poly([[cx-cell*.09,cy-cell*.12],[cx,cy-cell*.24],[cx+cell*.09,cy-cell*.12]],MAPC.hillSnow);
+        shadow(cx,cy+cell*.26,cell*.38,cell*.08);
+        ftri(cx,cy-cell*.28,cell*.38,cy+cell*.24,MAPC.hill,MAPC.hillEdge);
+        ftri(cx,cy-cell*.28,cell*.14,cy-cell*.08,MAPC.hillSnow,MAPC.hill);
       }else if(terrain==="mine"){
-        poly([[cx-cell*.30,cy+cell*.10],[cx,cy-cell*.26],[cx+cell*.30,cy+cell*.10]],MAPC.mineSnow);
-        // depletion stages: one gem per ore left, a hollow mark once the vein is spent
-        if(ore>0){const n=Math.min(3,ore),s=n===1?cell*.085:cell*.06,gx=cx-(n-1)*s*1.5/2;
-          for(let i=0;i<n;i++)dia(gx+i*s*1.5,cy+cell*.22,s,MAPC.ore);
+        shadow(cx,cy+cell*.24,cell*.36,cell*.08);
+        ftri(cx-cell*.08,cy-cell*.24,cell*.30,cy+cell*.12,MAPC.mineSnow,MAPC.mineRock);
+        ftri(cx+cell*.16,cy-cell*.10,cell*.20,cy+cell*.12,MAPC.mineSnow,MAPC.mineRock);
+        // depletion stages: one faceted gem per ore left, a hollow mark once the vein is spent
+        if(ore>0){const n=Math.min(3,ore),s=n===1?cell*.10:cell*.075,gx=cx-(n-1)*s*1.6/2;
+          for(let i=0;i<n;i++)fgem(gx+i*s*1.6,cy+cell*.22,s);
         }else{
-          const s=cell*.08,gy=cy+cell*.22;
-          ctx.strokeStyle=MAPC.oreEmptyMark;ctx.lineWidth=Math.max(1.3,cell*.045);ctx.lineJoin="round";
+          const s=cell*.09,gy=cy+cell*.22;
+          ctx.strokeStyle=MAPC.oreEmptyMark;ctx.lineWidth=Math.max(1.4,cell*.05);ctx.lineJoin="round";
           ctx.beginPath();ctx.moveTo(cx,gy-s);ctx.lineTo(cx+s*.7,gy);ctx.lineTo(cx,gy+s);ctx.lineTo(cx-s*.7,gy);ctx.closePath();ctx.stroke();
         }
       }else if(terrain==="field"&&crop>0){
-        // the crop reads its growth stage: sprout -> half-grown stalk -> ripe sheaf
-        ctx.lineCap="round";
-        const base=cy+cell*.16;
+        // the crop reads its growth stage: green shoots -> tall green rows -> ripe golden rows
+        const base=cy+cell*.22;
+        shadow(cx,base+cell*.05,cell*.30,cell*.07);
+        soil(cx,base,cell*.26);
         if(crop===1){
-          // fresh sprout: two young shoots
-          ctx.strokeStyle=MAPC.treeLight;ctx.lineWidth=Math.max(1.7,cell*.055);
-          ctx.beginPath();ctx.moveTo(cx-cell*.05,base);ctx.lineTo(cx-cell*.10,base-cell*.17);ctx.moveTo(cx+cell*.05,base);ctx.lineTo(cx+cell*.10,base-cell*.17);ctx.stroke();
-          dia(cx-cell*.10,base-cell*.19,cell*.05,MAPC.treeLight);dia(cx+cell*.10,base-cell*.19,cell*.05,MAPC.treeLight);
+          blade(cx-cell*.13,base,cell*.14,MAPC.treeLight,MAPC.treeDark);
+          blade(cx+cell*.13,base,cell*.14,MAPC.treeLight,MAPC.treeDark);
+          blade(cx,base-cell*.02,cell*.18,MAPC.treeLight,MAPC.treeDark);
         }else if(crop===2){
-          // half-grown: a single stalk with a small grain head
-          ctx.strokeStyle=MAPC.crop;ctx.lineWidth=Math.max(1.6,cell*.05);
-          const h=cell*.20;
-          ctx.beginPath();ctx.moveTo(cx,base);ctx.lineTo(cx,base-h);ctx.stroke();
-          dia(cx,base-h,cell*.05,MAPC.crop);
+          blade(cx-cell*.14,base,cell*.24,MAPC.treeLight,MAPC.treeDark,MAPC.crop);
+          blade(cx+cell*.14,base,cell*.24,MAPC.treeLight,MAPC.treeDark,MAPC.crop);
+          blade(cx,base-cell*.02,cell*.30,MAPC.treeLight,MAPC.treeDark,MAPC.crop);
         }else{
-          // ripe: full sheaf, side grains, tie band
-          ctx.strokeStyle=MAPC.crop;ctx.lineWidth=Math.max(1.6,cell*.05);
-          const h=cell*.30;
-          ctx.beginPath();ctx.moveTo(cx,base);ctx.lineTo(cx,base-h);ctx.stroke();
-          dia(cx,base-h,cell*.06,MAPC.crop);
-          dia(cx-cell*.09,base-h*.66,cell*.045,MAPC.crop);dia(cx+cell*.09,base-h*.66,cell*.045,MAPC.crop);
-          ctx.strokeStyle=MAPC.cropBand;ctx.lineWidth=Math.max(1.4,cell*.04);ctx.beginPath();ctx.moveTo(cx-cell*.10,base-cell*.05);ctx.lineTo(cx+cell*.10,base-cell*.05);ctx.stroke();
+          blade(cx-cell*.28,base+cell*.02,cell*.20,MAPC.crop,MAPC.cropBand,MAPC.crop);
+          blade(cx+cell*.28,base+cell*.02,cell*.20,MAPC.crop,MAPC.cropBand,MAPC.crop);
+          blade(cx-cell*.14,base,cell*.27,MAPC.crop,MAPC.cropBand,MAPC.crop);
+          blade(cx+cell*.14,base,cell*.27,MAPC.crop,MAPC.cropBand,MAPC.crop);
+          blade(cx,base-cell*.02,cell*.33,MAPC.crop,MAPC.cropBand,MAPC.crop);
         }
       }else if(terrain==="plain"&&houses===0&&(x*7+y*13)%3===0){
         // quiet grass tufts on some plains so the field is not sterile
-        ctx.strokeStyle=MAPC.plainTuft;ctx.lineCap="round";ctx.lineWidth=Math.max(1.2,cell*.04);
-        const ty=py+cell*.68;
-        ctx.beginPath();ctx.moveTo(cx-cell*.06,ty);ctx.lineTo(cx-cell*.09,ty-cell*.09);ctx.moveTo(cx,ty);ctx.lineTo(cx,ty-cell*.12);ctx.moveTo(cx+cell*.06,ty);ctx.lineTo(cx+cell*.09,ty-cell*.09);ctx.stroke();
+        const ty=py+cell*.70;
+        blade(cx,ty,cell*.14,MAPC.plainTuft,MAPC.treeDark);
       }
       if(houses>0){
-        // settlement reads its size: hut -> village pair -> town keep with the city roof
+        // settlement reads its size: hut -> village pair -> hall + tower keep
         const hut=(hx,by,s,roof)=>{
-          ctx.fillStyle=MAPC.buildingWall;ctx.fillRect(hx-s,by-s*1.2,s*2,s*1.2);
-          poly([[hx-s*1.3,by-s*1.1],[hx,by-s*2.32],[hx+s*1.3,by-s*1.1]],roof);
+          shadow(hx,by+s*.07,s*1.35,s*.22);
+          ctx.fillStyle=MAPC.buildingWall;ctx.fillRect(hx-s,by-s*1.25,s*2,s*1.25);
+          ctx.save();ctx.globalAlpha=.55;ctx.fillStyle=MAPC.buildingShadow;ctx.fillRect(hx+s*.45,by-s*1.25,s*.55,s*1.25);ctx.restore();
+          ftri1(hx,by-s*2.45,s*1.35,by-s*1.20,roof);
+          ctx.fillStyle=MAPC.symbolInk;ctx.fillRect(hx-s*.15,by-s*.52,s*.30,s*.52);
         };
-        if(houses===1)hut(cx,cy+cell*.22,cell*.18,MAPC.roofVillage);
-        else if(houses===2){hut(cx-cell*.14,cy+cell*.22,cell*.13,MAPC.roofVillage);hut(cx+cell*.14,cy+cell*.22,cell*.13,MAPC.roofVillage);}
+        if(houses===1)hut(cx,cy+cell*.24,cell*.17,MAPC.roofVillage);
+        else if(houses===2){hut(cx-cell*.15,cy+cell*.24,cell*.13,MAPC.roofVillage);hut(cx+cell*.15,cy+cell*.24,cell*.13,MAPC.roofVillage);}
         else{
-          ctx.fillStyle=MAPC.buildingWall;ctx.fillRect(cx-cell*.12,cy-cell*.12,cell*.24,cell*.34);
-          poly([[cx-cell*.16,cy-cell*.11],[cx,cy-cell*.30],[cx+cell*.16,cy-cell*.11]],MAPC.roofCity);
+          hut(cx-cell*.14,cy+cell*.26,cell*.13,MAPC.roofVillage);
+          // tower keep with the city roof
+          const tx=cx+cell*.15,tb=cy+cell*.26,ts=cell*.13;
+          shadow(tx,tb+ts*.07,ts*1.25,ts*.22);
+          ctx.fillStyle=MAPC.buildingWall;ctx.fillRect(tx-ts,tb-ts*2.1,ts*2,ts*2.1);
+          ctx.save();ctx.globalAlpha=.55;ctx.fillStyle=MAPC.buildingShadow;ctx.fillRect(tx+ts*.45,tb-ts*2.1,ts*.55,ts*2.1);ctx.restore();
+          ftri1(tx,tb-ts*3.3,ts*1.3,tb-ts*2.05,MAPC.roofCity);
+          ctx.fillStyle=MAPC.symbolInk;ctx.fillRect(tx-ts*.13,tb-ts*1.6,ts*.26,ts*.34);ctx.fillRect(tx-ts*.14,tb-ts*.55,ts*.28,ts*.55);
         }
       }
       ctx.restore();
