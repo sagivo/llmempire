@@ -1504,4 +1504,96 @@ $("board").addEventListener("click",(e)=>{
   cv.addEventListener("dblclick",e=>{ if(!world)return; e.preventDefault(); resetMapView(); renderBoard(world); });
   cv.addEventListener("wheel",e=>{
     if(!world)return; e.preventDefault();
-    const 
+    const m=toBacking(e.clientX,e.clientY);
+    const ns=Math.min(4,Math.max(1,mapView.s*(e.deltaY<0?1.15:1/1.15)));
+    mapView.tx=m[0]-(m[0]-mapView.tx)*(ns/mapView.s);
+    mapView.ty=m[1]-(m[1]-mapView.ty)*(ns/mapView.s);
+    mapView.s=ns; clampPan(); renderBoard(world);
+  },{passive:false});
+})();
+
+// ---------- wiring ----------
+const operatorDrawer=$("operatorDrawer");
+if(operatorDrawer){["analyzeBtn","exportBtn","newBtn"].forEach(id=>operatorDrawer.appendChild($(id)));const ab=document.querySelector("#topbar .aboutOpen");if(ab)operatorDrawer.appendChild(ab);}
+$("toolsBtn").onclick=()=>{operatorDrawer.classList.toggle("show");$("toolsBtn").classList.toggle("open",operatorDrawer.classList.contains("show"));};
+operatorDrawer.addEventListener("click",()=>{operatorDrawer.classList.remove("show");$("toolsBtn").classList.remove("open");});
+$("highlightsBtn").onclick=()=>{eventView="highlights";$("highlightsBtn").classList.add("on");$("allEventsBtn").classList.remove("on");renderEvents(world);};
+$("allEventsBtn").onclick=()=>{eventView="all";$("allEventsBtn").classList.add("on");$("highlightsBtn").classList.remove("on");renderEvents(world);};
+for(const group of document.querySelectorAll("#setup .cols>div")){const h=group.querySelector("h2");if(h)h.onclick=()=>{if(matchMedia("(max-width:759px)").matches)group.classList.toggle("collapsed");};}
+$("homeSettings").onclick=()=>showScreen("setup");
+$("configureMatch").onclick=()=>showScreen("setup");
+$("settingsBack").onclick=()=>showScreen("home");
+$("quickStart").onclick=()=>{ const cfg=readConfig(); newMatch(cfg); };
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.style.display="block"; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display="none",3200); }
+$("playBtn").onclick=()=>{ replayData?null:(playing?pause():play()); };
+$("stepBtn").onclick=()=>{ if(!replayData){pause();tickOnce();} };
+$("speedSel").onchange=()=>{ if(playing){pause();play();} };
+$("newBtn").onclick=()=>{ pause(); world=null; replayData=null; pendingInject=null; operatorDrawer.classList.remove("show"); showScreen("setup"); };
+$("analyzeBtn").onclick=analyzeMatch;
+$("exportBtn").onclick=()=>{
+  const blob=new Blob([JSON.stringify(exportData())],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="commons-day"+world.day+"-tick"+world.tick+".commons.json"; a.click();
+  toast("Exported "+world.events.length+" events, "+world.snapshots.length+" snapshots");
+};
+$("droughtBtn").onclick=()=>{ pendingInject="drought"; toast("Click the map: drought clears crops in a 5x5 box"); };
+$("cacheBtn").onclick=()=>{ pendingInject="cache"; toast("Click an unowned cell to drop a level-3 crop"); };
+$("silenceBtn").onclick=()=>{ injectSilence(world,8); toast("Radio silence for 8 ticks"); renderAll(); };
+$("curfewBtn").onclick=()=>{ injectCurfew(world,16); toast("Curfew: raids disabled for 16 ticks"); renderAll(); };
+$("muteBtn").onclick=()=>{ if(selectedKingdom===null){toast("Select a kingdom first (leaderboard)");return;} injectMute(world,selectedKingdom,16); toast(world.kingdoms[selectedKingdom].name+" muted for 16 ticks"); renderAll(); };
+$("savePresetBtn").onclick=saveLLMPreset;
+$("loadPresetBtn").onclick=loadLLMPreset;
+$("deletePresetBtn").onclick=deleteLLMPreset;
+$("llmPreset").onchange=()=>{const n=$("llmPreset").value;if(n)$("presetName").value=n;};
+$("toggleKey").onclick=()=>{ const key=$("apiKey"); const reveal=key.type==="password"; key.type=reveal?"text":"password"; $("toggleKey").textContent=reveal?"Hide":"Show"; };
+document.addEventListener("change",e=>{ if(e.target.id==="cfg_playerCount") buildAgentOverrides(); });
+$("modelA").addEventListener("change",()=>{ if($("modelA").value.trim()==="mock") $("setupMsg").textContent="Mock mode runs locally with no key."; else $("setupMsg").textContent=$("apiKey").value.trim()?"Model ready.":"Add an API key to use this model."; });
+$("startBtn").onclick=()=>{ const cfg=readConfig(); newMatch(cfg); };
+$("loadReplayBtn").onclick=()=>$("replayFile").click();
+$("replayFile").onchange=(e)=>{ const f=e.target.files[0]; if(!f)return;
+  f.text().then(t=>{ try{ loadReplay(JSON.parse(t)); }catch(err){ $("setupMsg").textContent="Could not load replay: "+err.message; } finally { e.target.value=""; } }); };
+$("replaySlider").oninput=(e)=>{ replayIdx=+e.target.value; applyReplayIdx(); };
+$("exitReplayBtn").onclick=()=>{ replayData=null; $("replaybar").classList.remove("show"); $("app").classList.add("hidden"); $("setup").classList.remove("hidden"); };
+document.querySelectorAll("#observe [data-power]").forEach(b=>b.onclick=()=>{const m={drought:"droughtBtn",silence:"silenceBtn",curfew:"curfewBtn",cache:"cacheBtn",mute:"muteBtn"};$(m[b.dataset.power]).click();});
+for (const b of document.querySelectorAll("#tabs button")) b.onclick=()=>{ const wasOn=b.classList.contains("on"); showTab(b.dataset.tab); if(wasOn) setSheet(sheetMode==="peek"?"half":"peek"); else setSheet("half"); };
+(function(){
+  const grab=$("sheetGrab"), side=$("side"); if(!grab||!side)return;
+  let drag=null;
+  grab.style.touchAction="none";
+  grab.addEventListener("pointerdown",e=>{ if(!matchMedia("(max-width:759px)").matches)return; grab.setPointerCapture(e.pointerId); drag={y:e.clientY,h:side.getBoundingClientRect().height,moved:false}; side.style.transition="none"; });
+  grab.addEventListener("pointermove",e=>{ if(!drag)return; const dy=e.clientY-drag.y; if(Math.abs(dy)>4)drag.moved=true; const mainH=$("main").getBoundingClientRect().height; const h=Math.min(mainH*0.72,Math.max(96,drag.h-dy)); side.style.flexBasis=h+"px"; layoutBoard(); });
+  const endDrag=()=>{ if(!drag)return; side.style.transition=""; side.style.flexBasis=""; if(!drag.moved){ setSheet(sheetMode==="peek"?"half":"peek"); } else { setSheet(side.getBoundingClientRect().height<240?"peek":"half"); } drag=null; };
+  grab.addEventListener("pointerup",endDrag); grab.addEventListener("pointercancel",endDrag);
+})();
+window.addEventListener("resize",layoutBoard);
+window.addEventListener("orientationchange",()=>setTimeout(layoutBoard,120));
+$("side").addEventListener("transitionend",e=>{ if(e.propertyName==="flex-basis")layoutBoard(); });
+
+document.addEventListener("keydown",(e)=>{ if(e.code==="Space"&&world&&!replayData&&$("app").classList.contains("hidden")===false){ e.preventDefault(); playing?pause():play(); } });
+
+buildSetup();
+DB.open().then(async ()=>{
+  const saved=await DB.latest();
+  // Do not let a slow local-storage restore overwrite a match the user just started.
+  if(world || $("home").classList.contains("hidden")) return;
+  if (saved && saved.data && saved.data.snapshots && saved.data.snapshots.length){
+    $("setupMsg").textContent="Resumed last match from local telemetry ("+saved.data.snapshots.length+" ticks logged).";
+    loadReplay(saved.data); replayData=null; $("replaybar").classList.remove("show");
+    // resume as live world: rebuild deterministically from seed+config, then fast-forward
+    const data=saved.data; world=createWorld(data.config,data.seed);
+    // restore roster from snapshot meta
+    world.kingdoms.forEach((k,i)=>{ const s=data.snapshots[0].kingdoms[i]; k.goal=s.goal; k.talkModel=s.talkModel; k.actModel=s.actModel; });
+    pause();
+    // Restore the recorded state exactly. Re-simulating would corrupt matches that used real models.
+    restoreSnapshot(data.snapshots[data.snapshots.length-1]);
+    world.events=data.events; world.snapshots=data.snapshots; world.usage=data.usage||world.usage; world.aiAnalysis=data.aiAnalysis||null;
+    renderedEventCount=0; $("events").innerHTML=""; renderAll();
+    toast(world.over?"Restored finished match":"Restored match - press Play to continue");
+  }
+});
+</script>
+</body>
+</html>
+
+
+
