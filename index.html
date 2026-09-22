@@ -2047,20 +2047,20 @@ function renderBoard(w, snap){
       if(visible&&!visible.has(g.x+","+g.y))continue;
       const hc=hexCenter({cell,ox,oy},g.x,g.y),cx=hc[0],cy=hc[1],kc=factionColor(k.id);
       const size=Math.max(cell*.58,Math.min(cell*.95,cell*.58+Math.min(g.size,12)*cell*.02)),r=size/2;
-      ctx.save();ctx.shadowColor=MAPC.unitShadow;ctx.shadowBlur=4;ctx.fillStyle=kc;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle=MAPC.unitRing;ctx.lineWidth=Math.max(1.5,size*.07);ctx.stroke();
-      // Crossed swords stay legible at token scale. The headcount remains in the
-      // same faction-colored value pill as the other board resources.
+      ctx.save();ctx.shadowColor=MAPC.unitShadow;ctx.shadowBlur=4;ctx.fillStyle=MAPC.unitGlyph;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle=kc;ctx.lineWidth=Math.max(2,size*.11);ctx.stroke();
+      // Faction-colored crossed swords and ring on a light disc: the token reads as
+      // the kingdom color at token scale. The headcount remains in the same
+      // faction-colored value pill as the other board resources.
       {
         const s=size*.72;
         ctx.save();ctx.translate(cx,cy);
         for(const dir of[-1,1]){
           ctx.save();ctx.rotate(dir*Math.PI/4);
-          ctx.fillStyle=MAPC.unitGlyph;
-          ctx.beginPath();ctx.moveTo(0,-s*.62);ctx.lineTo(s*.13,s*.28);ctx.lineTo(0,s*.39);ctx.lineTo(-s*.13,s*.28);ctx.closePath();ctx.fill();
-          ctx.fillStyle=MAPC.unitRing;
-          ctx.beginPath();if(ctx.roundRect)ctx.roundRect(-s*.26,s*.23,s*.52,s*.13,s*.05);else ctx.rect(-s*.26,s*.23,s*.52,s*.13);ctx.fill();
+          ctx.fillStyle=kc;ctx.strokeStyle=MAPC.symbolInk;ctx.lineWidth=Math.max(.8,s*.045);ctx.lineJoin="round";
+          ctx.beginPath();ctx.moveTo(0,-s*.62);ctx.lineTo(s*.13,s*.28);ctx.lineTo(0,s*.39);ctx.lineTo(-s*.13,s*.28);ctx.closePath();ctx.fill();ctx.stroke();
+          ctx.beginPath();if(ctx.roundRect)ctx.roundRect(-s*.26,s*.23,s*.52,s*.13,s*.05);else ctx.rect(-s*.26,s*.23,s*.52,s*.13);ctx.fill();ctx.stroke();
           ctx.fillRect(-s*.07,s*.34,s*.14,s*.22);
-          ctx.beginPath();ctx.arc(0,s*.60,s*.10,0,Math.PI*2);ctx.fill();
+          ctx.beginPath();ctx.arc(0,s*.60,s*.10,0,Math.PI*2);ctx.fill();ctx.stroke();
           ctx.restore();
         }
         ctx.restore();
@@ -2446,6 +2446,7 @@ DB.open().then(async ()=>{
 </script>
 </body>
 </html>
+
 
 
 
