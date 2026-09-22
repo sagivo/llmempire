@@ -568,6 +568,11 @@ function defaultConfig(){
 
 // ---------- world construction ----------
 function createWorld(cfg, seed){
+  cfg={...defaultConfig(),...cfg};
+  cfg.startPop=Math.min(cfg.startPop,cfg.popBaseCap);
+  cfg.startArmy=Math.min(cfg.startArmy,cfg.startPop,cfg.armyCap);
+  cfg.startFood=Math.min(cfg.startFood,cfg.foodCap);
+  cfg.startMetal=Math.min(cfg.startMetal,cfg.metalCap);
   const rng = mulberry32(seed);
   const grid = [];
   // Topography drives the economy: fields grow food, mines yield resources, plains hold settlements.
@@ -1009,10 +1014,17 @@ function runTick(world,thinkers){
 
 <script>
 "use strict";
+// ---------- resilient browser storage ----------
+// Some private-browsing and quota-restricted browsers throw even on getItem.
+const Storage={
+  get(key,fallback=""){try{const v=localStorage.getItem(key);return v===null?fallback:v}catch(e){return fallback}},
+  set(key,value){try{localStorage.setItem(key,value);return true}catch(e){console.warn("Browser storage unavailable",e);return false}},
+  remove(key){try{localStorage.removeItem(key);return true}catch(e){return false}}
+};
 // ---------- LLM orchestrator (client-side, OpenAI-compatible / AI Gateway) ----------
 const LLM = {
-  base: localStorage.getItem("llmempire.apiBase") || "https://ai-gateway.vercel.sh/v1",
-  key: localStorage.getItem("llmempire.apiKey") || "",
+  base: Storage.get("llmempire.apiBase") || "https://ai-gateway.vercel.sh/v1",
+  key: Storage.get("llmempire.apiKey") || "",
   temperature: 0.7, timeoutMs: 20000,
   async chat(model, system, user){
     if (!this.key) throw new Error("no api key");
@@ -1024,11 +1036,13 @@ const LLM = {
         body:JSON.stringify({model,temperature:this.temperature,response_format:{type:"json_object"},
           messages:[{role:"system",content:system},{role:"user",content:user}]})
       });
-      if (!res.ok) throw new Error("http "+res.status);
+      if (!res.ok){const detail=await res.text().catch(()=>"");const err=new Error(res.status===401?"API key rejected":res.status===429?"Rate limited":res.status>=500?"Model service unavailable":"LLM request failed ("+res.status+")");err.code="http_"+res.status;err.detail=detail.slice(0,160);throw err;}
       const j=await res.json();
+      const text=j.choices?.[0]?.message?.content;
+      if(typeof text!=="string"||!text.trim()){const err=new Error("Model returned no response");err.code="empty_response";throw err;}
       const u=j.usage||{};
-      return {text:j.choices?.[0]?.message?.content||"", usage:{inputTokens:u.prompt_tokens||0,outputTokens:u.completion_tokens||0}};
-    } finally { clearTimeout(to); }
+      return {text, usage:{inputTokens:u.prompt_tokens||0,outputTokens:u.completion_tokens||0}};
+    } catch(e){if(e?.name==="AbortError"){const err=new Error("Model request timed out");err.code="timeout";throw err;}if(!e.code)e.code="network";throw e;} finally { clearTimeout(to); }
   }
 };
 const PRICING={ "openai/gpt-5-mini":[0.25,2.0], "anthropic/claude-4.5":[3.0,15.0], "google/gemini-2.5-flash":[0.3,2.5], "typesafe-ai/jev":[0.042,0.0] };
@@ -1096,7 +1110,7 @@ async function thinkPhaseA(world,k){
     if (typeof j!=="object"||j===null) throw new Error("bad json");
     return {bulletin:j.bulletin??null,letters:Array.isArray(j.letters)?j.letters:[],self_note:String(j.self_note||"")};
   }catch(e){
-    emit(world,{type:"ThinkTimeout",tick:absTick(world),kingdomId:k.id,phase:"A",fallbackExecuted:"mock"});
+    emit(world,{type:"ThinkFailure",tick:absTick(world),kingdomId:k.id,phase:"A",reason:e.code||"invalid_response",message:String(e.message||e).slice(0,120),fallbackExecuted:"mock"});
     return mockPhaseA(world,k);
   }
 }
@@ -1110,7 +1124,7 @@ async function thinkPhaseB(world,k){
     if (!j||!legal.includes(j.act)) throw new Error("illegal act "+(j&&j.act));
     return {act:j.act,target:(j.target===undefined?null:j.target),dir:j.dir||null,group_id:j.group_id||null,amount:Number.isFinite(+j.amount)?Math.floor(+j.amount):null,placement:j.placement||null,note:String(j.note||"").slice(0,80)};
   }catch(e){
-    emit(world,{type:"ThinkTimeout",tick:absTick(world),kingdomId:k.id,phase:"B",fallbackExecuted:"mock"});
+    emit(world,{type:"ThinkFailure",tick:absTick(world),kingdomId:k.id,phase:"B",reason:e.code||"invalid_response",message:String(e.message||e).slice(0,120),fallbackExecuted:"mock"});
     return mockPhaseB(world,k);
   }
 }
@@ -1139,8 +1153,8 @@ document.getElementById("aboutSetup").addEventListener("click",()=>showScreen("s
 // Matches never leave this browser. Each visitor gets an isolated session.
 const DB={
   open(){ return Promise.resolve(); },
-  save(match){ try{ localStorage.setItem("llmempire.currentMatch",JSON.stringify(match)); }catch(e){ console.warn("Could not save local match",e); } },
-  latest(){ try{ return Promise.resolve(JSON.parse(localStorage.getItem("llmempire.currentMatch")||"null")); }catch(e){ return Promise.resolve(null); } }
+  save(match){ if(!Storage.set("llmempire.currentMatch",JSON.stringify(match))) toast?.("Match continues, but this browser cannot save it"); },
+  latest(){ try{ return Promise.resolve(JSON.parse(Storage.get("llmempire.currentMatch","null"))); }catch(e){ Storage.remove("llmempire.currentMatch"); return Promise.resolve(null); } }
 };
 
 // ---------- setup screen ----------
@@ -1159,19 +1173,19 @@ function buildSetup(){
     }
   }
   $("apiBase").value=LLM.base; $("apiKey").value=LLM.key;
-  $("modelA").value=localStorage.getItem("llmempire.defaultModel") || "mock";
+  $("modelA").value=Storage.get("llmempire.defaultModel") || "mock";
   renderLLMPresets();
-  const preferred=localStorage.getItem("llmempire.defaultLLMPreset"),saved=getLLMPresets()[preferred];
+  const preferred=Storage.get("llmempire.defaultLLMPreset"),saved=getLLMPresets()[preferred];
   if(saved){applyLLMSetup(saved);renderLLMPresets(preferred)} else buildAgentOverrides();
 }
 const LLM_PRESETS_KEY="llmempire.llmPresets";
-function getLLMPresets(){try{return JSON.parse(localStorage.getItem(LLM_PRESETS_KEY)||"{}")}catch(e){return {}}}
+function getLLMPresets(){try{return JSON.parse(Storage.get(LLM_PRESETS_KEY)||"{}")}catch(e){return {}}}
 function renderLLMPresets(selected){const el=$("llmPreset"),ps=getLLMPresets();el.innerHTML='<option value="">Current setup</option>'+Object.keys(ps).sort().map(n=>'<option value="'+htmlSafe(n)+'">'+htmlSafe(n)+'</option>').join("");if(selected&&ps[selected])el.value=selected;}
 function currentLLMSetup(){const overrides={};document.querySelectorAll(".agent-model input").forEach((el,i)=>{if(el.value.trim())overrides[i]=el.value.trim()});return {defaultModel:$("modelA").value.trim()||"mock",overrides,apiBase:$("apiBase").value.trim(),temperature:+$("temperature").value||.7,thinkTimeoutMs:+$("thinkTimeoutMs").value||20000};}
-function applyLLMSetup(setup){if(!setup)return;$("modelA").value=setup.defaultModel||"mock";$("apiBase").value=setup.apiBase||"https://ai-gateway.vercel.sh/v1";$("temperature").value=setup.temperature??.7;$("thinkTimeoutMs").value=setup.thinkTimeoutMs||20000;localStorage.setItem("llmempire.agentModels",JSON.stringify(setup.overrides||{}));buildAgentOverrides();}
-function saveLLMPreset(){const name=$("presetName").value.trim();if(!name){toast("Name the LLM setup first");return}const ps=getLLMPresets();ps[name]=currentLLMSetup();localStorage.setItem(LLM_PRESETS_KEY,JSON.stringify(ps));renderLLMPresets(name);localStorage.setItem("llmempire.defaultLLMPreset",name);toast("Saved “"+name+"” as the default LLM setup");}
-function loadLLMPreset(){const name=$("llmPreset").value,setup=getLLMPresets()[name];if(!setup){toast("Choose a saved setup");return}applyLLMSetup(setup);localStorage.setItem("llmempire.defaultLLMPreset",name);toast("Using “"+name+"” for future matches");}
-function deleteLLMPreset(){const name=$("llmPreset").value;if(!name){toast("Choose a saved setup");return}const ps=getLLMPresets();delete ps[name];localStorage.setItem(LLM_PRESETS_KEY,JSON.stringify(ps));if(localStorage.getItem("llmempire.defaultLLMPreset")===name)localStorage.removeItem("llmempire.defaultLLMPreset");renderLLMPresets();toast("Deleted “"+name+"”");}
+function applyLLMSetup(setup){if(!setup)return;$("modelA").value=setup.defaultModel||"mock";$("apiBase").value=setup.apiBase||"https://ai-gateway.vercel.sh/v1";$("temperature").value=setup.temperature??.7;$("thinkTimeoutMs").value=setup.thinkTimeoutMs||20000;Storage.set("llmempire.agentModels",JSON.stringify(setup.overrides||{}));buildAgentOverrides();}
+function saveLLMPreset(){const name=$("presetName").value.trim();if(!name){toast("Name the LLM setup first");return}const ps=getLLMPresets();ps[name]=currentLLMSetup();Storage.set(LLM_PRESETS_KEY,JSON.stringify(ps));renderLLMPresets(name);Storage.set("llmempire.defaultLLMPreset",name);toast("Saved “"+name+"” as the default LLM setup");}
+function loadLLMPreset(){const name=$("llmPreset").value,setup=getLLMPresets()[name];if(!setup){toast("Choose a saved setup");return}applyLLMSetup(setup);Storage.set("llmempire.defaultLLMPreset",name);toast("Using “"+name+"” for future matches");}
+function deleteLLMPreset(){const name=$("llmPreset").value;if(!name){toast("Choose a saved setup");return}const ps=getLLMPresets();delete ps[name];Storage.set(LLM_PRESETS_KEY,JSON.stringify(ps));if(Storage.get("llmempire.defaultLLMPreset")===name)Storage.remove("llmempire.defaultLLMPreset");renderLLMPresets();toast("Deleted “"+name+"”");}
 function readConfig(){
   const cfg=defaultConfig();
   for (const [,knobs] of CONFIG_SCHEMA) for (const [key] of knobs){
@@ -1180,15 +1194,15 @@ function readConfig(){
   }
   LLM.base=$("apiBase").value.trim()||LLM.base; LLM.key=$("apiKey").value.trim();
   LLM.temperature=+$("temperature").value||0.7; LLM.timeoutMs=+$("thinkTimeoutMs").value||20000;
-  localStorage.setItem("llmempire.apiBase",LLM.base); localStorage.setItem("llmempire.apiKey",LLM.key);
-  localStorage.setItem("llmempire.defaultModel",$("modelA").value.trim()||"mock");
+  Storage.set("llmempire.apiBase",LLM.base); Storage.set("llmempire.apiKey",LLM.key);
+  Storage.set("llmempire.defaultModel",$("modelA").value.trim()||"mock");
   const overrides={}; document.querySelectorAll(".agent-model input").forEach((el,i)=>{ if(el.value.trim()) overrides[i]=el.value.trim(); });
-  localStorage.setItem("llmempire.agentModels",JSON.stringify(overrides));
+  Storage.set("llmempire.agentModels",JSON.stringify(overrides));
   return cfg;
 }
 function buildAgentOverrides(){
   const host=$("agentOverrides"), count=Math.max(2,+($("cfg_playerCount")?.value||4));
-  let saved={}; try{saved=JSON.parse(localStorage.getItem("llmempire.agentModels")||"{}");}catch(e){}
+  let saved={}; try{saved=JSON.parse(Storage.get("llmempire.agentModels")||"{}");}catch(e){}
   host.innerHTML="";
   for(let i=0;i<count;i++){
     const row=document.createElement("label"); row.className="agent-model";
@@ -1241,7 +1255,7 @@ function exportData(){ return { format:"commons.json", version:1, exportedAt:new
   config:world.cfg, seed:world.seed, usage:world.usage, events:world.events, snapshots:world.snapshots, aiAnalysis:world.aiAnalysis||null }; }
 
 // ---------- AI match analyst ----------
-function analysisLogPayload(w){return {match:{seed:w.seed,config:w.cfg,day:w.day,tick:w.tick,over:w.over,winner:w.winner},players:w.kingdoms.map(k=>({id:k.id+1,name:k.name,model:k.actModel,alive:k.alive,final:{land:cellsOf(w,k.id).length,pop:k.pop,army:k.army,armyGroups:normalizeArmyGroups(w,k).map(g=>({...g})),armyPos:k.armyPos?{...k.armyPos}:null,armyIntent:k.armyIntent||null,food:k.food,metal:k.metal,stamina:k.stamina}})),events:w.events,snapshots:w.snapshots};}
+function analysisLogPayload(w){const step=Math.max(1,w.cfg.ticksPerDay||8),sampled=w.snapshots.filter((s,i)=>i===0||i===w.snapshots.length-1||i%step===0).map(s=>({day:s.day,tick:s.tick,over:s.over,winner:s.winner,kingdoms:s.kingdoms.map(k=>({id:k.id+1,alive:k.alive,pop:k.pop,army:k.army,food:k.food,metal:k.metal,stamina:k.stamina,groups:k.armyGroups?.length||0})),land:s.owners.reduce((a,o)=>{if(o>=0)a[o]=(a[o]||0)+1;return a},[])}));return {match:{seed:w.seed,config:w.cfg,day:w.day,tick:w.tick,over:w.over,winner:w.winner},players:w.kingdoms.map(k=>({id:k.id+1,name:k.name,model:k.actModel,alive:k.alive,final:{land:cellsOf(w,k.id).length,pop:k.pop,army:k.army,armyGroups:normalizeArmyGroups(w,k).map(g=>({...g})),food:k.food,metal:k.metal,stamina:k.stamina}})),events:w.events,snapshots:sampled};}
 function htmlSafe(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function parseJsonLoose(text){try{return JSON.parse(text);}catch(e){const a=text.indexOf("{"),b=text.lastIndexOf("}");if(a>=0&&b>a)return JSON.parse(text.slice(a,b+1));throw new Error("The model returned an unreadable report");}}
 async function analyzeMatch(){
@@ -1277,7 +1291,7 @@ function renderWorldTab(w){
     +(notable.length?'<div class="agent-section"><label>Latest shifts</label>'+notable.map(e=>'<div class="agent-action"><span>'+eventIcon(e.type)+'</span><span>'+htmlSafe(evText(w,e))+'</span></div>').join('')+'</div>':'')
     +'<div class="analysis-empty" style="padding-top:8px">Tap a kingdom on the map or in the agent strip to follow its story.</div>';
 }
-function renderAll(){ if(!world)return; $("app").classList.toggle("match-over",world.over); const end=$("matchEnd"); if(world.over) end.textContent=world.winner?("🏆 "+world.kingdoms[world.winner.id].name+" wins by "+world.winner.how.replace("_"," ")+"."):"Every kingdom has fallen."; renderBoard(world); renderLeaderboard(world); renderEmpires(world); renderEvents(world); renderInspector(); renderClock(world); renderWorldTab(world); if(world.aiAnalysis)renderAnalysis(world.aiAnalysis); }
+function renderAll(){ if(!world)return; $("app").classList.toggle("match-over",world.over); const end=$("matchEnd"); end.textContent=world.over?(world.winner?("🏆 "+world.kingdoms[world.winner.id].name+" wins by "+world.winner.how.replace("_"," ")+"."):"Every kingdom has fallen."):""; renderBoard(world); renderLeaderboard(world); renderEmpires(world); renderEvents(world); renderInspector(); renderClock(world); renderWorldTab(world); if(world.aiAnalysis)renderAnalysis(world.aiAnalysis); }
 function storyFor(w,ev){
   if(!ev)return {title:"The kingdoms are taking position",detail:"Press play to watch the first decisions unfold."};
   const name=id=>id>=0&&w.kingdoms[id]?w.kingdoms[id].name:"A kingdom";
@@ -1560,7 +1574,7 @@ $("board").addEventListener("click",(e)=>{
 });
 // Genre-standard map gestures: drag to pan, pinch or wheel to zoom, double-tap to refit.
 (function(){
-  const cv=$("board"); cv.style.touchAction="none";
+  const cv=$("board"); cv.style.touchAction="none"; cv.addEventListener("contextmenu",e=>e.preventDefault());
   const ptrs=new Map(); let pinch=null, moved=false;
   const toBacking=(cx,cy)=>{const r=cv.getBoundingClientRect();return [(cx-r.left)*cv.width/r.width,(cy-r.top)*cv.height/r.height];};
   cv.addEventListener("pointerdown",e=>{
@@ -1623,8 +1637,9 @@ $("newBtn").onclick=()=>{ pause(); world=null; replayData=null; pendingInject=nu
 $("analyzeBtn").onclick=analyzeMatch;
 $("exportBtn").onclick=()=>{
   const blob=new Blob([JSON.stringify(exportData())],{type:"application/json"});
-  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  const a=document.createElement("a"),url=URL.createObjectURL(blob); a.href=url;
   a.download="commons-day"+world.day+"-tick"+world.tick+".commons.json"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),0);
   toast("Exported "+world.events.length+" events, "+world.snapshots.length+" snapshots");
 };
 function canInject(){if(!world||replayData){toast("Operator powers need a live match");return false}if(world.over){toast("This match is over - start a new match to use powers");return false}return true}
