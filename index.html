@@ -1545,7 +1545,7 @@ function logUsage(world,k,model,u){
 <script>
 "use strict";
 // Map colors come from THEME CONFIG too; resolved once at boot.
-const MAPC={};for(const [k,t] of [["sea1","--map-sea-1"],["sea2","--map-sea-2"],["sea3","--map-sea-3"],["waterGlint","--map-water-glint"],["waterShade","--map-water-shade"],["boardShadow","--map-board-shadow"],["board","--map-board"],["boardEdge","--map-board-edge"],["land","--map-land"],["tileGlint","--map-tile-glint"],["tileShade","--map-tile-shade"],["tileEdge","--map-tile-edge"],["symbolInk","--map-symbol-ink"],["fieldGlow","--map-field-glow"],["fieldLine","--map-field-line"],["mineRock","--map-mine-rock"],["mineSnow","--map-mine-snow"],["ore","--map-ore"],["oreSpent","--map-ore-spent"],["oreRing","--map-ore-ring"],["oreGem","--map-ore-gem"],["oreEmptyMark","--map-ore-empty-mark"],["treeTrunk","--map-tree-trunk"],["treeDark","--map-tree-dark"],["treeLight","--map-tree-light"],["hillEdge","--map-hill-edge"],["hill","--map-hill"],["hillSnow","--map-hill-snow"],["plainTuft","--map-plain-tuft"],["crop","--map-crop"],["cropBand","--map-crop-band"],["roofCity","--map-roof-city"],["roofVillage","--map-roof-village"],["buildingShadow","--map-building-shadow"],["buildingWall","--map-building-wall"],["labelBg","--map-label-bg"],["labelText","--map-label-text"],["shield","--map-shield"],["worldEdge","--map-world-edge"],["unitShadow","--map-unit-shadow"],["unitRing","--map-unit-ring"],["unitGlyph","--map-unit-glyph"]])MAPC[k]=themeColor(t);
+const MAPC={};for(const [k,t] of [["sea1","--map-sea-1"],["sea2","--map-sea-2"],["sea3","--map-sea-3"],["waterGlint","--map-water-glint"],["waterShade","--map-water-shade"],["boardShadow","--map-board-shadow"],["board","--map-board"],["boardEdge","--map-board-edge"],["land","--map-land"],["grass","--sun-green"],["tileGlint","--map-tile-glint"],["tileShade","--map-tile-shade"],["tileEdge","--map-tile-edge"],["symbolInk","--map-symbol-ink"],["fieldGlow","--map-field-glow"],["fieldLine","--map-field-line"],["mineRock","--map-mine-rock"],["mineSnow","--map-mine-snow"],["ore","--map-ore"],["oreSpent","--map-ore-spent"],["oreRing","--map-ore-ring"],["oreGem","--map-ore-gem"],["oreEmptyMark","--map-ore-empty-mark"],["treeTrunk","--map-tree-trunk"],["treeDark","--map-tree-dark"],["treeLight","--map-tree-light"],["hillEdge","--map-hill-edge"],["hill","--map-hill"],["hillSnow","--map-hill-snow"],["plainTuft","--map-plain-tuft"],["crop","--map-crop"],["cropBand","--map-crop-band"],["roofCity","--map-roof-city"],["roofVillage","--map-roof-village"],["buildingShadow","--map-building-shadow"],["buildingWall","--map-building-wall"],["labelBg","--map-label-bg"],["labelText","--map-label-text"],["shield","--map-shield"],["worldEdge","--map-world-edge"],["unitShadow","--map-unit-shadow"],["unitRing","--map-unit-ring"],["unitGlyph","--map-unit-glyph"]])MAPC[k]=themeColor(t);
 // ---------- UI state ----------
 let world=null, playing=false, timer=null, selectedKingdom=null, watchedKingdom=null, pendingInject=null, tickInFlight=false, matchGeneration=0;
 let replayData=null, replayIdx=0, renderedEventCount=0, eventView="highlights";
@@ -1822,70 +1822,69 @@ function renderBoard(w, snap){
     let owner,crop,shield,terrain,ore,houses;
     if(snap){owner=get(x,y,"owners");crop=get(x,y,"crops");shield=get(x,y,"shields");terrain=get(x,y,"terrains")||"plain";ore=get(x,y,"ores")||0;houses=get(x,y,"houses")||0;owner=owner===-1?null:owner;}
     else{const g=w.grid[y][x];owner=g.owner;crop=g.crop;shield=g.shield;terrain=g.terrain||"plain";ore=g.ore||0;houses=g.houses||0;}
-    const base=owner===null?MAPC.land:factionColor(owner);
-    // beveled toy tile: one shared visual grammar everywhere
-    ctx.fillStyle=base;ctx.fillRect(px+.7,py+.7,cell-1.4,cell-1.4);
-    poly([[px+1,py+1],[px+cell-1,py+1],[px+cell-1,py+cell*.24],[px+1,py+cell*.55]],MAPC.tileGlint);
-    poly([[px+1,py+cell*.55],[px+cell-1,py+cell*.24],[px+cell-1,py+cell-1],[px+1,py+cell-1]],MAPC.tileShade);
-    ctx.strokeStyle=MAPC.tileEdge;ctx.lineWidth=Math.max(1,cell*.045);ctx.strokeRect(px+.8,py+.8,cell-1.6,cell-1.6);
-    // Unified map marks: one flat geometric silhouette per tile, one shared visual grammar.
-    // Same fill treatment everywhere, theme palette only; empty tiles stay empty so the map stays calm.
+    // Polytopia-style tiles: flush low-poly terrain squares. Terrain owns the ground color,
+    // ownership is a faction tint + faction frame; one centered flat icon, one value pill.
+    const ground=terrain==="mine"?MAPC.mineRock:terrain==="hill"?MAPC.hill:MAPC.grass;
+    ctx.fillStyle=ground;ctx.fillRect(px,py,cell,cell);
+    // low-poly diagonal facets
+    poly([[px,py],[px+cell,py],[px,py+cell]],MAPC.tileGlint);
+    poly([[px+cell,py],[px+cell,py+cell],[px,py+cell]],MAPC.tileShade);
+    // faction territory: tint + frame in the owner's color
+    if(owner!==null){
+      ctx.save();ctx.globalAlpha=.24;ctx.fillStyle=factionColor(owner);ctx.fillRect(px,py,cell,cell);ctx.restore();
+      ctx.strokeStyle=factionColor(owner);ctx.lineWidth=Math.max(2.4,cell*.12);ctx.strokeRect(px+cell*.06,py+cell*.06,cell*.88,cell*.88);
+    }else{
+      ctx.strokeStyle=MAPC.tileEdge;ctx.lineWidth=Math.max(1,cell*.04);ctx.strokeRect(px+.5,py+.5,cell-1,cell-1);
+    }
     const dia=(gx,gy,sz,fill)=>poly([[gx,gy-sz],[gx+sz*.7,gy],[gx,gy+sz],[gx-sz*.7,gy]],fill);
-    if(cell>12){
-      const cx=px+cell*.5;
-      ctx.save();
-      if(terrain==="field"){
-        ctx.fillStyle=MAPC.fieldGlow;ctx.fillRect(px+cell*.10,py+cell*.12,cell*.80,cell*.68);
-      }else if(terrain==="mine"){
-        poly([[cx-cell*.34,py+cell*.64],[cx,py+cell*.20],[cx+cell*.34,py+cell*.64]],MAPC.mineRock);
-        poly([[cx-cell*.10,py+cell*.33],[cx,py+cell*.20],[cx+cell*.10,py+cell*.33]],MAPC.mineSnow);
-        const n=Math.max(1,Math.min(3,ore));
-        for(let i=0;i<n;i++)dia(cx+(i-(n-1)/2)*cell*.16,py+cell*.76,cell*.05,ore>0?MAPC.ore:MAPC.oreSpent);
-      }else if(terrain==="forest"){
-        poly([[cx,py+cell*.30],[cx-cell*.26,py+cell*.62],[cx+cell*.26,py+cell*.62]],MAPC.treeDark);
-        poly([[cx,py+cell*.17],[cx-cell*.17,py+cell*.44],[cx+cell*.17,py+cell*.44]],MAPC.treeLight);
-        ctx.fillStyle=MAPC.treeTrunk;ctx.fillRect(cx-cell*.035,py+cell*.60,cell*.07,cell*.16);
-      }else if(terrain==="hill"){
-        poly([[cx-cell*.34,py+cell*.68],[cx,py+cell*.24],[cx+cell*.34,py+cell*.68]],MAPC.hill);
-        poly([[cx-cell*.09,py+cell*.36],[cx,py+cell*.24],[cx+cell*.09,py+cell*.36]],MAPC.hillSnow);
-      }
-      // plain: no mark - the calm background every other icon reads against
-      ctx.restore();
-    }
-    if(crop>0&&terrain==="field"){
-      // Crop maturity: the same flat wheat mark grows - stem, stem with grain, full sheaf.
-      const n=Math.min(3,crop),cx=px+cell*.5,base=py+cell*.72;ctx.save();ctx.strokeStyle=MAPC.crop;ctx.lineCap="round";ctx.lineWidth=Math.max(1.6,cell*.05);
-      const h=cell*(.12+.08*n);
-      ctx.beginPath();ctx.moveTo(cx,base);ctx.lineTo(cx,base-h);ctx.stroke();
-      if(n>=2)dia(cx,base-h,cell*.055,MAPC.crop);
-      if(n>=3){dia(cx-cell*.085,base-h*.70,cell*.04,MAPC.crop);dia(cx+cell*.085,base-h*.70,cell*.04,MAPC.crop);ctx.strokeStyle=MAPC.cropBand;ctx.lineWidth=Math.max(1.4,cell*.04);ctx.beginPath();ctx.moveTo(cx-cell*.10,base-cell*.055);ctx.lineTo(cx+cell*.10,base-cell*.055);ctx.stroke();}
-      ctx.restore();
-    }
-    if(houses>0&&cell>12){
-      const cx=px+cell*.5;
-      // One flat house mark per tile; the count pill shows how many houses stand here.
-      ctx.fillStyle=MAPC.buildingWall;ctx.fillRect(cx-cell*.20,py+cell*.42,cell*.40,cell*.28);
-      poly([[cx-cell*.26,py+cell*.44],[cx,py+cell*.20],[cx+cell*.26,py+cell*.44]],MAPC.roofVillage);
-      const label=String(houses),fs=Math.max(7,cell*.22);
+    // value pill: one small dark badge, bottom-right, icon-colored number - houses, ore, crop
+    const pill=(val,ink)=>{
+      const label=String(val),fs=Math.max(7,cell*.26);
       ctx.font="900 "+fs+"px Nunito,Segoe UI,sans-serif";
-      const tw=ctx.measureText(label).width+cell*.12,lx=cx+cell*.10,ly=py+cell*.10;
-      ctx.fillStyle=MAPC.labelBg;ctx.beginPath();if(ctx.roundRect)ctx.roundRect(lx,ly,tw,fs+cell*.10,Math.max(2,cell*.05));else ctx.rect(lx,ly,tw,fs+cell*.10);ctx.fill();
-      ctx.fillStyle=MAPC.labelText;ctx.textAlign="center";ctx.textBaseline="top";ctx.fillText(label,lx+tw/2,ly+cell*.035);
+      const tw=ctx.measureText(label).width+cell*.18,th=fs+cell*.14,lx=px+cell-tw-cell*.05,ly=py+cell-th-cell*.05;
+      ctx.fillStyle=MAPC.labelBg;ctx.beginPath();if(ctx.roundRect)ctx.roundRect(lx,ly,tw,th,Math.max(2,cell*.08));else ctx.rect(lx,ly,tw,th);ctx.fill();
+      ctx.fillStyle=ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(label,lx+tw/2,ly+th/2+cell*.01);
+    };
+    if(cell>12){
+      const cx=px+cell*.5,cy=py+cell*.46;
+      ctx.save();
+      if(terrain==="forest"){
+        // stand of flat pines
+        const pine=(tx,ty,s,canopy)=>{poly([[tx,ty-s],[tx-s*.62,ty],[tx+s*.62,ty]],canopy);ctx.fillStyle=MAPC.treeTrunk;ctx.fillRect(tx-s*.08,ty,s*.16,s*.34);};
+        pine(cx-cell*.20,cy+cell*.10,cell*.17,MAPC.treeDark);
+        pine(cx+cell*.20,cy+cell*.10,cell*.17,MAPC.treeDark);
+        pine(cx,cy-cell*.02,cell*.22,MAPC.treeLight);
+      }else if(terrain==="hill"){
+        poly([[cx-cell*.34,cy+cell*.22],[cx,cy-cell*.24],[cx+cell*.34,cy+cell*.22]],MAPC.hillEdge);
+        poly([[cx-cell*.09,cy-cell*.12],[cx,cy-cell*.24],[cx+cell*.09,cy-cell*.12]],MAPC.hillSnow);
+      }else if(terrain==="mine"){
+        poly([[cx-cell*.30,cy+cell*.10],[cx,cy-cell*.26],[cx+cell*.30,cy+cell*.10]],MAPC.mineSnow);
+        dia(cx,cy+cell*.22,cell*.075,ore>0?MAPC.ore:MAPC.oreSpent);
+      }else if(terrain==="field"&&crop>0){
+        // one flat wheat sheaf; the pill carries the maturity value
+        ctx.strokeStyle=MAPC.crop;ctx.lineCap="round";ctx.lineWidth=Math.max(1.6,cell*.05);
+        const h=cell*.30,base=cy+cell*.16;
+        ctx.beginPath();ctx.moveTo(cx,base);ctx.lineTo(cx,base-h);ctx.stroke();
+        dia(cx,base-h,cell*.06,MAPC.crop);
+        dia(cx-cell*.09,base-h*.66,cell*.045,MAPC.crop);dia(cx+cell*.09,base-h*.66,cell*.045,MAPC.crop);
+        ctx.strokeStyle=MAPC.cropBand;ctx.lineWidth=Math.max(1.4,cell*.04);ctx.beginPath();ctx.moveTo(cx-cell*.10,base-cell*.05);ctx.lineTo(cx+cell*.10,base-cell*.05);ctx.stroke();
+      }else if(terrain==="plain"&&houses===0&&(x*7+y*13)%3===0){
+        // quiet grass tufts on some plains so the field is not sterile
+        ctx.strokeStyle=MAPC.plainTuft;ctx.lineCap="round";ctx.lineWidth=Math.max(1.2,cell*.04);
+        const ty=py+cell*.68;
+        ctx.beginPath();ctx.moveTo(cx-cell*.06,ty);ctx.lineTo(cx-cell*.09,ty-cell*.09);ctx.moveTo(cx,ty);ctx.lineTo(cx,ty-cell*.12);ctx.moveTo(cx+cell*.06,ty);ctx.lineTo(cx+cell*.09,ty-cell*.09);ctx.stroke();
+      }
+      if(houses>0){
+        // flat house mark; the pill carries the count
+        ctx.fillStyle=MAPC.buildingWall;ctx.fillRect(cx-cell*.18,cy-cell*.02,cell*.36,cell*.24);
+        poly([[cx-cell*.24,cy],[cx,cy-cell*.22],[cx+cell*.24,cy]],MAPC.roofVillage);
+      }
+      ctx.restore();
+      if(houses>0)pill(houses,MAPC.labelText);
+      else if(terrain==="mine"&&ore>0)pill(ore,MAPC.ore);
+      else if(terrain==="field"&&crop>0)pill(crop,MAPC.crop);
     }
-    if(shield>0){ctx.strokeStyle=MAPC.shield;ctx.lineWidth=Math.max(2,cell*.09);ctx.globalAlpha=.5+.2*shield;ctx.strokeRect(px+cell*.13,py+cell*.13,cell*.74,cell*.74);ctx.globalAlpha=1;}
-  }
-  // Strong territory edges make all factions, including green, readable at phone scale.
-  const ownerAt=(x,y)=>{if(x<0||y<0||x>=W||y>=H)return null;const v=snap?snap.owners[y*W+x]:w.grid[y][x].owner;return v===-1?null:v;};
-  ctx.lineCap="square";ctx.lineWidth=Math.max(2.4,cell*.13);
-  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
-    const own=ownerAt(x,y);if(own===null)continue;
-    const px=ox+x*cell,py=oy+y*cell;ctx.strokeStyle=factionColor(own);
-    ctx.beginPath();
-    if(ownerAt(x,y-1)!==own){ctx.moveTo(px,py+1);ctx.lineTo(px+cell,py+1);}
-    if(ownerAt(x+1,y)!==own){ctx.moveTo(px+cell-1,py);ctx.lineTo(px+cell-1,py+cell);}
-    if(ownerAt(x,y+1)!==own){ctx.moveTo(px+cell,py+cell-1);ctx.lineTo(px,py+cell-1);}
-    if(ownerAt(x-1,y)!==own){ctx.moveTo(px+1,py+cell);ctx.lineTo(px+1,py);}
-    ctx.stroke();
+    if(shield>0){ctx.strokeStyle=MAPC.shield;ctx.lineWidth=Math.max(2,cell*.09);ctx.globalAlpha=.5+.2*shield;ctx.strokeRect(px+cell*.16,py+cell*.16,cell*.68,cell*.68);ctx.globalAlpha=1;}
   }
   ctx.strokeStyle=MAPC.worldEdge;ctx.lineWidth=Math.max(2,cell*.10);ctx.strokeRect(ox-1,oy-1,W*cell+2,H*cell+2);
   const dispCell=cell*mapView.s*(cv.clientWidth?cv.clientWidth/cv.width:1);
@@ -2231,7 +2230,6 @@ DB.open().then(async ()=>{
 </script>
 </body>
 </html>
-
 
 
 
