@@ -676,7 +676,7 @@
   @media(max-width:759px){
     #app{position:relative}
     #topbar{height:48px;min-height:48px;flex:0 0 48px;padding:4px 6px;grid-template-columns:44px 38px 52px minmax(0,1fr) 52px 40px;gap:4px;border-bottom-width:1px;box-shadow:none}#topbar .clock{min-width:0}
-    #topbar button,#topbar select{height:38px;min-height:38px;border-radius:10px;padding:0 5px}
+    #topbar button,#topbar select{height:38px;min-height:38px;border-radius:10px;padding:0 5px}#topbar select{width:100%!important;min-width:0}
     #topbar #playBtn{border-width:1px;box-shadow:none}
     #topbar .clock{font-size:9px;line-height:1.05}
     #operatorDrawer{top:50px;left:6px;right:6px;border-radius:13px}
@@ -986,7 +986,7 @@ function createWorld(cfg, seed){
     grid[c[1]][c[0]].owner=i; grid[c[1]][c[0]].terrain="plain";
     grid[c[1]][c[0]].houses=cfg.startHouses;
     // Every capital gets one mine in reach: a standing army is sustainable if the kingdom claims it.
-    const spot=[[1,0],[-1,0],[0,1],[0,-1]].map(([dx,dy])=>[((c[0]+dx)%cfg.width+cfg.width)%cfg.width,((c[1]+dy)%cfg.height+cfg.height)%cfg.height]).find(([mx,my])=>!caps.some(cc=>cc[0]===mx&&cc[1]===my));
+    const spot=neighbors6({cfg},c[0],c[1]).find(([mx,my])=>!caps.some(cc=>cc[0]===mx&&cc[1]===my));
     if(spot){const g=grid[spot[1]][spot[0]];g.terrain="mine";g.ore=2+Math.floor(rng()*2);g.crop=0;g.houses=0;}
     return { id:i, name:KINGDOM_NAMES[i%KINGDOM_NAMES.length]+" #"+(i+1), color:factionColor(i),
       alive:true, pop:cfg.startPop, army:cfg.startArmy, armyGroups:cfg.startArmy>0?[{id:"g1",x:c[0],y:c[1],size:cfg.startArmy,intent:"capital garrison"}]:[], armyPos:{x:c[0],y:c[1]}, armyIntent:"capital garrison", food:cfg.startFood, metal:cfg.startMetal, stamina:cfg.startStamina,
@@ -1017,17 +1017,22 @@ function normalizeArmyGroups(world,k){
 }
 function validArmyPos(world,k){return normalizeArmyGroups(world,k).length>0;}
 function ensureArmyPos(world,k){const g=normalizeArmyGroups(world,k)[0];return g?[g.x,g.y]:null;}
-function moveReachable(world,k,group){const max=world.cfg.armyMoveRange||3,q=[[[group.x,group.y],0]],seen=new Set([group.x+","+group.y]),out=[[group.x,group.y]];while(q.length){const [p,d]=q.shift();if(d>=max)continue;for(const n of neighbors4(world,p[0],p[1])){const key=n.join(",");if(seen.has(key)||world.grid[n[1]][n[0]].owner!==k.id)continue;seen.add(key);out.push(n);q.push([n,d+1]);}}return out;}
-function chooseArmyPost(world,k,intent,group){const pool=moveReachable(world,k,group),score=([x,y])=>{const g=world.grid[y][x];let v=0;if(intent==="village")v+=g.houses>0?100:0;if(intent==="mine")v+=g.terrain==="mine"?100:0;if(intent==="border")v+=neighbors4(world,x,y).some(([nx,ny])=>world.grid[ny][nx].owner!==k.id)?80:0;v+=g.shield*3;return v;};return pool.slice().sort((a,b)=>score(b)-score(a))[0]||[group.x,group.y];}
+function moveReachable(world,k,group){const max=world.cfg.armyMoveRange||3,q=[[[group.x,group.y],0]],seen=new Set([group.x+","+group.y]),out=[[group.x,group.y]];while(q.length){const [p,d]=q.shift();if(d>=max)continue;for(const n of neighbors6(world,p[0],p[1])){const key=n.join(",");if(seen.has(key)||world.grid[n[1]][n[0]].owner!==k.id)continue;seen.add(key);out.push(n);q.push([n,d+1]);}}return out;}
+function chooseArmyPost(world,k,intent,group){const pool=moveReachable(world,k,group),score=([x,y])=>{const g=world.grid[y][x];let v=0;if(intent==="village")v+=g.houses>0?100:0;if(intent==="mine")v+=g.terrain==="mine"?100:0;if(intent==="border")v+=neighbors6(world,x,y).some(([nx,ny])=>world.grid[ny][nx].owner!==k.id)?80:0;v+=g.shield*3;return v;};return pool.slice().sort((a,b)=>score(b)-score(a))[0]||[group.x,group.y];}
 function armyAt(world,k,x,y){return normalizeArmyGroups(world,k).filter(g=>g.x===x&&g.y===y).reduce((n,g)=>n+g.size,0);}
 function groupAt(world,k,x,y){return normalizeArmyGroups(world,k).find(g=>g.x===x&&g.y===y);}
 function nextGroupId(k){const used=new Set((k.armyGroups||[]).map(g=>g.id));let n=1;while(used.has("g"+n))n++;return "g"+n;}
 function loseArmy(world,k,amount,x=null,y=null){normalizeArmyGroups(world,k);let left=amount;const order=(x===null?k.armyGroups:[...k.armyGroups].sort((a,b)=>(a.x===x&&a.y===y?-1:b.x===x&&b.y===y?1:0)));for(const g of order){const cut=Math.min(left,g.size);g.size-=cut;left-=cut;if(!left)break;}k.armyGroups=k.armyGroups.filter(g=>g.size>0);k.army=k.armyGroups.reduce((n,g)=>n+g.size,0);normalizeArmyGroups(world,k);}
 
-function neighbors4(world,x,y){ const [[n],[e],[s],[w]]=[[ [x,y-1] ],[ [x+1,y] ],[ [x,y+1] ],[ [x-1,y] ]]; return [wrap(world,x,y-1),wrap(world,x+1,y),wrap(world,x,y+1),wrap(world,x-1,y)]; }
-function chebyshev(world,a,b){ const dx=Math.min(Math.abs(a[0]-b[0]),world.cfg.width-Math.abs(a[0]-b[0])); const dy=Math.min(Math.abs(a[1]-b[1]),world.cfg.height-Math.abs(a[1]-b[1])); return Math.max(dx,dy); }
+function neighbors6(world,x,y){
+  // odd-q offset coordinates: six edge-sharing hexes, wrapped on both axes.
+  const d=(x&1)?[[0,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0]]:[[0,-1],[1,-1],[1,0],[0,1],[-1,0],[-1,-1]];
+  const out=[],seen=new Set();for(const [dx,dy] of d){const n=wrap(world,x+dx,y+dy),k=n.join(",");if(!seen.has(k)&&!(n[0]===x&&n[1]===y)){seen.add(k);out.push(n);}}return out;
+}
+function hexCube(x,y){const z=y-(x-(x&1))/2;return [x,-x-z,z];}
+function hexDistance(world,a,b){let best=Infinity;for(const sx of [-world.cfg.width,0,world.cfg.width])for(const sy of [-world.cfg.height,0,world.cfg.height]){const A=hexCube(a[0],a[1]),B=hexCube(b[0]+sx,b[1]+sy),d=Math.max(Math.abs(A[0]-B[0]),Math.abs(A[1]-B[1]),Math.abs(A[2]-B[2]));if(d<best)best=d;}return best;}
 function kingdomAnchor(world,kid){ const c=cellsOf(world,kid); return c.length?c[0]:null; }
-function kingdomDistance(world,a,b){ const ca=cellsOf(world,a), cb=cellsOf(world,b); let d=Infinity; for(const pa of ca) for(const pb of cb){ const dd=chebyshev(world,pa,pb); if(dd<d)d=dd; } return d; }
+function kingdomDistance(world,a,b){ const ca=cellsOf(world,a), cb=cellsOf(world,b); let d=Infinity; for(const pa of ca) for(const pb of cb){ const dd=hexDistance(world,pa,pb); if(dd<d)d=dd; } return d; }
 function emit(world,ev){ world.events.push(ev); }
 
 // ---------- legal actions ----------
@@ -1043,7 +1048,7 @@ function legalActions(world,k){
   if (k.stamina>=1 && claimOptions(world,k).length) acts.push("claim");
     const raidCells=[];
   if (absTick(world)>=world.curfewUntil && k.stamina>=1 && k.army>=1){
-    for(const g of normalizeArmyGroups(world,k))for(const n of neighbors4(world,g.x,g.y)){const o=world.grid[n[1]][n[0]].owner;if(o!==null&&o!==k.id&&world.kingdoms[o].alive)raidCells.push(n);}
+    for(const g of normalizeArmyGroups(world,k))for(const n of neighbors6(world,g.x,g.y)){const o=world.grid[n[1]][n[0]].owner;if(o!==null&&o!==k.id&&world.kingdoms[o].alive)raidCells.push(n);}
     if (raidCells.length) acts.push("raid");
   }
   if (k.metal>=cfg.trainCostMetal && k.stamina>=cfg.trainCostStamina && k.army<Math.min(cfg.armyCap,k.pop)) acts.push("train");
@@ -1061,7 +1066,7 @@ function claimOptions(world,k){
   const out=[],seen=new Set();
   for(const group of normalizeArmyGroups(world,k)){
     if(group.size<1)continue;
-    for(const n of neighbors4(world,group.x,group.y)){
+    for(const n of neighbors6(world,group.x,group.y)){
       if(world.grid[n[1]][n[0]].owner!==null)continue;
       const key=n[0]+","+n[1]+","+group.id;
       if(!seen.has(key)){seen.add(key);out.push({cell:n,group});}
@@ -1071,7 +1076,7 @@ function claimOptions(world,k){
 }
 function adjacentKingdoms(world,kid){
   const set=new Set();
-  for (const c of cellsOf(world,kid)) for (const n of neighbors4(world,c[0],c[1])){ const o=world.grid[n[1]][n[0]].owner; if (o!==null && o!==kid && world.kingdoms[o].alive) set.add(o); }
+  for (const c of cellsOf(world,kid)) for (const n of neighbors6(world,c[0],c[1])){ const o=world.grid[n[1]][n[0]].owner; if (o!==null && o!==kid && world.kingdoms[o].alive) set.add(o); }
   return [...set];
 }
 
@@ -1124,7 +1129,7 @@ function executeAct(world,kid,action,events){
       const dists=opts.map(o=>{
         let d=Infinity;
         for (const rival of world.kingdoms){ if (!rival.alive||rival.id===kid) continue;
-          for (const oc of cellsOf(world,rival.id)){ const dd=chebyshev(world,o.cell,oc); if(dd<d)d=dd; } }
+          for (const oc of cellsOf(world,rival.id)){ const dd=hexDistance(world,o.cell,oc); if(dd<d)d=dd; } }
         return d;
       });
       const minD=Math.min(...dists);
@@ -1139,7 +1144,7 @@ function executeAct(world,kid,action,events){
       emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"claim",target:null,dir:null,from,to:{x:c[0],y:c[1]},amount:group.size,note:action.note||("army conquered empty tile "+c)});
       break;}
     case "raid":{
-      let targets=[];for(const g of normalizeArmyGroups(world,k))for(const n of neighbors4(world,g.x,g.y)){const o=world.grid[n[1]][n[0]].owner;if(o!==null&&o!==kid&&world.kingdoms[o].alive)targets.push(n);}
+      let targets=[];for(const g of normalizeArmyGroups(world,k))for(const n of neighbors6(world,g.x,g.y)){const o=world.grid[n[1]][n[0]].owner;if(o!==null&&o!==kid&&world.kingdoms[o].alive)targets.push(n);}
       let cell=targets[0];
       if (action.target!==null && action.target!==undefined){
         const pref=targets.filter(n=>world.grid[n[1]][n[0]].owner===action.target);
@@ -1191,7 +1196,7 @@ function resolveCombat(world,attackerId,cell,note){
   const cfg=world.cfg,g=world.grid[cell[1]][cell[0]],defenderId=g.owner;
   const A=world.kingdoms[attackerId],D=world.kingdoms[defenderId];
   normalizeArmyGroups(world,A);normalizeArmyGroups(world,D);
-  const attackers=A.armyGroups.filter(g=>neighbors4(world,g.x,g.y).some(n=>n[0]===cell[0]&&n[1]===cell[1])),attackGroup=attackers.sort((a,b)=>b.size-a.size)[0],attacking=attackGroup?.size||0, defending=armyAt(world,D,cell[0],cell[1]);
+  const attackers=A.armyGroups.filter(g=>neighbors6(world,g.x,g.y).some(n=>n[0]===cell[0]&&n[1]===cell[1])),attackGroup=attackers.sort((a,b)=>b.size-a.size)[0],attacking=attackGroup?.size||0, defending=armyAt(world,D,cell[0],cell[1]);
   const placeBonus=g.houses>0?2:(g.terrain==="mine"?1:0);
   const pA=attacking+(A.stamina>=3?1:0),pD=defending+placeBonus+g.shield+(D.stamina>=3?1:0);
   let winnerId,loot=0;
@@ -1770,10 +1775,15 @@ function renderClock(w){
   if($("storyTitle")){const story=storyFor(w,shift);$("storyTitle").textContent=story.title;$("storyDetail").textContent=story.detail;}
 }
 function boardGeom(w){
-  const cv=$("board"), W=w.cfg.width, H=w.cfg.height;
-  const cell=Math.max(14,Math.min(Math.floor(cv.width/W),Math.floor(cv.height/H)));
-  return {cell, ox:Math.floor((cv.width-cell*W)/2), oy:Math.floor((cv.height-cell*H)/2)};
+  const cv=$("board"),W=w.cfg.width,H=w.cfg.height,rt=Math.sqrt(3)/2;
+  const byW=cv.width/(.75*(W-1)+1),byH=cv.height/(rt*(H+.5));
+  const cell=Math.max(14,Math.floor(Math.min(byW,byH)));
+  const boardW=cell*(.75*(W-1)+1),boardH=cell*rt*(H+.5);
+  return {cell,boardW,boardH,ox:Math.floor((cv.width-boardW)/2),oy:Math.floor((cv.height-boardH)/2)};
 }
+function hexCenter(g,x,y){return [g.ox+g.cell*.5+x*g.cell*.75,g.oy+g.cell*Math.sqrt(3)/2*(y+.5+(x&1)*.5)];}
+function hexPath(ctx,cx,cy,r){ctx.beginPath();for(let i=0;i<6;i++){const a=Math.PI/3*i,x=cx+r*Math.cos(a),y=cy+r*Math.sin(a);i?ctx.lineTo(x,y):ctx.moveTo(x,y);}ctx.closePath();}
+function hexPoints(cx,cy,r){const p=[];for(let i=0;i<6;i++){const a=Math.PI/3*i;p.push([cx+r*Math.cos(a),cy+r*Math.sin(a)]);}return p;}
 const mapView={s:1,tx:0,ty:0};
 function resetMapView(){mapView.s=1;mapView.tx=0;mapView.ty=0;const cv=$("board");if(cv)delete cv.dataset.mobileViewReady;}
 function focusKingdom(id,animate=false){
@@ -1783,15 +1793,15 @@ function focusKingdom(id,animate=false){
   const anchor=groups[0]||(cells[0]?{x:cells[0][0],y:cells[0][1]}:null); if(!anchor)return;
   const target=Math.max(1.35,Math.min(2.15,20/g.cell));
   mapView.s=target;
-  mapView.tx=cv.width/2-(g.ox+(anchor.x+.5)*g.cell)*target;
-  mapView.ty=cv.height/2-(g.oy+(anchor.y+.5)*g.cell)*target;
+  const hc=hexCenter(g,anchor.x,anchor.y);mapView.tx=cv.width/2-hc[0]*target;
+  mapView.ty=cv.height/2-hc[1]*target;
   clampPan(); renderBoard(world);
   if(animate){cv.classList.remove("map-focus");void cv.offsetWidth;cv.classList.add("map-focus");}
 }
 function clampPan(){
   const cv=$("board"); if(!world)return;
   const g=boardGeom(world), W=world.cfg.width, H=world.cfg.height;
-  const mw=g.cell*W*mapView.s, mh=g.cell*H*mapView.s;
+  const mw=g.boardW*mapView.s, mh=g.boardH*mapView.s;
   const bx=g.ox*mapView.s, by=g.oy*mapView.s;
   mapView.tx=Math.min(cv.width/2-bx,Math.max(cv.width/2-bx-mw,mapView.tx));
   mapView.ty=Math.min(cv.height/2-by,Math.max(cv.height/2-by-mh,mapView.ty));
@@ -1806,7 +1816,7 @@ function layoutBoard(){
   if(world){
     if(innerWidth<760 && !cv.dataset.mobileViewReady){
       cv.dataset.mobileViewReady="1";
-      const g=boardGeom(world), worldH=g.cell*world.cfg.height;
+      const g=boardGeom(world), worldH=g.boardH;
       const useful=Math.min(1.65,Math.max(1,Math.min(r.height/(worldH/dpr)*.72,1.65)));
       mapView.s=useful; mapView.tx=(cv.width-cv.width*useful)/2; mapView.ty=(cv.height-cv.height*useful)/2; clampPan();
     }
@@ -1838,29 +1848,27 @@ function renderBoard(w, snap){
   const get=(x,y,f)=> snap ? snap[f][y*W+x] : null;
   const poly=(pts,fill)=>{ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i][0],pts[i][1]);ctx.closePath();ctx.fillStyle=fill;ctx.fill();};
   // Treat the world as a physical atlas board, not a loose strip of tiles.
-  const pad=Math.max(6,cell*.45), radius=Math.max(8,cell*.55), bx=ox-pad, by=oy-pad, bw=W*cell+pad*2, bh=H*cell+pad*2;
+  const pad=Math.max(6,cell*.28), radius=Math.max(8,cell*.45), bx=ox-pad, by=oy-pad, bw=boardGeom(w).boardW+pad*2, bh=boardGeom(w).boardH+pad*2;
   ctx.save();ctx.shadowColor=MAPC.boardShadow;ctx.shadowBlur=Math.max(10,cell*.8);ctx.shadowOffsetY=Math.max(5,cell*.35);
   ctx.fillStyle=MAPC.board;ctx.beginPath();if(ctx.roundRect)ctx.roundRect(bx,by,bw,bh,radius);else ctx.rect(bx,by,bw,bh);ctx.fill();ctx.restore();
-  ctx.strokeStyle=MAPC.boardEdge;ctx.lineWidth=Math.max(2,cell*.10);ctx.strokeRect(ox-1.5,oy-1.5,W*cell+3,H*cell+3);
+  ctx.strokeStyle=MAPC.boardEdge;ctx.lineWidth=Math.max(2,cell*.08);ctx.strokeRect(bx,by,bw,bh);
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){
-    const px=ox+x*cell, py=oy+y*cell;
+    const [hcx,hcy]=hexCenter({cell,ox,oy},x,y),px=hcx-cell*.5,py=hcy-cell*.5;
     let owner,crop,shield,terrain,ore,houses;
     if(snap){owner=get(x,y,"owners");crop=get(x,y,"crops");shield=get(x,y,"shields");terrain=get(x,y,"terrains")||"plain";ore=get(x,y,"ores")||0;houses=get(x,y,"houses")||0;owner=owner===-1?null:owner;}
     else{const g=w.grid[y][x];owner=g.owner;crop=g.crop;shield=g.shield;terrain=g.terrain||"plain";ore=g.ore||0;houses=g.houses||0;}
-    // Polytopia-style tiles: flush low-poly terrain squares. Terrain owns the ground color,
+    // Tiny Attack-style tiles: flush low-poly terrain hexagons. Terrain owns the ground color,
     // ownership is a faction tint + faction frame; one centered flat icon, one value pill.
     const ground=terrain==="mine"?MAPC.mineRock:terrain==="hill"?MAPC.hill:MAPC.grass;
-    ctx.fillStyle=ground;ctx.fillRect(px,py,cell,cell);
-    // low-poly diagonal facets
-    poly([[px,py],[px+cell,py],[px,py+cell]],MAPC.tileGlint);
-    poly([[px+cell,py],[px+cell,py+cell],[px,py+cell]],MAPC.tileShade);
-    // faction territory: tint + frame in the owner's color
+    // Tiny Attack language: chunky edge-locked hex, bright flat top and beveled lower facets.
+    const hr=cell*.505;hexPath(ctx,hcx,hcy,hr);ctx.fillStyle=ground;ctx.fill();
+    const hp=hexPoints(hcx,hcy,hr);
+    poly([hp[1],hp[2],hp[3],[hcx,hcy]],MAPC.tileShade);
+    poly([hp[3],hp[4],hp[5],[hcx,hcy]],MAPC.tileGlint);
     if(owner!==null){
-      ctx.save();ctx.globalAlpha=.24;ctx.fillStyle=factionColor(owner);ctx.fillRect(px,py,cell,cell);ctx.restore();
-      ctx.strokeStyle=factionColor(owner);ctx.lineWidth=Math.max(2.4,cell*.12);ctx.strokeRect(px+cell*.06,py+cell*.06,cell*.88,cell*.88);
-    }else{
-      ctx.strokeStyle=MAPC.tileEdge;ctx.lineWidth=Math.max(1,cell*.04);ctx.strokeRect(px+.5,py+.5,cell-1,cell-1);
-    }
+      ctx.save();ctx.globalAlpha=.27;hexPath(ctx,hcx,hcy,hr*.96);ctx.fillStyle=factionColor(owner);ctx.fill();ctx.restore();
+      ctx.strokeStyle=factionColor(owner);ctx.lineWidth=Math.max(2.4,cell*.105);hexPath(ctx,hcx,hcy,hr*.86);ctx.stroke();
+    }else{ctx.strokeStyle=MAPC.tileEdge;ctx.lineWidth=Math.max(1,cell*.035);hexPath(ctx,hcx,hcy,hr*.98);ctx.stroke();}
     const dia=(gx,gy,sz,fill)=>poly([[gx,gy-sz],[gx+sz*.7,gy],[gx,gy+sz],[gx-sz*.7,gy]],fill);
     // value pill: one small dark badge, bottom-right, icon-colored number - houses, ore, crop
     const pill=(val,ink)=>{
@@ -1982,27 +1990,27 @@ function renderBoard(w, snap){
       else if(terrain==="mine"&&ore>0)pill(ore,MAPC.ore);
       else if(terrain==="field"&&crop>0)pill(crop,MAPC.crop);
     }
-    if(shield>0){ctx.strokeStyle=MAPC.shield;ctx.lineWidth=Math.max(2,cell*.09);ctx.globalAlpha=.5+.2*shield;ctx.strokeRect(px+cell*.16,py+cell*.16,cell*.68,cell*.68);ctx.globalAlpha=1;}
+    if(shield>0){ctx.strokeStyle=MAPC.shield;ctx.lineWidth=Math.max(2,cell*.075);ctx.globalAlpha=.5+.2*shield;hexPath(ctx,hcx,hcy,cell*.33);ctx.stroke();ctx.globalAlpha=1;}
   }
-  // Polytopia-style perspective: owned land plus its one-tile orthogonal ring is visible.
+  // Polytopia-style perspective: owned land plus its one full edge-adjacent hex ring is visible.
   // View-all is the operator default; a kingdom view hides both terrain detail and army tokens outside sight.
   let visible=null;
   if(viewKingdom!==null){
     visible=new Set();
     const ownerAt=(x,y)=>{if(snap){const o=get(x,y,"owners");return o===-1?null:o;}return w.grid[y][x].owner;};
-    for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(ownerAt(x,y)===viewKingdom){visible.add(x+","+y);for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const n=wrap(w,x+dx,y+dy);visible.add(n[0]+","+n[1]);}}
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(ownerAt(x,y)===viewKingdom){visible.add(x+","+y);for(const n of neighbors6(w,x,y))visible.add(n[0]+","+n[1]);}
     ctx.save();ctx.fillStyle=MAPC.symbolInk;ctx.globalAlpha=.88;
-    for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(!visible.has(x+","+y))ctx.fillRect(ox+x*cell,oy+y*cell,cell,cell);
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(!visible.has(x+","+y)){const c=hexCenter({cell,ox,oy},x,y);hexPath(ctx,c[0],c[1],cell*.505);ctx.fill();}
     ctx.restore();
   }
-  ctx.strokeStyle=MAPC.worldEdge;ctx.lineWidth=Math.max(2,cell*.10);ctx.strokeRect(ox-1,oy-1,W*cell+2,H*cell+2);
+  // Hexes themselves define the world edge; no square-grid frame.
   const dispCell=cell*mapView.s*(cv.clientWidth?cv.clientWidth/cv.width:1);
   if(dispCell>=10){
     ctx.textAlign="center";ctx.textBaseline="middle";
     const tokenKingdoms=snap?snap.kingdoms.map(k=>({id:k.id,alive:k.alive,army:k.army,groups:(k.armyGroups||[])})):w.kingdoms.map(k=>({id:k.id,alive:k.alive,army:k.army,groups:normalizeArmyGroups(w,k)}));
     for(const k of tokenKingdoms){if(!k.alive||k.army<=0)continue;for(const g of k.groups){
       if(visible&&!visible.has(g.x+","+g.y))continue;
-      const cx=ox+g.x*cell+cell*.5,cy=oy+g.y*cell+cell*.5,kc=factionColor(k.id);
+      const hc=hexCenter({cell,ox,oy},g.x,g.y),cx=hc[0],cy=hc[1],kc=factionColor(k.id);
       const size=Math.max(cell*.58,Math.min(cell*.95,cell*.58+Math.min(g.size,12)*cell*.02)),r=size/2;
       ctx.save();ctx.shadowColor=MAPC.unitShadow;ctx.shadowBlur=4;ctx.fillStyle=kc;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle=MAPC.unitRing;ctx.lineWidth=Math.max(1.5,size*.07);ctx.stroke();
       // Flat unit mark in the same family as the tile icons, plus the headcount.
@@ -2178,8 +2186,8 @@ $("board").addEventListener("click",(e)=>{
   const sx=cv.width/r.width,sy=cv.height/r.height;
   let px=(e.clientX-r.left)*sx, py=(e.clientY-r.top)*sy;
   px=(px-mapView.tx)/mapView.s; py=(py-mapView.ty)/mapView.s;
-  const x=Math.floor((px-ox)/cell), y=Math.floor((py-oy)/cell);
-  if (x<0||y<0||x>=world.cfg.width||y>=world.cfg.height) return;
+  let x=-1,y=-1,best=Infinity;for(let gy=0;gy<world.cfg.height;gy++)for(let gx=0;gx<world.cfg.width;gx++){const c=hexCenter({cell,ox,oy},gx,gy),d=Math.hypot(px-c[0],py-c[1]);if(d<best){best=d;x=gx;y=gy;}}
+  if(best>cell*.54)return;
   if (pendingInject==="drought"){ injectDrought(world,x-2,y-2,x+2,y+2); pendingInject=null; toast("Drought injected"); renderAll(); saveCurrentMatch(); return; }
   if (pendingInject==="cache"){ if(injectCacheDrop(world,x,y)){pendingInject=null;toast("Food cache dropped");renderAll();saveCurrentMatch();}else toast("Choose an empty, unowned cell"); return; }
   const o=world.grid[y][x].owner;
@@ -2244,7 +2252,7 @@ function launchConfiguredMatch(){const cfg=readConfig(),models=[$("modelA").valu
 $("quickStart").onclick=launchConfiguredMatch;
 function toast(msg){ const t=$("toast"); t.textContent=msg; t.style.display="block"; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display="none",3200); }
 const overviewBtn=$("overviewBtn");
-$("viewSel").onchange=()=>{viewKingdom=$("viewSel").value==="all"?null:+$("viewSel").value;if(viewKingdom===null){resetMapView();const cv=$("board");if(cv)cv.dataset.mobileViewReady="1";renderBoard(world);}else{const cells=cellsOf(world,viewKingdom),cv=$("board"),g=boardGeom(world);if(cells.length){let ax=0,ay=0;for(const c of cells){ax+=c[0];ay+=c[1];}ax/=cells.length;ay/=cells.length;const target=Math.max(1.35,Math.min(2.15,20/g.cell));mapView.s=target;mapView.tx=cv.width/2-(g.ox+(ax+.5)*g.cell)*target;mapView.ty=cv.height/2-(g.oy+(ay+.5)*g.cell)*target;clampPan();}renderBoard(world);}toast(viewKingdom===null?"Viewing the whole world":"Viewing as "+world.kingdoms[viewKingdom].name);};
+$("viewSel").onchange=()=>{viewKingdom=$("viewSel").value==="all"?null:+$("viewSel").value;if(viewKingdom===null){resetMapView();const cv=$("board");if(cv)cv.dataset.mobileViewReady="1";renderBoard(world);}else{const cells=cellsOf(world,viewKingdom),cv=$("board"),g=boardGeom(world);if(cells.length){let ax=0,ay=0;for(const c of cells){ax+=c[0];ay+=c[1];}ax/=cells.length;ay/=cells.length;const target=Math.max(1.35,Math.min(2.15,20/g.cell));mapView.s=target;const hc=hexCenter(g,ax,ay);mapView.tx=cv.width/2-hc[0]*target;mapView.ty=cv.height/2-hc[1]*target;clampPan();}renderBoard(world);}toast(viewKingdom===null?"Viewing the whole world":"Viewing as "+world.kingdoms[viewKingdom].name);};
 if(overviewBtn) overviewBtn.onclick=()=>{ resetMapView(); const cv=$("board"); if(cv)cv.dataset.mobileViewReady="1"; renderBoard(world); toast("Whole world"); };
 $("playBtn").onclick=()=>{ replayData?null:(playing?pause():play()); };
 $("stepBtn").onclick=()=>{ if(!replayData){pause();tickOnce();} };
