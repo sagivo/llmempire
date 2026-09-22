@@ -672,6 +672,11 @@
 
 
   /* ===== Mobile-first field UI: map first, chrome second ===== */
+  #tileInfo{position:absolute;z-index:13;top:8px;left:8px;max-width:min(330px,calc(100% - 66px));background:var(--sun-paper-soft);color:var(--sun-ink);border:1px solid var(--sun-edge);border-radius:13px;box-shadow:0 3px 0 rgba(82,60,31,.18),0 10px 24px rgba(26,33,36,.16);padding:8px 10px 9px;font-size:12.5px;line-height:1.4}
+  #tileInfo .ti-title{font-weight:800;font-size:13px;padding-right:16px}
+  #tileInfo .ti-row{display:flex;align-items:center;gap:6px;margin-top:2px;flex-wrap:wrap}
+  #tileInfo .ti-close{position:absolute;top:1px;right:6px;border:0;background:none;font-size:15px;color:var(--sun-muted);cursor:pointer;padding:4px}
+  #tileInfo .ti-agent{margin-top:5px;border:1px solid var(--sun-edge);background:var(--sun-paper-mid);border-radius:9px;padding:3px 9px;font-weight:700;font-size:12px;color:var(--sun-ink);cursor:pointer}
   #overviewBtn{display:none}
   @media(max-width:759px){
     #app{position:relative}
@@ -886,7 +891,7 @@
     <button id="exitReplayBtn">Exit replay</button>
   </div>
   <div id="main">
-    <div id="boardwrap"><div id="mapstage"><div id="mapframe"><canvas id="board" width="960" height="640"></canvas><div id="mapActions" aria-hidden="true"></div></div><button id="overviewBtn" type="button" title="Show the whole world" aria-label="Show the whole world">⌗</button></div><div id="matchEnd"></div><div id="turnViz" aria-live="polite"></div><div id="empirebar"></div></div>
+    <div id="boardwrap"><div id="mapstage"><div id="mapframe"><canvas id="board" width="960" height="640"></canvas><div id="mapActions" aria-hidden="true"></div><div id="tileInfo" class="hidden"></div></div><button id="overviewBtn" type="button" title="Show the whole world" aria-label="Show the whole world">⌗</button></div><div id="matchEnd"></div><div id="turnViz" aria-live="polite"></div><div id="empirebar"></div></div>
     <div id="side">
       <div id="lb"></div>
       <div id="sheetGrab" aria-hidden="true"><i></i></div>
@@ -1665,6 +1670,7 @@ function assignRoster(world){
 // ---------- match lifecycle ----------
 function newMatch(cfg,seed){
   matchGeneration++; replayData=null; pendingInject=null; eventView="highlights"; $("highlightsBtn").classList.add("on"); $("allEventsBtn").classList.remove("on"); showTab("world");
+  hideTileInfo();
   world=createWorld(cfg,seed??Math.floor(Math.random()*2**31));
   assignRoster(world);
   emit(world,{type:"Control",tick:0,operatorAction:"match_start",parameters:{seed:world.seed,roster:"custom",defaultModel:$("modelA").value.trim()||"mock"}});
@@ -1704,7 +1710,7 @@ const RES_ICONS={
   food:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 14V5" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M8 1.8 10.4 5 8 8.2 5.6 5z" fill="currentColor"/><path d="M4.4 6.8 6.2 9l-1.8 2.2-1.8-2.2z" fill="currentColor" opacity=".8"/><path d="M11.6 6.8 13.4 9l-1.8 2.2-1.8-2.2z" fill="currentColor" opacity=".8"/></svg>',
   house:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.3 8.6 8 3.2l5.7 5.4z" fill="currentColor"/><rect x="4" y="8.6" width="8" height="5" fill="currentColor" opacity=".72"/></svg>',
   mineral:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.2 12.6 6 8 13.8 3.4 6z" fill="currentColor"/><path d="M8 2.2 10.1 6 8 13.8z" fill="currentColor" opacity=".65"/></svg>',
-  army:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8 11.4 5.4 8 9 4.6 5.4z" fill="currentColor"/><rect x="7" y="8.8" width="2" height="5.4" fill="currentColor"/></svg>',
+  army:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.9 9.6 11.3 2.1l3-1.1-1.1 3-7.5 6.4z" fill="currentColor"/><path d="M3.3 9.8l2.8 2.8-1.1 1.1-2.8-2.8z" fill="currentColor"/><path d="M2.2 12.4l1.4 1.4-.9.9-1.4-1.4z" fill="currentColor"/><circle cx="1.6" cy="14.4" r=".85" fill="currentColor"/></svg>',
   pop:'<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="4.8" r="2.6" fill="currentColor"/><path d="M2.8 13.8c0-3 2.3-4.6 5.2-4.6s5.2 1.6 5.2 4.6z" fill="currentColor"/></svg>',
   land:'<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.4" y="2.4" width="11.2" height="11.2" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M2.4 9.2h11.2" stroke="currentColor" stroke-width="1.3"/></svg>'
 };
@@ -1756,7 +1762,7 @@ function renderViewPicker(){
   }
   if(document.activeElement!==el&&el.value!==chosen)el.value=chosen;
 }
-function renderAll(){ if(!world)return; renderViewPicker(); $("app").classList.toggle("match-over",world.over); const end=$("matchEnd"); end.textContent=world.over?(world.winner?("🏆 "+world.kingdoms[world.winner.id].name+" wins by "+world.winner.how.replace("_"," ")+"."):"Every kingdom has fallen."):""; renderBoard(world); renderLeaderboard(world); renderEmpires(world); renderEvents(world); renderInspector(); renderClock(world); renderWorldTab(world); if(world.aiAnalysis)renderAnalysis(world.aiAnalysis); }
+function renderAll(){ if(!world)return; renderViewPicker(); if(tileInfoCell)showTileInfo(tileInfoCell.x,tileInfoCell.y); $("app").classList.toggle("match-over",world.over); const end=$("matchEnd"); end.textContent=world.over?(world.winner?("🏆 "+world.kingdoms[world.winner.id].name+" wins by "+world.winner.how.replace("_"," ")+"."):"Every kingdom has fallen."):""; renderBoard(world); renderLeaderboard(world); renderEmpires(world); renderEvents(world); renderInspector(); renderClock(world); renderWorldTab(world); if(world.aiAnalysis)renderAnalysis(world.aiAnalysis); }
 function storyFor(w,ev){
   if(!ev)return {title:"The kingdoms are taking position",detail:"Press play to watch the first decisions unfold."};
   const name=id=>id>=0&&w.kingdoms[id]?w.kingdoms[id].name:"A kingdom";
@@ -1807,13 +1813,23 @@ function focusKingdom(id,animate=false){
 }
 function clampPan(){
   const cv=$("board"); if(!world)return;
-  const g=boardGeom(world), W=world.cfg.width, H=world.cfg.height;
+  const g=boardGeom(world);
   const mw=g.boardW*mapView.s, mh=g.boardH*mapView.s;
   const bx=g.ox*mapView.s, by=g.oy*mapView.s;
-  // When the board is smaller than the canvas, center it - the old min/max collapsed and
-  // pinned the board edge to the canvas centerline, leaving half the map blank.
-  mapView.tx=mw<=cv.width?(cv.width-mw)/2-bx:Math.min(cv.width/2-bx,Math.max(cv.width/2-bx-mw,mapView.tx));
-  mapView.ty=mh<=cv.height?(cv.height-mh)/2-by:Math.min(cv.height/2-by,Math.max(cv.height/2-by-mh,mapView.ty));
+  // Smaller than the canvas: center. Larger: pan only until the board edge meets the
+  // canvas edge. Pinning to the canvas centerline left dead sea and cut the map off.
+  mapView.tx=mw<=cv.width?(cv.width-mw)/2-bx:Math.min(-bx,Math.max(cv.width-bx-mw,mapView.tx));
+  mapView.ty=mh<=cv.height?(cv.height-mh)/2-by:Math.min(-by,Math.max(cv.height-by-mh,mapView.ty));
+}
+// Whole-world view: fit the entire board inside the canvas, centered.
+function fitMapView(){
+  const cv=$("board"); if(!cv||!world)return;
+  const g=boardGeom(world);
+  const s=Math.min(cv.width/g.boardW,cv.height/g.boardH);
+  mapView.s=Math.min(4,Math.max(.5,s*.985));
+  mapView.tx=(cv.width-g.boardW*mapView.s)/2-g.ox*mapView.s;
+  mapView.ty=(cv.height-g.boardH*mapView.s)/2-g.oy*mapView.s;
+  clampPan();
 }
 function layoutBoard(){
   const stage=$("mapstage"),cv=$("board"); if(!stage||!cv)return;
@@ -1827,7 +1843,7 @@ function layoutBoard(){
       cv.dataset.mobileViewReady="1";
       const g=boardGeom(world), worldH=g.boardH;
       const useful=Math.min(1.65,Math.max(1,Math.min(r.height/(worldH/dpr)*.72,1.65)));
-      mapView.s=useful; mapView.tx=(cv.width-cv.width*useful)/2; mapView.ty=(cv.height-cv.height*useful)/2; clampPan();
+      mapView.s=useful; mapView.tx=(cv.width-g.boardW*useful)/2-g.ox*useful; mapView.ty=(cv.height-g.boardH*useful)/2-g.oy*useful; clampPan();
     }
     renderBoard(world);
   }
@@ -1858,7 +1874,7 @@ function renderBoard(w, snap){
   const poly=(pts,fill)=>{ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i][0],pts[i][1]);ctx.closePath();ctx.fillStyle=fill;ctx.fill();};
   // Labels are a separate overlay pass. Drawing them inside the tile loop let a later
   // neighbouring hex paint over the badge, which looked like the number pill was clipped.
-  const valuePills=[];
+  const valuePills=[], armyPills=[];
   // Treat the world as a physical atlas board, not a loose strip of tiles.
   const pad=Math.max(6,cell*.28), radius=Math.max(8,cell*.45), bx=ox-pad, by=oy-pad, bw=boardGeom(w).boardW+pad*2, bh=boardGeom(w).boardH+pad*2;
   ctx.save();ctx.shadowColor=MAPC.boardShadow;ctx.shadowBlur=Math.max(10,cell*.8);ctx.shadowOffsetY=Math.max(5,cell*.35);
@@ -2030,17 +2046,26 @@ function renderBoard(w, snap){
       const hc=hexCenter({cell,ox,oy},g.x,g.y),cx=hc[0],cy=hc[1],kc=factionColor(k.id);
       const size=Math.max(cell*.58,Math.min(cell*.95,cell*.58+Math.min(g.size,12)*cell*.02)),r=size/2;
       ctx.save();ctx.shadowColor=MAPC.unitShadow;ctx.shadowBlur=4;ctx.fillStyle=kc;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle=MAPC.unitRing;ctx.lineWidth=Math.max(1.5,size*.07);ctx.stroke();
-      // Flat unit mark in the same family as the tile icons, plus the headcount.
-      const num=String(g.size),markW=size*.30,gap=size*.06;
-      ctx.font="900 "+Math.max(size*.40,size*.40)+"px Nunito,Segoe UI,sans-serif";
-      const nw=ctx.measureText(num).width,total=markW+gap+nw,sx=cx-total/2,mx=sx+markW/2;
-      ctx.fillStyle=MAPC.unitGlyph;
-      const u=(pts)=>{const s=markW*.9;ctx.beginPath();ctx.moveTo(mx+pts[0][0]*s,cy+pts[0][1]*s);for(let i=1;i<pts.length;i++)ctx.lineTo(mx+pts[i][0]*s,cy+pts[i][1]*s);ctx.closePath();ctx.fill();};
-      if(g.size===1){u([[0,-.6],[.30,-.05],[0,.18],[-.30,-.05]]);ctx.fillRect(mx-markW*.07,cy+markW*.05,markW*.14,markW*.55);}
-      else if(g.size<=3){ctx.save();ctx.translate(mx,cy);for(const a of [-.6,.6]){ctx.save();ctx.rotate(a);ctx.fillRect(-markW*.07,-markW*.42,markW*.14,markW*.84);ctx.restore();}ctx.restore();}
-      else if(g.size<=6){u([[-.48,-.55],[.48,-.55],[.48,.08],[0,.60],[-.48,.08]]);}
-      else{u([[-.55,.45],[.55,.45],[.55,-.12],[.28,.14],[0,-.50],[-.28,.14],[-.55,-.12]]);}
-      ctx.textAlign="left";ctx.fillText(num,sx+markW+gap,cy+.5);ctx.textAlign="center";
+      // Flat faceted sword, same low-poly family as the tile icons. The headcount lives
+      // in a value pill like every other number on the board.
+      {
+        const s=size*.62;
+        ctx.save();ctx.translate(cx,cy);ctx.rotate(Math.PI/4);
+        ctx.fillStyle=MAPC.unitGlyph;
+        ctx.beginPath();ctx.moveTo(0,-s*.68);ctx.lineTo(s*.16,-s*.02);ctx.lineTo(0,s*.10);ctx.closePath();ctx.fill();
+        ctx.fillStyle=MAPC.unitShadow;
+        ctx.beginPath();ctx.moveTo(0,-s*.68);ctx.lineTo(0,s*.10);ctx.lineTo(-s*.16,-s*.02);ctx.closePath();ctx.fill();
+        ctx.fillStyle=MAPC.unitRing;ctx.fillRect(-s*.30,s*.10,s*.60,s*.13);
+        ctx.fillRect(-s*.065,s*.23,s*.13,s*.28);
+        ctx.beginPath();ctx.arc(0,s*.57,s*.11,0,Math.PI*2);ctx.fill();
+        ctx.restore();
+      }
+      {
+        const label=String(g.size),fs=Math.max(7,cell*.26);
+        ctx.font="900 "+fs+"px Nunito,Segoe UI,sans-serif";
+        const tw=ctx.measureText(label).width+cell*.18,th=fs+cell*.14;
+        armyPills.push({label,ink:kc,fs,tw,th,lx:cx-cell*.5+cell*.05,ly:cy+cell*.5-th-cell*.05});
+      }
       // Show an arrow only for an army that actually moved this turn.
       if(g.moving&&g.heading&&(g.heading.dx||g.heading.dy)){
         const ang=Math.atan2(g.heading.dy,g.heading.dx),al=size*.46,aw=size*.26;
@@ -2051,6 +2076,11 @@ function renderBoard(w, snap){
         ctx.restore();
       }
       ctx.restore();    }}
+  }
+  for(const p of armyPills){
+    ctx.font="900 "+p.fs+"px Nunito,Segoe UI,sans-serif";
+    ctx.fillStyle=MAPC.labelBg;ctx.beginPath();if(ctx.roundRect)ctx.roundRect(p.lx,p.ly,p.tw,p.th,Math.max(2,cell*.08));else ctx.rect(p.lx,p.ly,p.tw,p.th);ctx.fill();
+    ctx.fillStyle=p.ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(p.label,p.lx+p.tw/2,p.ly+p.th/2+cell*.01);
   }
   ctx.setTransform(1,0,0,1,0,0);positionMapActions();
   cv.style.cursor=!snap&&pendingInject?"crosshair":mapView.s>1?"grab":"default";
@@ -2130,7 +2160,7 @@ function renderEvents(w){
   const source=(eventView==="highlights"?w.events.filter(e=>important.has(e.type)):w.events).slice(-120).reverse();let lastDay=null,out="";
   for(const ev of source){const day=ev.day||Math.floor((ev.tick||0)/w.cfg.ticksPerDay)+1;if(day!==lastDay){out+='<div class="ev-day">Day '+day+'</div>';lastDay=day;}out+='<div class="ev '+ev.type+(important.has(ev.type)?' important':'')+'"><span class="ev-icon">'+eventIcon(ev.type)+'</span><span class="t">'+(ev.tick!==undefined?'T'+ev.tick:'')+'</span><span class="ev-copy">'+htmlSafe(evText(w,ev))+'</span></div>';}
   box.innerHTML=out||'<div class="empty-feed">No major events yet. Let the match run or use a God mode power.</div>';
-  [...box.querySelectorAll(".ev")].forEach((node,i)=>{const ev=source[i];const id=ev&&(ev.kingdomId??ev.attacker??ev.from??ev.defender??ev.to);if(id!==undefined&&w.kingdoms[id]){node.title="Open "+w.kingdoms[id].name;node.onclick=()=>{selectedKingdom=id;renderEmpires(w);renderInspector();showTab("insp");focusKingdom(id,true);};}});
+  [...box.querySelectorAll(".ev")].forEach((node,i)=>{const ev=source[i];const id=ev&&(ev.kingdomId??ev.attackerId??ev.from??ev.defenderId??ev.to);if(id!==undefined&&w.kingdoms[id]){node.title="Open "+w.kingdoms[id].name;node.onclick=()=>{selectedKingdom=id;renderEmpires(w);renderInspector();showTab("insp");focusKingdom(id,true);};}});
   renderedEventCount=w.events.length;
 }
 function renderInspector(){
@@ -2193,6 +2223,45 @@ function applyReplayIdx(){
   renderAll();
 }
 
+// ---------- tile info ----------
+let tileInfoCell=null;
+function hideTileInfo(){tileInfoCell=null;const el=$("tileInfo");if(el)el.classList.add("hidden");}
+function tileVisible(x,y){
+  if(viewKingdom===null)return true;
+  if(world.grid[y][x].owner===viewKingdom)return true;
+  for(let yy=0;yy<world.cfg.height;yy++)for(let xx=0;xx<world.cfg.width;xx++)if(world.grid[yy][xx].owner===viewKingdom)for(const n of neighbors6(world,xx,yy))if(n[0]===x&&n[1]===y)return true;
+  return false;
+}
+function showTileInfo(x,y){
+  const el=$("tileInfo"); if(!el||!world)return;
+  tileInfoCell={x,y};
+  const close='<button class="ti-close" aria-label="Close">✕</button>';
+  if(!tileVisible(x,y)){
+    el.innerHTML=close+'<div class="ti-title">Uncharted land</div><div class="ti-row">Beyond '+htmlSafe(world.kingdoms[viewKingdom].name)+"'s sight.</div>";
+    el.classList.remove("hidden"); el.querySelector(".ti-close").onclick=hideTileInfo; return;
+  }
+  const g=world.grid[y][x], names={field:"Field",mine:"Mine",forest:"Forest",hill:"Hill",plain:"Plain"}, detail=[];
+  if(g.terrain==="field")detail.push(g.crop===0?"no crop planted":g.crop===1?"sprouting crop · 1":g.crop===2?"growing crop · 2":"ripe crop · 3");
+  if(g.terrain==="mine")detail.push(g.ore>0?g.ore+" ore in the vein":"vein depleted");
+  if(g.terrain==="forest")detail.push("timber stand");
+  if(g.terrain==="hill")detail.push("high ground");
+  if(g.houses>0)detail.push((g.houses>=3?"City":g.houses===2?"Village":"Hut")+" · "+g.houses+"/"+world.cfg.maxHousesPerTile+" houses");
+  if(g.shield>0)detail.push("fortified +"+g.shield);
+  const armies=[];
+  for(const k of world.kingdoms){const n=armyAt(world,k,x,y);if(n>0)armies.push({k,n});}
+  let html=close+'<div class="ti-title">'+htmlSafe(names[g.terrain]||"Plain")+'</div>';
+  if(detail.length)html+='<div class="ti-row">'+htmlSafe(detail.join(" · "))+'</div>';
+  if(g.owner!==null){const k=world.kingdoms[g.owner];html+='<div class="ti-row"><span class="dot" style="background:'+factionColor(g.owner)+'"></span><b>'+htmlSafe(k.name)+'</b></div>';}
+  else html+='<div class="ti-row">Unclaimed land - armies conquer it from the frontier.</div>';
+  for(const a of armies)html+='<div class="ti-row">'+ric("army")+'<span class="dot" style="background:'+factionColor(a.k.id)+'"></span>'+a.n+' · '+htmlSafe(a.k.name)+'</div>';
+  html+='<div class="ti-row" style="color:var(--sun-muted)">hex '+x+','+y+'</div>';
+  if(g.owner!==null)html+='<button class="ti-agent">Open '+htmlSafe(world.kingdoms[g.owner].name)+' ›</button>';
+  el.innerHTML=html; el.classList.remove("hidden");
+  el.querySelector(".ti-close").onclick=hideTileInfo;
+  const ab=el.querySelector(".ti-agent");
+  if(ab)ab.onclick=()=>{const o=world.grid[y][x].owner;if(o===null)return;selectedKingdom=o;renderLeaderboard(world);renderEmpires(world);renderInspector();showTab("insp");setSheet("half");hideTileInfo();};
+}
+
 // ---------- map interaction ----------
 let suppressMapClickUntil=0;
 $("board").addEventListener("click",(e)=>{
@@ -2207,8 +2276,7 @@ $("board").addEventListener("click",(e)=>{
   if(best>cell*.54)return;
   if (pendingInject==="drought"){ injectDrought(world,x-2,y-2,x+2,y+2); pendingInject=null; toast("Drought injected"); renderAll(); saveCurrentMatch(); return; }
   if (pendingInject==="cache"){ if(injectCacheDrop(world,x,y)){pendingInject=null;toast("Food cache dropped");renderAll();saveCurrentMatch();}else toast("Choose an empty, unowned cell"); return; }
-  const o=world.grid[y][x].owner;
-  if (o!==null){ selectedKingdom=o; renderLeaderboard(world); renderEmpires(world); renderInspector(); showTab("insp"); focusKingdom(o,true); setSheet("half"); }
+  showTileInfo(x,y);
 });
 // Genre-standard map gestures: drag to pan, pinch or wheel to zoom, double-tap to refit.
 // During a gesture the already-painted canvas moves on the compositor. Repainting hundreds
@@ -2252,7 +2320,7 @@ $("board").addEventListener("click",(e)=>{
   });
   const up=e=>{if(ptrs.has(e.pointerId)){ptrs.delete(e.pointerId);if(moved)suppressMapClickUntil=performance.now()+300;if(ptrs.size<2)pinch=null;if(ptrs.size===0)commitPreview();}};
   cv.addEventListener("pointerup",up);cv.addEventListener("pointercancel",up);
-  cv.addEventListener("dblclick",e=>{if(!world)return;e.preventDefault();previewBase=null;cv.style.transform="";resetMapView();renderBoard(world);});
+  cv.addEventListener("dblclick",e=>{if(!world)return;e.preventDefault();previewBase=null;cv.style.transform="";hideTileInfo();fitMapView();renderBoard(world);});
   cv.addEventListener("wheel",e=>{
     if(!world)return;e.preventDefault();beginPreview();
     const m=toBacking(e.clientX,e.clientY),ns=Math.min(4,Math.max(1,mapView.s*(e.deltaY<0?1.15:1/1.15)));
@@ -2276,12 +2344,12 @@ function launchConfiguredMatch(){const cfg=readConfig(),models=[$("modelA").valu
 $("quickStart").onclick=launchConfiguredMatch;
 function toast(msg){ const t=$("toast"); t.textContent=msg; t.style.display="block"; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display="none",3200); }
 const overviewBtn=$("overviewBtn");
-$("viewSel").onchange=()=>{viewKingdom=$("viewSel").value==="all"?null:+$("viewSel").value;if(viewKingdom===null){resetMapView();const cv=$("board");if(cv)cv.dataset.mobileViewReady="1";renderBoard(world);}else{const cells=cellsOf(world,viewKingdom),cv=$("board"),g=boardGeom(world);if(cells.length){let ax=0,ay=0;for(const c of cells){ax+=c[0];ay+=c[1];}ax/=cells.length;ay/=cells.length;const target=Math.max(1.35,Math.min(2.15,20/g.cell));mapView.s=target;const hc=hexCenter(g,ax,ay);mapView.tx=cv.width/2-hc[0]*target;mapView.ty=cv.height/2-hc[1]*target;clampPan();}renderBoard(world);}toast(viewKingdom===null?"Viewing the whole world":"Viewing as "+world.kingdoms[viewKingdom].name);};
-if(overviewBtn) overviewBtn.onclick=()=>{ resetMapView(); const cv=$("board"); if(cv)cv.dataset.mobileViewReady="1"; renderBoard(world); toast("Whole world"); };
+$("viewSel").onchange=()=>{viewKingdom=$("viewSel").value==="all"?null:+$("viewSel").value;if(viewKingdom===null){hideTileInfo();fitMapView();renderBoard(world);}else{const cells=cellsOf(world,viewKingdom),cv=$("board"),g=boardGeom(world);if(cells.length){let ax=0,ay=0;for(const c of cells){ax+=c[0];ay+=c[1];}ax/=cells.length;ay/=cells.length;const target=Math.max(1.35,Math.min(2.15,20/g.cell));mapView.s=target;const hc=hexCenter(g,ax,ay);mapView.tx=cv.width/2-hc[0]*target;mapView.ty=cv.height/2-hc[1]*target;clampPan();}renderBoard(world);}toast(viewKingdom===null?"Viewing the whole world":"Viewing as "+world.kingdoms[viewKingdom].name);};
+if(overviewBtn) overviewBtn.onclick=()=>{ hideTileInfo(); fitMapView(); renderBoard(world); toast("Whole world"); };
 $("playBtn").onclick=()=>{ replayData?null:(playing?pause():play()); };
 $("stepBtn").onclick=()=>{ if(!replayData){pause();tickOnce();} };
 $("speedSel").onchange=()=>{ if(playing){pause();play();} };
-$("newBtn").onclick=()=>{ pause(); matchGeneration++; world=null; replayData=null; pendingInject=null; operatorDrawer.classList.remove("show"); showScreen("setup"); };
+$("newBtn").onclick=()=>{ pause(); matchGeneration++; world=null; hideTileInfo(); replayData=null; pendingInject=null; operatorDrawer.classList.remove("show"); showScreen("setup"); };
 $("analyzeBtn").onclick=analyzeMatch;
 $("exportBtn").onclick=()=>{
   if(replayData){
@@ -2319,7 +2387,7 @@ $("loadReplayBtn").onclick=()=>$("replayFile").click();
 $("replayFile").onchange=(e)=>{ const f=e.target.files[0]; if(!f)return;
   f.text().then(t=>{ try{ loadReplay(JSON.parse(t)); }catch(err){ $("setupMsg").textContent="Could not load replay: "+err.message; } finally { e.target.value=""; } }); };
 $("replaySlider").oninput=(e)=>{ replayIdx=+e.target.value; applyReplayIdx(); };
-$("exitReplayBtn").onclick=()=>{ replayData=null; world=null; pause(); $("replaybar").classList.remove("show"); showScreen("setup"); };
+$("exitReplayBtn").onclick=()=>{ replayData=null; world=null; pause(); hideTileInfo(); $("replaybar").classList.remove("show"); showScreen("setup"); };
 document.querySelectorAll("#observe [data-power]").forEach(b=>b.onclick=()=>{const m={drought:"droughtBtn",silence:"silenceBtn",curfew:"curfewBtn",cache:"cacheBtn",mute:"muteBtn"};$(m[b.dataset.power]).click();});
 for (const b of document.querySelectorAll("#tabs button")) b.onclick=()=>{ const wasOn=b.classList.contains("on"); showTab(b.dataset.tab); if(wasOn) setSheet(sheetMode==="peek"?"half":"peek"); else setSheet("half"); };
 (function(){
