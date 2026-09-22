@@ -1990,7 +1990,7 @@ function renderBoard(w, snap){
   if(viewKingdom!==null){
     visible=new Set();
     const ownerAt=(x,y)=>{if(snap){const o=get(x,y,"owners");return o===-1?null:o;}return w.grid[y][x].owner;};
-    for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(ownerAt(x,y)===viewKingdom){visible.add(x+","+y);for(const n of neighbors4(w,x,y))visible.add(n[0]+","+n[1]);}
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(ownerAt(x,y)===viewKingdom){visible.add(x+","+y);for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const n=wrap(w,x+dx,y+dy);visible.add(n[0]+","+n[1]);}}
     ctx.save();ctx.fillStyle=MAPC.symbolInk;ctx.globalAlpha=.88;
     for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(!visible.has(x+","+y))ctx.fillRect(ox+x*cell,oy+y*cell,cell,cell);
     ctx.restore();
