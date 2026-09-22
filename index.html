@@ -675,7 +675,7 @@
   #overviewBtn{display:none}
   @media(max-width:759px){
     #app{position:relative}
-    #topbar{height:48px;min-height:48px;flex:0 0 48px;padding:4px 6px;grid-template-columns:44px 38px 52px 1fr 52px 40px;gap:4px;border-bottom-width:1px;box-shadow:none}
+    #topbar{height:48px;min-height:48px;flex:0 0 48px;padding:4px 6px;grid-template-columns:44px 38px 52px minmax(0,1fr) 52px 40px;gap:4px;border-bottom-width:1px;box-shadow:none}#topbar .clock{min-width:0}
     #topbar button,#topbar select{height:38px;min-height:38px;border-radius:10px;padding:0 5px}
     #topbar #playBtn{border-width:1px;box-shadow:none}
     #topbar .clock{font-size:9px;line-height:1.05}
