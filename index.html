@@ -1688,7 +1688,7 @@ $("loadReplayBtn").onclick=()=>$("replayFile").click();
 $("replayFile").onchange=(e)=>{ const f=e.target.files[0]; if(!f)return;
   f.text().then(t=>{ try{ loadReplay(JSON.parse(t)); }catch(err){ $("setupMsg").textContent="Could not load replay: "+err.message; } finally { e.target.value=""; } }); };
 $("replaySlider").oninput=(e)=>{ replayIdx=+e.target.value; applyReplayIdx(); };
-$("exitReplayBtn").onclick=()=>{ replayData=null; $("replaybar").classList.remove("show"); $("app").classList.add("hidden"); $("setup").classList.remove("hidden"); };
+$("exitReplayBtn").onclick=()=>{ replayData=null; world=null; pause(); $("replaybar").classList.remove("show"); showScreen("setup"); };
 document.querySelectorAll("#observe [data-power]").forEach(b=>b.onclick=()=>{const m={drought:"droughtBtn",silence:"silenceBtn",curfew:"curfewBtn",cache:"cacheBtn",mute:"muteBtn"};$(m[b.dataset.power]).click();});
 for (const b of document.querySelectorAll("#tabs button")) b.onclick=()=>{ const wasOn=b.classList.contains("on"); showTab(b.dataset.tab); if(wasOn) setSheet(sheetMode==="peek"?"half":"peek"); else setSheet("half"); };
 (function(){
