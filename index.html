@@ -1467,7 +1467,13 @@ const LLM = {
     if (!this.key) throw new Error("no api key");
     const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),this.timeoutMs);
     try{
-      const res=await fetch(this.base.replace(/\/$/,"")+"/chat/completions",{
+      const base=this.base.replace(/\/$/,"");
+      // Vercel AI Gateway omits CORS headers on some error responses (notably 401),
+      // which browsers surface as an opaque NetworkError. Route the default gateway
+      // through our same-origin Pages Function so callers receive the real HTTP error.
+      const isVercelGateway=/^https:\/\/ai-gateway\.vercel\.sh\/v1$/i.test(base);
+      const endpoint=isVercelGateway?"/api/chat":base+"/chat/completions";
+      const res=await fetch(endpoint,{
         method:"POST",signal:ctrl.signal,
         headers:{"Content-Type":"application/json","Authorization":"Bearer "+this.key},
         body:JSON.stringify({model,temperature:this.temperature,response_format:{type:"json_object"},
@@ -2442,6 +2448,7 @@ DB.open().then(async ()=>{
 </script>
 </body>
 </html>
+
 
 
 
