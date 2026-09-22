@@ -784,6 +784,8 @@ function resolveCombat(world,attackerId,cell,note){
   if(pA>pD){
     const dLoss=Math.min(defending,Math.max(1,Math.ceil(attacking/2)));loseArmy(world,D,dLoss,cell[0],cell[1]);
     g.shield=0;g.owner=attackerId;if(attackGroup){attackGroup.x=cell[0];attackGroup.y=cell[1];attackGroup.intent="occupied enemy tile";}normalizeArmyGroups(world,A);
+    // Losing a settlement can lower population capacity immediately. Do not leave an over-cap kingdom until Dawn.
+    D.pop=Math.min(D.pop,popCap(world,D));D.army=Math.min(D.army,Math.min(cfg.armyCap,D.pop));normalizeArmyGroups(world,D);syncSettlementPop(world,D);
     loot=Math.min(cfg.raidLootMax,D.food);D.food-=loot;A.food=Math.min(cfg.foodCap,A.food+loot);winnerId=attackerId;
   }else if(pD>pA){loseArmy(world,A,1,attackGroup?.x,attackGroup?.y);winnerId=defenderId;
   }else{loseArmy(world,A,1,attackGroup?.x,attackGroup?.y);loseArmy(world,D,1,cell[0],cell[1]);if(A.food>0)A.food-=1;if(D.food>0)D.food-=1;winnerId=-1;}
