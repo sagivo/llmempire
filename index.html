@@ -1759,6 +1759,7 @@ function renderBoard(w, snap){
   }
   ctx.setTransform(mapView.s,0,0,mapView.s,mapView.tx,mapView.ty);
   const {cell,ox,oy}=boardGeom(w), W=w.cfg.width, H=w.cfg.height;
+  const dispCss=cell*mapView.s*(cv.clientWidth?cv.clientWidth/cv.width:1);
   const get=(x,y,f)=> snap ? snap[f][y*W+x] : null;
   const poly=(pts,fill)=>{ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i][0],pts[i][1]);ctx.closePath();ctx.fillStyle=fill;ctx.fill();};
   // Treat the world as a physical atlas board, not a loose strip of tiles.
@@ -1817,7 +1818,7 @@ function renderBoard(w, snap){
       poly([[cx-cell*.26,py+cell*.44],[cx,py+cell*.20],[cx+cell*.26,py+cell*.44]],roof);
       if(isCity){ctx.fillStyle=MAPC.buildingWall;ctx.fillRect(cx+cell*.10,py+cell*.30,cell*.13,cell*.40);poly([[cx+cell*.085,py+cell*.32],[cx+cell*.165,py+cell*.16],[cx+cell*.245,py+cell*.32]],roof);}
       // Population label only when zoomed in enough to read it - overview stays clean.
-      if(cell*mapView.s>=30){
+      if(dispCss>=28){
         const label=(isCity?"CITY ":"VILLAGE ")+st.pop+"/"+st.cap,fs=Math.max(7,cell*.16);ctx.font="900 "+fs+"px Nunito,Segoe UI,sans-serif";const tw=ctx.measureText(label).width+cell*.12,lx=cx-tw/2,ly=py+cell*.76;
         ctx.fillStyle=MAPC.labelBg;ctx.beginPath();if(ctx.roundRect)ctx.roundRect(lx,ly,tw,fs+cell*.10,Math.max(2,cell*.05));else ctx.rect(lx,ly,tw,fs+cell*.10);ctx.fill();ctx.fillStyle=MAPC.labelText;ctx.textAlign="center";ctx.textBaseline="top";ctx.fillText(label,cx,ly+cell*.035);
       }
