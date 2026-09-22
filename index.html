@@ -216,9 +216,9 @@
   #turnViz{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
   .map-action{--kc:#63d8ff;position:absolute;z-index:8;width:30px;height:30px;margin:-15px 0 0 -15px;display:grid;place-items:center;pointer-events:none;filter:drop-shadow(0 2px 4px #02050a) drop-shadow(0 0 7px color-mix(in srgb,var(--kc) 75%,transparent));animation:mapAction .9s cubic-bezier(.18,.8,.28,1) both}
   .map-action::before{content:"";position:absolute;inset:2px;border:1px solid var(--kc);border-radius:50%;animation:actionRing .9s ease-out both}
-  .map-action .map-action-icon{position:relative;font-size:20px;line-height:1;animation:actionPop .55s cubic-bezier(.2,.9,.25,1.25) both}
+  .map-action .map-action-icon{position:relative;width:27px;height:27px;display:grid;place-items:center;border:2px solid #fff1cf;border-radius:7px;background:var(--kc);font-size:15px;line-height:1;animation:actionPop .55s cubic-bezier(.2,.9,.25,1.25) both;box-shadow:0 2px 0 rgba(45,38,26,.55)}
   .map-action .map-action-who{position:absolute;right:-3px;top:-3px;min-width:14px;height:14px;padding:0 3px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.75);border-radius:9px;background:var(--kc);color:#07101d;font:900 8px/1 system-ui;box-shadow:0 1px 4px #000}
-  .map-action .map-action-label{position:absolute;top:29px;left:50%;transform:translateX(-50%);color:#f4f8ff;font:800 8px/1 system-ui;letter-spacing:.03em;text-transform:uppercase;white-space:nowrap;text-shadow:0 1px 3px #000,0 0 5px #000}
+  .map-action .map-action-label{position:absolute;top:31px;left:50%;transform:translateX(-50%);padding:3px 5px;border:1px solid #fff1cf;border-radius:5px;background:var(--kc);color:#fff8e7;font:900 8px/1 system-ui;letter-spacing:.03em;text-transform:uppercase;white-space:nowrap;text-shadow:0 1px 2px rgba(30,20,12,.8);box-shadow:0 2px 3px rgba(30,20,12,.45)}
   @keyframes actionPop{0%{transform:scale(.2) rotate(-18deg)}58%{transform:scale(1.28) rotate(5deg)}100%{transform:none}}
   @keyframes actionRing{0%{opacity:0;transform:scale(.35)}22%{opacity:1}100%{opacity:0;transform:scale(2.15)}}
   @keyframes mapAction{0%{opacity:0;transform:translateY(5px) scale(.7)}22%,78%{opacity:1;transform:none}100%{opacity:.94;transform:none}}
@@ -556,6 +556,7 @@ const CONFIG_SCHEMA = [
 const END_MODES = ["dominion","last_stand","timed","open"];
 const KINGDOM_NAMES = ["Aldermark","Brevia","Corvane","Duskhold","Eastmere","Fenreach","Galloway","Hightower","Ismere","Jorvik","Kestrel","Lornwick","Maradir","Norhelm","Ostmark","Pellinor","Quillon","Ravencourt","Solmere","Thornfield","Ulstead","Veyra","Westhold","Yarrow"];
 const KINGDOM_COLORS = ["#e05d5d","#4da3ff","#4caf7d","#e0a94f","#b07de0","#5ad1d1","#e07fb8","#8bc34a","#ff8a65","#7e94e8","#c0ca5a","#5aa9e6","#d4a05a","#9ccc65","#ba68c8","#4db6ac","#f06292","#aed581","#9575cd","#4dd0e1","#ffb74d","#a1887f","#90a4ae","#dce775"];
+const factionColor=id=>KINGDOM_COLORS[((Number(id)||0)%KINGDOM_COLORS.length+KINGDOM_COLORS.length)%KINGDOM_COLORS.length];
 const STOCK_GOALS = ["Raider","Steward","Schemer","Merchant","Warlord","Hermit"];
 
 function defaultConfig(){
@@ -585,7 +586,7 @@ function createWorld(cfg, seed){
   }
   const kingdoms = caps.map((c,i)=>{
     grid[c[1]][c[0]].owner=i;
-    return { id:i, name:KINGDOM_NAMES[i%KINGDOM_NAMES.length]+" #"+(i+1), color:KINGDOM_COLORS[i%KINGDOM_COLORS.length],
+    return { id:i, name:KINGDOM_NAMES[i%KINGDOM_NAMES.length]+" #"+(i+1), color:factionColor(i),
       alive:true, pop:cfg.startPop, army:cfg.startArmy, food:cfg.startFood, stamina:cfg.startStamina,
       goal:STOCK_GOALS[i%STOCK_GOALS.length], selfNote:"", bulletin:"", inbox:[], outbox:[],
       talkModel:"mock", actModel:"mock", mutedUntil:0, pendingOffers:[] };
@@ -1136,7 +1137,7 @@ function buildAgentOverrides(){
   for(let i=0;i<count;i++){
     const row=document.createElement("label"); row.className="agent-model";
     const name=document.createElement("span"), dot=document.createElement("i"), input=document.createElement("input");
-    dot.className="dot"; dot.style.background=KINGDOM_COLORS[i%KINGDOM_COLORS.length];
+    dot.className="dot"; dot.style.background=factionColor(i);
     name.append(dot,document.createTextNode("Agent #"+(i+1)));
     input.type="text"; input.setAttribute("list","modelOptions"); input.placeholder="Use default"; input.value=saved[i]||"";
     row.append(name,input); host.appendChild(row);
@@ -1200,7 +1201,7 @@ function showTurnActions(w,events){
   const acts=events.filter(e=>e.type==="Act"); if(!acts.length)return;
   const viz=$("turnViz"), map=$("mapActions");
   viz.textContent=acts.map(e=>{const k=w.kingdoms[e.kingdomId],v=ACTION_VISUALS[e.act]||["•",e.act];return "Player "+(k.id+1)+" "+k.name+": "+v[1];}).join(". ");
-  map.innerHTML=acts.map(e=>{const k=w.kingdoms[e.kingdomId],a=kingdomAnchor(w,k.id),v=ACTION_VISUALS[e.act]||["•",e.act];if(!a)return "";return '<span class="map-action" data-ax="'+a[0]+'" data-ay="'+a[1]+'" title="'+htmlSafe(k.name+' · '+v[1])+'" style="--kc:'+k.color+'"><span class="map-action-icon">'+v[0]+'</span><span class="map-action-who">'+(k.id+1)+'</span><span class="map-action-label">'+htmlSafe(v[1])+'</span></span>';}).join("");
+  map.innerHTML=acts.map(e=>{const k=w.kingdoms[e.kingdomId],a=kingdomAnchor(w,k.id),v=ACTION_VISUALS[e.act]||["•",e.act];if(!a)return "";return '<span class="map-action" data-ax="'+a[0]+'" data-ay="'+a[1]+'" title="'+htmlSafe(k.name+' · '+v[1])+'" style="--kc:'+factionColor(k.id)+'"><span class="map-action-icon">'+v[0]+'</span><span class="map-action-who">'+(k.id+1)+'</span><span class="map-action-label">'+htmlSafe(v[1])+'</span></span>';}).join("");
   positionMapActions();
   map.getAnimations({subtree:true}).forEach(a=>{a.cancel();a.play()});
 }
@@ -1292,7 +1293,7 @@ function renderBoard(w, snap){
     let owner,crop,shield;
     if(snap){owner=get(x,y,"owners");crop=get(x,y,"crops");shield=get(x,y,"shields");owner=owner===-1?null:owner;}
     else{const g=w.grid[y][x];owner=g.owner;crop=g.crop;shield=g.shield;}
-    const base=owner===null?"#8db65b":(snap?KINGDOM_COLORS[owner%KINGDOM_COLORS.length]:w.kingdoms[owner].color);
+    const base=owner===null?"#8db65b":factionColor(owner);
     // beveled toy tile: one shared visual grammar everywhere
     ctx.fillStyle=base;ctx.fillRect(px+.7,py+.7,cell-1.4,cell-1.4);
     poly([[px+1,py+1],[px+cell-1,py+1],[px+cell-1,py+cell*.24],[px+1,py+cell*.55]],"rgba(255,255,255,.16)");
@@ -1323,11 +1324,12 @@ function renderBoard(w, snap){
     for(const k of w.kingdoms){if(!k.alive)continue;const a=kingdomAnchor(w,k.id);if(!a)continue;
       const cx=ox+a[0]*cell+cell/2,cy=oy+a[1]*cell+cell/2,r=Math.max(7,Math.min(cell*.29,15));
       // faction standard: square heraldic badge shared with the UI chips
-      ctx.fillStyle="rgba(45,38,26,.35)";ctx.fillRect(cx-r+2,cy-r+3,r*2,r*2);
-      ctx.fillStyle=k.color;ctx.fillRect(cx-r,cy-r,r*2,r*2);
-      poly([[cx-r,cy-r],[cx+r,cy-r],[cx+r,cy-r*.25],[cx-r,cy+r*.25]],"rgba(255,255,255,.22)");
-      ctx.strokeStyle="#fff1cf";ctx.lineWidth=1.5;ctx.strokeRect(cx-r+.5,cy-r+.5,r*2-1,r*2-1);
-      ctx.fillStyle="#fff8e7";ctx.font="900 "+Math.max(9,r*.95)+"px Nunito,Segoe UI,sans-serif";ctx.fillText(String(k.army),cx,cy+.5);
+      const kc=factionColor(k.id), size=Math.max(15,Math.min(30,r*1.7+k.army*.65)),bx=cx-size/2,by=cy-size/2;
+      ctx.fillStyle="rgba(45,38,26,.35)";ctx.fillRect(bx+2,by+3,size,size);
+      ctx.fillStyle=kc;ctx.fillRect(bx,by,size,size);
+      poly([[bx,by],[bx+size,by],[bx+size,by+size*.28],[bx,by+size*.48]],"rgba(255,255,255,.22)");
+      ctx.strokeStyle="#fff1cf";ctx.lineWidth=Math.max(1.5,size*.07);ctx.strokeRect(bx+.5,by+.5,size-1,size-1);
+      ctx.fillStyle="#fff8e7";ctx.font="900 "+Math.max(11,size*.47)+"px Nunito,Segoe UI,sans-serif";ctx.fillText("⚔ "+String(k.army),cx,cy+.5);
     }
   }
   ctx.setTransform(1,0,0,1,0,0);positionMapActions();
@@ -1349,7 +1351,7 @@ function renderLeaderboard(w){
   let html="<table><thead><tr><th>Kingdom</th><th>Land</th><th>Pop</th><th>Army</th><th>Model</th></tr></thead><tbody>";
   for (const {k,land} of rows){
     html+='<tr data-k="'+k.id+'" class="'+(k.alive?"":"dead")+(selectedKingdom===k.id?" sel":"")+'">'
-      +'<td><span class="dot" style="background:'+k.color+'"></span>'+k.name+'</td>'
+      +'<td><span class="dot" style="background:'+factionColor(k.id)+'"></span>'+k.name+'</td>'
       +"<td>"+land+"</td><td>"+k.pop+"</td><td>"+k.army+"</td><td>"+(k.actModel==="mock"?"mock":k.actModel.split("/")[1]||k.actModel)+"</td></tr>";
   }
   $("lb").innerHTML=html+"</tbody></table>";
@@ -1358,8 +1360,8 @@ function renderLeaderboard(w){
 function evText(w,ev){
   const kn=(id)=>id>=0?("#"+(id+1)):"-";
   switch(ev.type){
-    case "Bulletin": return kn(ev.kingdomId)+" broadcasts: "+ev.text;
-    case "Letter": return kn(ev.from)+" -> "+kn(ev.to)+": "+ev.text;
+    case "Bulletin": { const text=String(ev.text||"").trim(),m=text.match(/^#(\d+)\s*[:\-–—]?\s*(.*)$/); return kn(ev.kingdomId)+"->"+(m?("#"+m[1]+" "+m[2]):("all "+text)); }
+    case "Letter": return kn(ev.from)+"->"+kn(ev.to)+" "+ev.text;
     case "TalkTruncated": return kn(ev.kingdomId)+" speech truncated to "+ev.truncatedText;
     case "Act": return kn(ev.kingdomId)+" "+ev.act+(ev.target!==null&&ev.target!==undefined?" -> "+kn(ev.target):"")+(ev.note?" ("+ev.note+")":"");
     case "ActRejected": return kn(ev.kingdomId)+" tried "+ev.attemptedAct+" - rejected: "+ev.reason;
@@ -1379,7 +1381,7 @@ function renderEmpires(w){
   let html="";
   for (const {k,land} of rows){
     const glyph=k.army<=0?"\u25CB":k.army===1?"\u265F":k.army<=3?"\u2694":k.army<=6?"\u265C":"\u265B";
-    html+='<div class="ecard'+(k.alive?"":" dead")+(selectedKingdom===k.id?" sel":"")+'" data-k="'+k.id+'" style="--kc:'+k.color+'">'
+    html+='<div class="ecard'+(k.alive?"":" dead")+(selectedKingdom===k.id?" sel":"")+'" data-k="'+k.id+'" style="--kc:'+factionColor(k.id)+'">'
       +'<span class="edot">'+glyph+'</span>'
       +'<span class="emeta"><b>'+htmlSafe(k.name)+'</b><i>\u2694'+k.army+' \u00B7 \u25CF'+k.pop+' \u00B7 \u25A6'+land+'</i></span></div>';
   }
@@ -1400,7 +1402,7 @@ function renderInspector(){
   const speech=world.events.filter(e=>(e.type==="Bulletin"&&e.kingdomId===k.id)||(e.type==="Letter"&&(e.from===k.id||e.to===k.id))).slice(-5).reverse();
   const acts=world.events.filter(e=>e.type==="Act"&&e.kingdomId===k.id).slice(-4).reverse();
   const latest=acts[0],v=latest?(ACTION_VISUALS[latest.act]||["•",latest.act]):["…","Waiting"];
-  el.innerHTML='<div class="agent-hero"><h2><span class="dot" style="background:'+k.color+'"></span>'+htmlSafe(k.name)+(k.alive?'':' (fallen)')+'</h2><div class="agent-stats"><span>👥 '+k.pop+' pop</span><span>⚔ '+k.army+' army</span><span>▦ '+land+' land</span><span>🌾 '+k.food+' food</span></div></div>'+
+  el.innerHTML='<div class="agent-hero"><h2><span class="dot" style="background:'+factionColor(k.id)+'"></span>'+htmlSafe(k.name)+(k.alive?'':' (fallen)')+'</h2><div class="agent-stats"><span>👥 '+k.pop+' pop</span><span>⚔ '+k.army+' army</span><span>▦ '+land+' land</span><span>🌾 '+k.food+' food</span></div></div>'+
   '<div class="agent-section"><label>Current plan</label><p>'+(htmlSafe((()=>{const note=k.selfNote||k.goal||"Watching the board before committing.";const m=note.match(/plan:([^|]+)/);return m?m[1].trim().replace(/^./,c=>c.toUpperCase()):note;})()))+'</p></div>'+
   '<div class="agent-section"><label>Latest action</label><div class="agent-action"><span>'+v[0]+'</span><span><b>'+htmlSafe(v[1])+'</b>'+(latest?.note?'<br>'+htmlSafe(latest.note):'')+'</span></div></div>'+
   '<div class="agent-section"><label>Recent conversation</label>'+(speech.length?speech.map(e=>'<div class="agent-action"><span>💬</span><span>'+htmlSafe(e.type==="Letter"?('#'+(e.from+1)+' → #'+(e.to+1)+': '+e.text):e.text)+'</span></div>').join(''):'<p>No messages yet.</p>')+'</div>'+
@@ -1502,95 +1504,4 @@ $("board").addEventListener("click",(e)=>{
   cv.addEventListener("dblclick",e=>{ if(!world)return; e.preventDefault(); resetMapView(); renderBoard(world); });
   cv.addEventListener("wheel",e=>{
     if(!world)return; e.preventDefault();
-    const m=toBacking(e.clientX,e.clientY);
-    const ns=Math.min(4,Math.max(1,mapView.s*(e.deltaY<0?1.15:1/1.15)));
-    mapView.tx=m[0]-(m[0]-mapView.tx)*(ns/mapView.s);
-    mapView.ty=m[1]-(m[1]-mapView.ty)*(ns/mapView.s);
-    mapView.s=ns; clampPan(); renderBoard(world);
-  },{passive:false});
-})();
-
-// ---------- wiring ----------
-const operatorDrawer=$("operatorDrawer");
-if(operatorDrawer){["analyzeBtn","exportBtn","newBtn"].forEach(id=>operatorDrawer.appendChild($(id)));const ab=document.querySelector("#topbar .aboutOpen");if(ab)operatorDrawer.appendChild(ab);}
-$("toolsBtn").onclick=()=>{operatorDrawer.classList.toggle("show");$("toolsBtn").classList.toggle("open",operatorDrawer.classList.contains("show"));};
-operatorDrawer.addEventListener("click",()=>{operatorDrawer.classList.remove("show");$("toolsBtn").classList.remove("open");});
-$("highlightsBtn").onclick=()=>{eventView="highlights";$("highlightsBtn").classList.add("on");$("allEventsBtn").classList.remove("on");renderEvents(world);};
-$("allEventsBtn").onclick=()=>{eventView="all";$("allEventsBtn").classList.add("on");$("highlightsBtn").classList.remove("on");renderEvents(world);};
-for(const group of document.querySelectorAll("#setup .cols>div")){const h=group.querySelector("h2");if(h)h.onclick=()=>{if(matchMedia("(max-width:759px)").matches)group.classList.toggle("collapsed");};}
-$("homeSettings").onclick=()=>showScreen("setup");
-$("configureMatch").onclick=()=>showScreen("setup");
-$("settingsBack").onclick=()=>showScreen("home");
-$("quickStart").onclick=()=>{ const cfg=readConfig(); newMatch(cfg); };
-function toast(msg){ const t=$("toast"); t.textContent=msg; t.style.display="block"; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display="none",3200); }
-$("playBtn").onclick=()=>{ replayData?null:(playing?pause():play()); };
-$("stepBtn").onclick=()=>{ if(!replayData){pause();tickOnce();} };
-$("speedSel").onchange=()=>{ if(playing){pause();play();} };
-$("newBtn").onclick=()=>{ pause(); world=null; replayData=null; pendingInject=null; operatorDrawer.classList.remove("show"); showScreen("setup"); };
-$("analyzeBtn").onclick=analyzeMatch;
-$("exportBtn").onclick=()=>{
-  const blob=new Blob([JSON.stringify(exportData())],{type:"application/json"});
-  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
-  a.download="commons-day"+world.day+"-tick"+world.tick+".commons.json"; a.click();
-  toast("Exported "+world.events.length+" events, "+world.snapshots.length+" snapshots");
-};
-$("droughtBtn").onclick=()=>{ pendingInject="drought"; toast("Click the map: drought clears crops in a 5x5 box"); };
-$("cacheBtn").onclick=()=>{ pendingInject="cache"; toast("Click an unowned cell to drop a level-3 crop"); };
-$("silenceBtn").onclick=()=>{ injectSilence(world,8); toast("Radio silence for 8 ticks"); renderAll(); };
-$("curfewBtn").onclick=()=>{ injectCurfew(world,16); toast("Curfew: raids disabled for 16 ticks"); renderAll(); };
-$("muteBtn").onclick=()=>{ if(selectedKingdom===null){toast("Select a kingdom first (leaderboard)");return;} injectMute(world,selectedKingdom,16); toast(world.kingdoms[selectedKingdom].name+" muted for 16 ticks"); renderAll(); };
-$("savePresetBtn").onclick=saveLLMPreset;
-$("loadPresetBtn").onclick=loadLLMPreset;
-$("deletePresetBtn").onclick=deleteLLMPreset;
-$("llmPreset").onchange=()=>{const n=$("llmPreset").value;if(n)$("presetName").value=n;};
-$("toggleKey").onclick=()=>{ const key=$("apiKey"); const reveal=key.type==="password"; key.type=reveal?"text":"password"; $("toggleKey").textContent=reveal?"Hide":"Show"; };
-document.addEventListener("change",e=>{ if(e.target.id==="cfg_playerCount") buildAgentOverrides(); });
-$("modelA").addEventListener("change",()=>{ if($("modelA").value.trim()==="mock") $("setupMsg").textContent="Mock mode runs locally with no key."; else $("setupMsg").textContent=$("apiKey").value.trim()?"Model ready.":"Add an API key to use this model."; });
-$("startBtn").onclick=()=>{ const cfg=readConfig(); newMatch(cfg); };
-$("loadReplayBtn").onclick=()=>$("replayFile").click();
-$("replayFile").onchange=(e)=>{ const f=e.target.files[0]; if(!f)return;
-  f.text().then(t=>{ try{ loadReplay(JSON.parse(t)); }catch(err){ $("setupMsg").textContent="Could not load replay: "+err.message; } finally { e.target.value=""; } }); };
-$("replaySlider").oninput=(e)=>{ replayIdx=+e.target.value; applyReplayIdx(); };
-$("exitReplayBtn").onclick=()=>{ replayData=null; $("replaybar").classList.remove("show"); $("app").classList.add("hidden"); $("setup").classList.remove("hidden"); };
-document.querySelectorAll("#observe [data-power]").forEach(b=>b.onclick=()=>{const m={drought:"droughtBtn",silence:"silenceBtn",curfew:"curfewBtn",cache:"cacheBtn",mute:"muteBtn"};$(m[b.dataset.power]).click();});
-for (const b of document.querySelectorAll("#tabs button")) b.onclick=()=>{ const wasOn=b.classList.contains("on"); showTab(b.dataset.tab); if(wasOn) setSheet(sheetMode==="peek"?"half":"peek"); else setSheet("half"); };
-(function(){
-  const grab=$("sheetGrab"), side=$("side"); if(!grab||!side)return;
-  let drag=null;
-  grab.style.touchAction="none";
-  grab.addEventListener("pointerdown",e=>{ if(!matchMedia("(max-width:759px)").matches)return; grab.setPointerCapture(e.pointerId); drag={y:e.clientY,h:side.getBoundingClientRect().height,moved:false}; side.style.transition="none"; });
-  grab.addEventListener("pointermove",e=>{ if(!drag)return; const dy=e.clientY-drag.y; if(Math.abs(dy)>4)drag.moved=true; const mainH=$("main").getBoundingClientRect().height; const h=Math.min(mainH*0.72,Math.max(96,drag.h-dy)); side.style.flexBasis=h+"px"; layoutBoard(); });
-  const endDrag=()=>{ if(!drag)return; side.style.transition=""; side.style.flexBasis=""; if(!drag.moved){ setSheet(sheetMode==="peek"?"half":"peek"); } else { setSheet(side.getBoundingClientRect().height<240?"peek":"half"); } drag=null; };
-  grab.addEventListener("pointerup",endDrag); grab.addEventListener("pointercancel",endDrag);
-})();
-window.addEventListener("resize",layoutBoard);
-window.addEventListener("orientationchange",()=>setTimeout(layoutBoard,120));
-$("side").addEventListener("transitionend",e=>{ if(e.propertyName==="flex-basis")layoutBoard(); });
-
-document.addEventListener("keydown",(e)=>{ if(e.code==="Space"&&world&&!replayData&&$("app").classList.contains("hidden")===false){ e.preventDefault(); playing?pause():play(); } });
-
-buildSetup();
-DB.open().then(async ()=>{
-  const saved=await DB.latest();
-  // Do not let a slow local-storage restore overwrite a match the user just started.
-  if(world || $("home").classList.contains("hidden")) return;
-  if (saved && saved.data && saved.data.snapshots && saved.data.snapshots.length){
-    $("setupMsg").textContent="Resumed last match from local telemetry ("+saved.data.snapshots.length+" ticks logged).";
-    loadReplay(saved.data); replayData=null; $("replaybar").classList.remove("show");
-    // resume as live world: rebuild deterministically from seed+config, then fast-forward
-    const data=saved.data; world=createWorld(data.config,data.seed);
-    // restore roster from snapshot meta
-    world.kingdoms.forEach((k,i)=>{ const s=data.snapshots[0].kingdoms[i]; k.goal=s.goal; k.talkModel=s.talkModel; k.actModel=s.actModel; });
-    pause();
-    // Restore the recorded state exactly. Re-simulating would corrupt matches that used real models.
-    restoreSnapshot(data.snapshots[data.snapshots.length-1]);
-    world.events=data.events; world.snapshots=data.snapshots; world.usage=data.usage||world.usage; world.aiAnalysis=data.aiAnalysis||null;
-    renderedEventCount=0; $("events").innerHTML=""; renderAll();
-    toast(world.over?"Restored finished match":"Restored match - press Play to continue");
-  }
-});
-</script>
-</body>
-</html>
-
-
+    const 
