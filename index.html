@@ -452,6 +452,38 @@
   #mapstage:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(135deg,rgba(255,245,205,.13),transparent 38%,rgba(16,61,79,.10));mix-blend-mode:soft-light}
   #board{background:#4d8498!important}
 
+  /* Palette lock: every UI surface uses this Sunstone Atlas set. */
+  :root{
+    --sun-paper:#f8edce;--sun-paper-soft:#fff5d7;--sun-paper-mid:#ead5a4;--sun-paper-deep:#d9c188;
+    --sun-ink:#273b3b;--sun-muted:#665d4c;--sun-edge:#967643;
+    --sun-orange:#ed9427;--sun-orange-dark:#985418;--sun-green:#438c59;
+    --sun-sea:#4f879b;--sun-sea-deep:#173149;--sun-danger:#a23e35;
+  }
+  body,#home,#about,#setup,#app,#side,#sidebody{color:var(--sun-ink)}
+  button,select,input[type=text],input[type=number],input[type=password],
+  #operatorDrawer button,#replaybar button,#eventMode button,.observe-powers button{
+    background:var(--sun-paper-soft)!important;color:var(--sun-ink)!important;
+    border-color:var(--sun-edge)!important;text-shadow:none!important;
+  }
+  button.primary,#topbar #playBtn,.watch-btn{
+    background:var(--sun-orange)!important;color:var(--sun-ink)!important;
+    border-color:var(--sun-orange-dark)!important;
+  }
+  button:disabled,select:disabled{background:var(--sun-paper-mid)!important;color:var(--sun-muted)!important;opacity:.62}
+  #operatorDrawer{background:var(--sun-paper-mid)!important;border:2px solid var(--sun-edge)!important}
+  #operatorDrawer button{font-weight:900!important;box-shadow:0 2px 0 var(--sun-edge)!important}
+  #topbar,.about-head,.settings-head,#tabs,#replaybar{color:var(--sun-ink)!important}
+  #tabs button,#topbar button,#topbar select{color:var(--sun-ink)!important}
+  #tabs button.on,#eventMode button.on{color:var(--sun-ink)!important;background:var(--sun-paper-deep)!important}
+  .note,label,p,.story-detail,.ev .t,.observe-note,.analysis-empty,#analysisStatus{color:var(--sun-muted)!important}
+  h1,h2,h3,strong,b,.story-title,.ecard .emeta b{color:var(--sun-ink)}
+  #toast{background:var(--sun-ink)!important;color:var(--sun-paper-soft)!important}
+  @media(max-width:759px){
+    #topbar #stepBtn:before,#topbar #toolsBtn:before{color:var(--sun-ink)!important}
+    #topbar .clock{color:var(--sun-ink)!important}
+    #operatorDrawer{background:var(--sun-paper-mid)!important;box-shadow:0 12px 30px rgba(39,59,59,.28)}
+  }
+
 </style>
 </head>
 <body>
@@ -655,7 +687,7 @@ const CONFIG_SCHEMA = [
 ];
 const END_MODES = ["dominion","last_stand","timed","open"];
 const KINGDOM_NAMES = ["Aldermark","Brevia","Corvane","Duskhold","Eastmere","Fenreach","Galloway","Hightower","Ismere","Jorvik","Kestrel","Lornwick","Maradir","Norhelm","Ostmark","Pellinor","Quillon","Ravencourt","Solmere","Thornfield","Ulstead","Veyra","Westhold","Yarrow"];
-const KINGDOM_COLORS = ["#d93f4c","#287fd2","#16856b","#e29a22","#7e55b8","#008da8","#c94f91","#6c922b","#e46435","#4e5fc4","#9a9e22","#2476a8","#bd6d24","#4f8d35","#9a47ad","#087f78","#ce3e76","#719c46","#6650ad","#008b9e","#d98221","#80654e","#5c7480","#96a52d"];
+const KINGDOM_COLORS = ["#d93f4c","#287fd2","#6936c7","#e29a22","#7e55b8","#008da8","#c94f91","#6c922b","#e46435","#4e5fc4","#9a9e22","#2476a8","#bd6d24","#4f8d35","#9a47ad","#087f78","#ce3e76","#719c46","#6650ad","#008b9e","#d98221","#80654e","#5c7480","#96a52d"];
 const factionColor=id=>KINGDOM_COLORS[((Number(id)||0)%KINGDOM_COLORS.length+KINGDOM_COLORS.length)%KINGDOM_COLORS.length];
 const STOCK_GOALS = ["Raider","Steward","Schemer","Merchant","Warlord","Hermit"];
 
@@ -1858,7 +1890,6 @@ DB.open().then(async ()=>{
 </script>
 </body>
 </html>
-
 
 
 
