@@ -458,6 +458,13 @@
   }
 
 
+  /* UX pass: controls that visibly do what they promise. */
+  .watch-btn.watching{background:var(--leaf-2)!important;border-color:var(--leaf-3)!important;color:var(--foam-1)!important}
+  .ev[title]{cursor:pointer}.ev[title]:active{transform:translateY(1px)}
+  #board.map-focus{animation:mapFocus .35s ease-out}
+  @keyframes mapFocus{0%{filter:brightness(1.16)}100%{filter:none}}
+  @media(max-width:759px){.watch-btn{min-height:46px}.ev[title]{min-height:44px}}
+
   /* ===== Genre pass: Polytopia-style map-first spectator UX ===== */
   #sheetGrab{display:none}
   #mapstage{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;width:100%;position:relative;overflow:hidden}
@@ -1467,7 +1474,7 @@ function logUsage(world,k,model,u){
 // Map colors come from THEME CONFIG too; resolved once at boot.
 const MAPC={};for(const [k,t] of [["sea1","--map-sea-1"],["sea2","--map-sea-2"],["sea3","--map-sea-3"],["waterGlint","--map-water-glint"],["waterShade","--map-water-shade"],["boardShadow","--map-board-shadow"],["board","--map-board"],["boardEdge","--map-board-edge"],["land","--map-land"],["tileGlint","--map-tile-glint"],["tileShade","--map-tile-shade"],["tileEdge","--map-tile-edge"],["symbolInk","--map-symbol-ink"],["fieldGlow","--map-field-glow"],["fieldLine","--map-field-line"],["mineRock","--map-mine-rock"],["mineSnow","--map-mine-snow"],["ore","--map-ore"],["oreSpent","--map-ore-spent"],["oreRing","--map-ore-ring"],["oreGem","--map-ore-gem"],["oreEmptyMark","--map-ore-empty-mark"],["treeTrunk","--map-tree-trunk"],["treeDark","--map-tree-dark"],["treeLight","--map-tree-light"],["hillEdge","--map-hill-edge"],["hill","--map-hill"],["hillSnow","--map-hill-snow"],["plainTuft","--map-plain-tuft"],["crop","--map-crop"],["cropBand","--map-crop-band"],["roofCity","--map-roof-city"],["roofVillage","--map-roof-village"],["buildingShadow","--map-building-shadow"],["buildingWall","--map-building-wall"],["labelBg","--map-label-bg"],["labelText","--map-label-text"],["shield","--map-shield"],["worldEdge","--map-world-edge"],["unitShadow","--map-unit-shadow"],["unitRing","--map-unit-ring"],["unitGlyph","--map-unit-glyph"]])MAPC[k]=themeColor(t);
 // ---------- UI state ----------
-let world=null, playing=false, timer=null, selectedKingdom=null, pendingInject=null, tickInFlight=false, matchGeneration=0;
+let world=null, playing=false, timer=null, selectedKingdom=null, watchedKingdom=null, pendingInject=null, tickInFlight=false, matchGeneration=0;
 let replayData=null, replayIdx=0, renderedEventCount=0, eventView="highlights";
 const $=(id)=>document.getElementById(id);
 let aboutOrigin="home";
@@ -1561,7 +1568,7 @@ function newMatch(cfg,seed){
   renderedEventCount=0;
   $("home").classList.add("hidden"); $("setup").classList.add("hidden"); $("app").classList.remove("hidden");
   $("replaybar").classList.remove("show");
-  pause(); selectedKingdom=null;
+  pause(); selectedKingdom=null; watchedKingdom=null;
   resetMapView(); setSheet("peek",true); setTimeout(layoutBoard,80);
   toast("Match started - seed "+world.seed);
   renderAll();
@@ -1581,7 +1588,7 @@ async function tickOnce(){
     const turnEvents=tickWorld.events.slice(eventStart);
     DB.save({id:"latest",savedAt:Date.now(),data:exportData()});
     renderAll();
-    showTurnActions(world,turnEvents);
+    showTurnActions(world,turnEvents); if(watchedKingdom!==null) focusKingdom(watchedKingdom);
     if (world.over){ pause(); showTab("world"); toast(world.winner?("Match over: "+world.kingdoms[world.winner.id].name+" wins by "+world.winner.how.replace("_"," ")):"Match over: all kingdoms fell"); }
   } finally { tickInFlight=false; }
 }
@@ -1658,6 +1665,18 @@ function boardGeom(w){
 }
 const mapView={s:1,tx:0,ty:0};
 function resetMapView(){mapView.s=1;mapView.tx=0;mapView.ty=0;}
+function focusKingdom(id,animate=false){
+  if(!world||id===null||!world.kingdoms[id]?.alive)return;
+  const cv=$("board"),g=boardGeom(world),k=world.kingdoms[id];
+  const groups=normalizeArmyGroups(world,k),cells=cellsOf(world,id);
+  const anchor=groups[0]||cells[0]; if(!anchor)return;
+  const target=Math.max(1.35,Math.min(2.15,20/g.cell));
+  mapView.s=target;
+  mapView.tx=cv.width/2-(g.ox+(anchor.x+.5)*g.cell)*target;
+  mapView.ty=cv.height/2-(g.oy+(anchor.y+.5)*g.cell)*target;
+  clampPan(); renderBoard(world);
+  if(animate){cv.classList.remove("map-focus");void cv.offsetWidth;cv.classList.add("map-focus");}
+}
 function clampPan(){
   const cv=$("board"); if(!world)return;
   const g=boardGeom(world), W=world.cfg.width, H=world.cfg.height;
@@ -1844,14 +1863,16 @@ function renderEmpires(w){
       +'<span class="emeta"><b>'+htmlSafe(k.name)+'</b><i>'+glyph+''+k.army+' · ●'+k.pop+' · 🌾'+k.food+'/'+k.pop+' · ⛏'+k.metal+'/'+k.army+'</i><i class="eaction">'+action[0]+' '+htmlSafe(action[1])+'</i></span></div>';
   }
   bar.innerHTML=html;
-  for (const c of bar.querySelectorAll(".ecard")) c.onclick=()=>{ selectedKingdom=+c.dataset.k; renderLeaderboard(world); renderEmpires(world); renderInspector(); showTab("insp"); setSheet("half"); };
+  for (const c of bar.querySelectorAll(".ecard")) c.onclick=()=>{ selectedKingdom=+c.dataset.k; renderLeaderboard(world); renderEmpires(world); renderInspector(); showTab("insp"); focusKingdom(selectedKingdom,true); setSheet("half"); };
 }
 function eventIcon(t){return ({Combat:"⚔️",Fall:"🔥",Dawn:"🌅",Transfer:"🤝",Control:"⚡",ThinkTimeout:"⏱️",ThinkFailure:"⏱️",Letter:"💬",Bulletin:"📣",Act:"•"})[t]||"•";}
 function renderEvents(w){
   const box=$("events"), important=new Set(["Combat","Fall","Dawn","Transfer","Control","ThinkTimeout","ThinkFailure","Letter","Bulletin"]);
   const source=(eventView==="highlights"?w.events.filter(e=>important.has(e.type)):w.events).slice(-120).reverse();let lastDay=null,out="";
   for(const ev of source){const day=ev.day||Math.floor((ev.tick||0)/w.cfg.ticksPerDay)+1;if(day!==lastDay){out+='<div class="ev-day">Day '+day+'</div>';lastDay=day;}out+='<div class="ev '+ev.type+(important.has(ev.type)?' important':'')+'"><span class="ev-icon">'+eventIcon(ev.type)+'</span><span class="t">'+(ev.tick!==undefined?'T'+ev.tick:'')+'</span><span class="ev-copy">'+htmlSafe(evText(w,ev))+'</span></div>';}
-  box.innerHTML=out||'<div class="empty-feed">No major events yet. Let the match run or use a God mode power.</div>';renderedEventCount=w.events.length;
+  box.innerHTML=out||'<div class="empty-feed">No major events yet. Let the match run or use a God mode power.</div>';
+  [...box.querySelectorAll(".ev")].forEach((node,i)=>{const ev=source[i];const id=ev&&(ev.kingdomId??ev.attacker??ev.from??ev.defender??ev.to);if(id!==undefined&&w.kingdoms[id]){node.title="Open "+w.kingdoms[id].name;node.onclick=()=>{selectedKingdom=id;renderEmpires(w);renderInspector();showTab("insp");focusKingdom(id,true);};}});
+  renderedEventCount=w.events.length;
 }
 function renderInspector(){
   const el=$("insp");
@@ -1865,7 +1886,10 @@ function renderInspector(){
   '<div class="agent-section"><label>Latest action</label><div class="agent-action"><span>'+v[0]+'</span><span><b>'+htmlSafe(v[1])+'</b>'+(latest?.note?'<br>'+htmlSafe(latest.note):'')+'</span></div></div>'+
   '<div class="agent-section"><label>Recent conversation</label>'+(speech.length?speech.map(e=>'<div class="agent-action"><span>💬</span><span>'+htmlSafe(e.type==="Letter"?('#'+(e.from+1)+' → #'+(e.to+1)+': '+e.text):e.text)+'</span></div>').join(''):'<p>No messages yet.</p>')+'</div>'+
   '<div class="agent-section"><label>Memory and belief</label><p>'+htmlSafe(k.selfNote||"No private memory recorded yet.")+'</p></div><button class="watch-btn" id="watchAgent">👁 Watch '+htmlSafe(k.name)+'</button>';
-  $("watchAgent").onclick=()=>{showTab("world");toast("Watching "+k.name);};
+  const watching=watchedKingdom===k.id;
+  $("watchAgent").textContent=watching?"✓ Watching "+k.name:"👁 Watch "+k.name;
+  $("watchAgent").classList.toggle("watching",watching);
+  $("watchAgent").onclick=()=>{watchedKingdom=watching?null:k.id;selectedKingdom=k.id;renderEmpires(world);renderInspector();if(watchedKingdom!==null){focusKingdom(k.id,true);showTab("world");setSheet("peek");toast("Following "+k.name+" on the map");}else toast("Stopped following "+k.name);};
 }
 function showTab(name){
   for(const b of document.querySelectorAll("#tabs button"))b.classList.toggle("on",b.dataset.tab===name);
@@ -1888,7 +1912,7 @@ function restoreSnapshot(snap){
   snap.kingdoms.forEach((s,i)=>{const k=world.kingdoms[i];Object.assign(k,{alive:s.alive,pop:s.pop,army:s.army,armyGroups:s.armyGroups||null,armyPos:s.armyPos||null,armyIntent:s.armyIntent||"capital garrison",food:s.food,metal:s.metal??world.cfg.startMetal??defaultConfig().startMetal,stamina:s.stamina,bulletin:s.bulletin,selfNote:s.selfNote,goal:s.goal||k.goal,talkModel:s.talkModel||k.talkModel,actModel:s.actModel||k.actModel,mutedUntil:s.mutedUntil||0,pendingOffers:Array.isArray(s.pendingOffers)?s.pendingOffers.map(o=>({...o})):[]});normalizeArmyGroups(world,k);});
 }
 function loadReplay(data){
-  validateReplay(data); matchGeneration++; selectedKingdom=null; replayData=data; replayIdx=0;
+  validateReplay(data); matchGeneration++; selectedKingdom=null; watchedKingdom=null; replayData=data; replayIdx=0;
   $("home").classList.add("hidden"); $("setup").classList.add("hidden"); $("app").classList.remove("hidden");
   $("replaybar").classList.add("show"); pause(); resetMapView(); setSheet("peek",true); setTimeout(layoutBoard,80);
   const cfg=data.config;
@@ -1925,7 +1949,7 @@ $("board").addEventListener("click",(e)=>{
   if (pendingInject==="drought"){ injectDrought(world,x-2,y-2,x+2,y+2); pendingInject=null; toast("Drought injected"); renderAll(); saveCurrentMatch(); return; }
   if (pendingInject==="cache"){ if(injectCacheDrop(world,x,y)){pendingInject=null;toast("Food cache dropped");renderAll();saveCurrentMatch();}else toast("Choose an empty, unowned cell"); return; }
   const o=world.grid[y][x].owner;
-  if (o!==null){ selectedKingdom=o; renderLeaderboard(world); renderEmpires(world); renderInspector(); showTab("insp"); setSheet("half"); }
+  if (o!==null){ selectedKingdom=o; renderLeaderboard(world); renderEmpires(world); renderInspector(); showTab("insp"); focusKingdom(o,true); setSheet("half"); }
 });
 // Genre-standard map gestures: drag to pan, pinch or wheel to zoom, double-tap to refit.
 (function(){
