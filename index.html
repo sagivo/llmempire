@@ -1061,7 +1061,10 @@ function executeAct(world,kid,action,events){
       const c=pick(cells.filter(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="mine"&&g.ore>0;})),g=world.grid[c[1]][c[0]],y=Math.min(2,g.ore);
       g.ore-=y;k.stamina-=1;k.metal=Math.min(cfg.metalCap,k.metal+y);emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"mine",target:null,dir:null,note:action.note||("+"+y+" mine stock")});break;}
     case "build_house":{
-      const c=pick(cells.filter(c=>{const g=world.grid[c[1]][c[0]];return (g.houses||0)<cfg.maxHousesPerTile;}));
+      // Urbanize: stack on the most-built-up eligible tile so towns visibly grow toward the cap.
+      const eligible=cells.filter(c=>{const g=world.grid[c[1]][c[0]];return (g.houses||0)<cfg.maxHousesPerTile;});
+      const maxH=Math.max(...eligible.map(c=>world.grid[c[1]][c[0]].houses||0));
+      const c=pick(eligible.filter(c=>(world.grid[c[1]][c[0]].houses||0)===maxH));
       world.grid[c[1]][c[0]].houses+=1;k.metal-=cfg.houseCostMetal;k.stamina-=1;emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"build_house",target:null,dir:null,note:action.note||("house built ("+world.grid[c[1]][c[0]].houses+" on tile)")});break;}
     case "eat":{
       k.food-=1; k.stamina=Math.min(cfg.staminaCap,k.stamina+cfg.eatStaminaGain);
