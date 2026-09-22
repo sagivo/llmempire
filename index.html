@@ -569,7 +569,11 @@ function defaultConfig(){
 function createWorld(cfg, seed){
   const rng = mulberry32(seed);
   const grid = [];
-  for (let y=0;y<cfg.height;y++){ const row=[]; for (let x=0;x<cfg.width;x++) row.push({owner:null,crop:0,shield:0}); grid.push(row); }
+  // Topography drives the economy: fields grow food, mines yield resources, plains hold settlements.
+  for (let y=0;y<cfg.height;y++){ const row=[]; for (let x=0;x<cfg.width;x++){
+    const r=rng(),terrain=r<.29?"field":r<.43?"mine":r<.58?"forest":r<.68?"hill":"plain";
+    row.push({owner:null,terrain,crop:terrain==="field"&&rng()<.42?1:0,ore:terrain==="mine"?2+Math.floor(rng()*2):0,shield:0,settlement:null});
+  } grid.push(row); }
   // far-placed capitals: greedy max-min toroidal distance
   const caps = [];
   for (let i=0;i<cfg.playerCount;i++){
@@ -585,7 +589,8 @@ function createWorld(cfg, seed){
     caps.push(best);
   }
   const kingdoms = caps.map((c,i)=>{
-    grid[c[1]][c[0]].owner=i;
+    grid[c[1]][c[0]].owner=i; grid[c[1]][c[0]].terrain="plain";
+    grid[c[1]][c[0]].settlement={kind:"city",pop:cfg.startPop,cap:Math.max(4,cfg.popBaseCap)};
     return { id:i, name:KINGDOM_NAMES[i%KINGDOM_NAMES.length]+" #"+(i+1), color:factionColor(i),
       alive:true, pop:cfg.startPop, army:cfg.startArmy, food:cfg.startFood, stamina:cfg.startStamina,
       goal:STOCK_GOALS[i%STOCK_GOALS.length], selfNote:"", bulletin:"", inbox:[], outbox:[],
@@ -599,7 +604,9 @@ function createWorld(cfg, seed){
 
 function wrap(world,x,y){ const W=world.cfg.width,H=world.cfg.height; return [((x%W)+W)%W, ((y%H)+H)%H]; }
 function cellsOf(world,kid){ const out=[]; for(let y=0;y<world.cfg.height;y++)for(let x=0;x<world.cfg.width;x++) if(world.grid[y][x].owner===kid) out.push([x,y]); return out; }
-function popCap(world,k){ return world.cfg.popBaseCap + world.cfg.popPerCell*cellsOf(world,k.id).length; }
+function settlementCells(world,kid){return cellsOf(world,kid).filter(([x,y])=>world.grid[y][x].settlement);}
+function popCap(world,k){const ss=settlementCells(world,k.id);return ss.reduce((n,[x,y])=>n+(world.grid[y][x].settlement?.cap||0),0)||world.cfg.popBaseCap;}
+function syncSettlementPop(world,k){const ss=settlementCells(world,k.id);if(!ss.length)return;let left=k.pop;ss.forEach(([x,y],i)=>{const st=world.grid[y][x].settlement,slots=ss.length-i;st.pop=Math.min(st.cap,Math.max(i===ss.length-1?left:1,Math.ceil(left/slots)));left=Math.max(0,left-st.pop);});}
 function neighbors4(world,x,y){ const [[n],[e],[s],[w]]=[[ [x,y-1] ],[ [x+1,y] ],[ [x,y+1] ],[ [x-1,y] ]]; return [wrap(world,x,y-1),wrap(world,x+1,y),wrap(world,x,y+1),wrap(world,x-1,y)]; }
 function chebyshev(world,a,b){ const dx=Math.min(Math.abs(a[0]-b[0]),world.cfg.width-Math.abs(a[0]-b[0])); const dy=Math.min(Math.abs(a[1]-b[1]),world.cfg.height-Math.abs(a[1]-b[1])); return Math.max(dx,dy); }
 function kingdomAnchor(world,kid){ const c=cellsOf(world,kid); return c.length?c[0]:null; }
@@ -610,8 +617,10 @@ function emit(world,ev){ world.events.push(ev); }
 function legalActions(world,k){
   if (!k.alive || world.over) return [];
   const cfg=world.cfg, cells=cellsOf(world,k.id), acts=[];
-  if (cells.some(c=>world.grid[c[1]][c[0]].crop>=2) && k.stamina>=1) acts.push("harvest");
-  if (cells.some(c=>world.grid[c[1]][c[0]].crop===0) && k.food>=cfg.plantCostFood) acts.push("plant");
+  if (cells.some(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="field"&&g.crop>=2;}) && k.stamina>=1) acts.push("harvest");
+  if (cells.some(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="field"&&g.crop===0;}) && k.food>=cfg.plantCostFood) acts.push("plant");
+  if (cells.some(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="mine"&&g.ore>0;}) && k.stamina>=1) acts.push("mine");
+  if (cells.some(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="plain"&&!g.settlement;}) && k.food>=3 && k.stamina>=1) acts.push("found_village");
   if (k.food>=1 && k.stamina<=cfg.staminaCap-cfg.eatStaminaGain+1) acts.push("eat");
   if (cells.some(c=>neighbors4(world,c[0],c[1]).some(n=>world.grid[n[1]][n[0]].owner===null)) && k.stamina>=1) acts.push("claim");
     const raidCells=[];
@@ -645,16 +654,22 @@ function executeAct(world,kid,action,events){
   const pick=(arr)=>arr[Math.floor(world.rng()*arr.length)];
   switch(action.act){
     case "harvest":{
-      const c=pick(cells.filter(c=>world.grid[c[1]][c[0]].crop>=2));
-      const y=Math.min(2,1+Math.floor(k.pop/3));
+      const c=pick(cells.filter(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="field"&&g.crop>=2;}));
+      const y=2;
       world.grid[c[1]][c[0]].crop=0; k.stamina-=1; k.food=Math.min(cfg.foodCap,k.food+y);
       emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"harvest",target:null,dir:null,note:action.note||("+"+y+" food")});
       break;}
     case "plant":{
-      const c=pick(cells.filter(c=>world.grid[c[1]][c[0]].crop===0));
+      const c=pick(cells.filter(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="field"&&g.crop===0;}));
       k.food-=cfg.plantCostFood; world.grid[c[1]][c[0]].crop=1;
-      emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"plant",target:null,dir:null,note:action.note||""});
+      emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"plant",target:null,dir:null,note:action.note||"field planted"});
       break;}
+    case "mine":{
+      const c=pick(cells.filter(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="mine"&&g.ore>0;})),g=world.grid[c[1]][c[0]],y=Math.min(2,g.ore);
+      g.ore-=y;k.stamina-=1;k.food=Math.min(cfg.foodCap,k.food+y);emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"mine",target:null,dir:null,note:action.note||("+"+y+" resources")});break;}
+    case "found_village":{
+      const c=pick(cells.filter(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="plain"&&!g.settlement;}));
+      world.grid[c[1]][c[0]].settlement={kind:"village",pop:1,cap:3};k.food-=3;k.stamina-=1;emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"found_village",target:null,dir:null,note:action.note||"village founded (cap 3)"});break;}
     case "eat":{
       k.food-=1; k.stamina=Math.min(cfg.staminaCap,k.stamina+cfg.eatStaminaGain);
       emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"eat",target:null,dir:null,note:action.note||""});
@@ -766,9 +781,9 @@ function processDawn(world){
     k.stamina=Math.min(cfg.staminaCap,k.stamina+1);
     k.army=Math.min(k.army,Math.min(cfg.armyCap,k.pop)); // desertion: A <= min(armyCap, pop)
     if (k.pop<=1 && cellsOf(world,k.id).length===0){ k.alive=false; emit(world,{type:"Fall",tick:absTick(world),kingdomId:k.id,conqueredBy:-1}); }
-    if (k.pop<=0){ k.pop=1; }
+    if (k.pop<=0){ k.pop=1; } syncSettlementPop(world,k);
   }
-  for (let y=0;y<cfg.height;y++)for(let x=0;x<cfg.width;x++){ const c=world.grid[y][x]; if (c.crop>0&&c.crop<3){c.crop+=1;grown.push([x,y]);} }
+  for (let y=0;y<cfg.height;y++)for(let x=0;x<cfg.width;x++){ const c=world.grid[y][x]; if (c.terrain==="field"&&c.crop>0&&c.crop<3){c.crop+=1;grown.push([x,y]);} if(c.terrain==="mine"&&c.ore<3&&world.rng()<.18)c.ore+=1; }
   world.day+=1;
   emit(world,{type:"Dawn",day:world.day,starvedPop,grownCrops:grown});
 }
@@ -871,11 +886,12 @@ function mockPhaseB(world,k){
   const cfg=world.cfg, cells=cellsOf(world,k.id), land=cells.length;
   const pickT=(pred)=>{ const adj=adjacentKingdoms(world,k.id).filter(pred); return adj.length?adj[Math.floor(world.rng()*adj.length)]:null; };
   const richest=(pred)=>{ const adj=adjacentKingdoms(world,k.id).filter(pred); adj.sort((a,b)=>(world.kingdoms[b].food-world.kingdoms[a].food)||(world.kingdoms[a].army-world.kingdoms[b].army)); return adj.length?adj[0]:null; };
-  const hasEmpty=cells.some(c=>world.grid[c[1]][c[0]].crop===0);
+  const hasEmpty=cells.some(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="field"&&g.crop===0;});
   const aggressive=(k.goal==="Raider"||k.goal==="Warlord"||k.goal==="Schemer");
   const target=Math.max(4,Math.min(7,k.pop+3));
   // 1. emergency: upkeep at dawn exceeds stores
   if (k.food<k.pop){
+    if (legal.includes("mine")) return {act:"mine",target:null,dir:null,note:"mine resources"};
     if (legal.includes("harvest")) return {act:"harvest",target:null,dir:null,note:"emergency harvest"};
     if (legal.includes("raid")&&k.army>=1){ const t=richest(()=>true)||pickT(()=>true); return {act:"raid",target:t,dir:null,note:"raid for food"}; }
     if (legal.includes("plant")&&hasEmpty) return {act:"plant",target:null,dir:null,note:"emergency planting"};
@@ -891,7 +907,8 @@ function mockPhaseB(world,k){
     if (legal.includes("eat")&&k.stamina<2&&k.food>1) return {act:"eat",target:null,dir:null,note:"recover"};
     if (legal.includes("rest")) return {act:"rest",target:null,dir:null,note:"sharpen blades"};
   }
-  // 3. agrarian archetypes: expand, plant, harvest
+  // 3. agrarian archetypes: expand, settle, plant, harvest
+  if (legal.includes("found_village")&&k.pop>=popCap(world,k)-1) return {act:"found_village",target:null,dir:null,note:"found village"};
   if (legal.includes("claim")&&land<target) return {act:"claim",target:null,dir:null,note:"expand"};
   if (legal.includes("plant")&&hasEmpty&&k.food>k.pop+cfg.plantCostFood) return {act:"plant",target:null,dir:null,note:"seed future food"};
   if (legal.includes("harvest")&&(k.food<3*k.pop||k.stamina>=cfg.staminaCap)) return {act:"harvest",target:null,dir:null,note:"cash in crops"};
@@ -905,6 +922,7 @@ function mockPhaseB(world,k){
   if (legal.includes("honor")&&world.rng()<0.5) return {act:"honor",target:null,dir:null,note:"honor trade"};
   if (legal.includes("fortify")&&adjacentKingdoms(world,k.id).length&&world.rng()<0.4) return {act:"fortify",target:null,dir:null,note:"fortify border"};
   if (legal.includes("harvest")) return {act:"harvest",target:null,dir:null,note:"cash in crops"};
+  if (legal.includes("mine")) return {act:"mine",target:null,dir:null,note:"work the mine"};
   if (legal.includes("plant")&&hasEmpty&&k.food>1) return {act:"plant",target:null,dir:null,note:"plant"};
   return {act:"rest",target:null,dir:null,note:"consolidate"};
 }
@@ -924,10 +942,10 @@ function injectCacheDrop(world,x,y){ const c=wrap(world,x,y); if(world.grid[c[1]
 // ---------- snapshots (compact, for replay/export) ----------
 function takeSnapshot(world){
   const W=world.cfg.width,H=world.cfg.height;
-  const owners=new Array(W*H), crops=new Array(W*H), shields=new Array(W*H);
-  for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const g=world.grid[y][x],i=y*W+x; owners[i]=g.owner===null?-1:g.owner; crops[i]=g.crop; shields[i]=g.shield; }
+  const owners=new Array(W*H), crops=new Array(W*H), shields=new Array(W*H), terrains=new Array(W*H), ores=new Array(W*H), settlements=new Array(W*H);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const g=world.grid[y][x],i=y*W+x; owners[i]=g.owner===null?-1:g.owner; crops[i]=g.crop; shields[i]=g.shield;terrains[i]=g.terrain;ores[i]=g.ore||0;settlements[i]=g.settlement?{...g.settlement}:null; }
   return { day:world.day, tick:world.tick, over:world.over, winner:world.winner,
-    owners, crops, shields,
+    owners, crops, shields, terrains, ores, settlements,
     kingdoms: world.kingdoms.map(k=>({id:k.id,alive:k.alive,pop:k.pop,army:k.army,food:k.food,stamina:k.stamina,bulletin:k.bulletin,selfNote:k.selfNote,goal:k.goal,talkModel:k.talkModel,actModel:k.actModel})) };
 }
 
@@ -1011,8 +1029,10 @@ function phaseBSystem(world,k){
   return "You are the executive command engine of Kingdom #"+(k.id+1)+".\n"+
   "You must select EXACTLY ONE legal tactical action to execute for the current round.\n\n"+
   "ACTION EXECUTION RULES:\n"+
-  "- 'harvest': Requires owned cell with crop level >= 2. Consumes 1 stamina. Increases food.\n"+
-  "- 'plant': Consumes "+cfg.plantCostFood+" food. Plants crop level 1 on owned empty cell.\n"+
+  "- 'harvest': Requires an owned FIELD tile with crop level >= 2. Consumes 1 stamina. Increases food.\n"+
+  "- 'mine': Requires an owned MINE tile with ore. Consumes 1 stamina and gains resources.\n"+
+  "- 'found_village': Requires an owned empty PLAIN tile, 3 food and 1 stamina. Adds a visible village with a 3-person cap.\n"+
+  "- 'plant': Consumes "+cfg.plantCostFood+" food. Plants crop level 1 on an owned empty FIELD tile only.\n"+
   "- 'eat': Consumes 1 food. Restores +"+cfg.eatStaminaGain+" stamina.\n"+
   "- 'share': Consumes food from your store and transfers it to target kingdom adjacent to your border.\n"+
   "- 'trade_offer': Proposes a resource exchange agreement to a target kingdom.\n"+
@@ -1290,31 +1310,27 @@ function renderBoard(w, snap){
   const poly=(pts,fill)=>{ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i][0],pts[i][1]);ctx.closePath();ctx.fillStyle=fill;ctx.fill();};
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){
     const px=ox+x*cell, py=oy+y*cell;
-    let owner,crop,shield;
-    if(snap){owner=get(x,y,"owners");crop=get(x,y,"crops");shield=get(x,y,"shields");owner=owner===-1?null:owner;}
-    else{const g=w.grid[y][x];owner=g.owner;crop=g.crop;shield=g.shield;}
+    let owner,crop,shield,terrain,ore,settlement;
+    if(snap){owner=get(x,y,"owners");crop=get(x,y,"crops");shield=get(x,y,"shields");terrain=get(x,y,"terrains")||"plain";ore=get(x,y,"ores")||0;settlement=get(x,y,"settlements");owner=owner===-1?null:owner;}
+    else{const g=w.grid[y][x];owner=g.owner;crop=g.crop;shield=g.shield;terrain=g.terrain||"plain";ore=g.ore||0;settlement=g.settlement;}
     const base=owner===null?"#8db65b":factionColor(owner);
     // beveled toy tile: one shared visual grammar everywhere
     ctx.fillStyle=base;ctx.fillRect(px+.7,py+.7,cell-1.4,cell-1.4);
     poly([[px+1,py+1],[px+cell-1,py+1],[px+cell-1,py+cell*.24],[px+1,py+cell*.55]],"rgba(255,255,255,.16)");
     poly([[px+1,py+cell*.55],[px+cell-1,py+cell*.24],[px+cell-1,py+cell-1],[px+1,py+cell-1]],"rgba(32,40,28,.10)");
     ctx.strokeStyle="rgba(47,52,38,.28)";ctx.lineWidth=Math.max(1,cell*.045);ctx.strokeRect(px+.8,py+.8,cell-1.6,cell-1.6);
-    const seed=(x*17+y*31)%11;
-    if(owner===null && crop===0 && cell>18){
-      if(seed===2||seed===8){ // tiny geometric pine
-        poly([[px+cell*.5,py+cell*.2],[px+cell*.28,py+cell*.62],[px+cell*.72,py+cell*.62]],"#2f714d");
-        poly([[px+cell*.5,py+cell*.36],[px+cell*.22,py+cell*.82],[px+cell*.78,py+cell*.82]],"#245e45");
-        ctx.fillStyle="#76502e";ctx.fillRect(px+cell*.46,py+cell*.77,cell*.08,cell*.16);
-      } else if(seed===5){ // faceted mountain
-        poly([[px+cell*.16,py+cell*.78],[px+cell*.49,py+cell*.18],[px+cell*.82,py+cell*.78]],"#79877e");
-        poly([[px+cell*.49,py+cell*.18],[px+cell*.82,py+cell*.78],[px+cell*.53,py+cell*.7]],"#596c68");
-        poly([[px+cell*.49,py+cell*.18],[px+cell*.37,py+cell*.4],[px+cell*.56,py+cell*.36]],"#f2e8d3");
-      }
+    // Persistent topography, readable under faction tint.
+    if(cell>18){
+      if(terrain==="field"){ctx.strokeStyle="rgba(91,62,27,.58)";ctx.lineWidth=Math.max(1,cell*.045);for(let i=1;i<4;i++){ctx.beginPath();ctx.moveTo(px+cell*.18,py+cell*(.18+i*.16));ctx.lineTo(px+cell*.82,py+cell*(.18+i*.16));ctx.stroke();}}
+      else if(terrain==="mine"){poly([[px+cell*.18,py+cell*.72],[px+cell*.5,py+cell*.22],[px+cell*.82,py+cell*.72]],"rgba(48,55,64,.78)");poly([[px+cell*.38,py+cell*.62],[px+cell*.5,py+cell*.38],[px+cell*.62,py+cell*.62]],ore>0?"#7de0ef":"#596168");}
+      else if(terrain==="forest"){poly([[px+cell*.5,py+cell*.18],[px+cell*.23,py+cell*.75],[px+cell*.77,py+cell*.75]],"rgba(27,91,57,.75)");}
+      else if(terrain==="hill"){poly([[px+cell*.12,py+cell*.75],[px+cell*.45,py+cell*.3],[px+cell*.82,py+cell*.75]],"rgba(99,89,75,.56)");}
     }
     if(crop>0){ // three simple diamond crops, no mismatched emoji
       const n=Math.min(3,crop),cy=py+cell*.55;
       for(let i=0;i<n;i++){const cx=px+cell*(.5+(i-(n-1)/2)*.2);poly([[cx,cy-cell*.2],[cx+cell*.1,cy],[cx,cy+cell*.2],[cx-cell*.1,cy]],i%2?"#f5d34d":"#ffdf63");}
     }
+    if(settlement&&cell>18){const st=settlement,cx=px+cell*.5,roof=st.kind==="city"?"#6b3240":"#7b4c2d";ctx.fillStyle="#f7e4b0";ctx.fillRect(cx-cell*.19,py+cell*.42,cell*.38,cell*.30);poly([[cx-cell*.25,py+cell*.44],[cx,py+cell*.22],[cx+cell*.25,py+cell*.44]],roof);if(st.kind==="city"){ctx.fillStyle="#f7e4b0";ctx.fillRect(cx-cell*.29,py+cell*.34,cell*.12,cell*.38);ctx.fillRect(cx+cell*.17,py+cell*.34,cell*.12,cell*.38);}ctx.fillStyle="#2b2b27";ctx.font="900 "+Math.max(8,cell*.22)+"px Nunito,Segoe UI,sans-serif";ctx.textAlign="center";ctx.textBaseline="top";ctx.fillText((st.kind==="city"?"CITY ":"V ")+st.pop+"/"+st.cap,cx,py+cell*.74);}
     if(shield>0){ctx.strokeStyle="#fff1c7";ctx.lineWidth=Math.max(2,cell*.09);ctx.globalAlpha=.5+.2*shield;ctx.strokeRect(px+cell*.13,py+cell*.13,cell*.74,cell*.74);ctx.globalAlpha=1;}
   }
   ctx.strokeStyle="rgba(246,226,181,.65)";ctx.lineWidth=2;ctx.strokeRect(ox-1,oy-1,W*cell+2,H*cell+2);
@@ -1425,7 +1441,7 @@ function validateReplay(data){
 function restoreSnapshot(snap){
   world.day=snap.day;world.tick=snap.tick;world.over=snap.over;world.winner=snap.winner;
   const W=world.cfg.width;
-  for(let y=0;y<world.cfg.height;y++)for(let x=0;x<W;x++){const i=y*W+x,g=world.grid[y][x];g.owner=snap.owners[i]===-1?null:snap.owners[i];g.crop=snap.crops[i];g.shield=snap.shields[i];}
+  for(let y=0;y<world.cfg.height;y++)for(let x=0;x<W;x++){const i=y*W+x,g=world.grid[y][x];g.owner=snap.owners[i]===-1?null:snap.owners[i];g.crop=snap.crops[i];g.shield=snap.shields[i];g.terrain=snap.terrains?.[i]||g.terrain||"plain";g.ore=snap.ores?.[i]||0;g.settlement=snap.settlements?.[i]||null;}
   snap.kingdoms.forEach((s,i)=>{const k=world.kingdoms[i];Object.assign(k,{alive:s.alive,pop:s.pop,army:s.army,food:s.food,stamina:s.stamina,bulletin:s.bulletin,selfNote:s.selfNote,goal:s.goal||k.goal,talkModel:s.talkModel||k.talkModel,actModel:s.actModel||k.actModel});});
 }
 function loadReplay(data){
@@ -1594,6 +1610,7 @@ DB.open().then(async ()=>{
 </script>
 </body>
 </html>
+
 
 
 
