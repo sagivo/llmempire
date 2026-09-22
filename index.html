@@ -446,6 +446,12 @@
     #boardwrap{padding:12px}.ecard{height:46px}#side{border-left:2px solid #8f7144}
   }
 
+  /* Map repair: the atlas board and faction colors now belong to the parchment UI. */
+  #boardwrap{background:#d9c188}
+  #mapstage{background:linear-gradient(180deg,#77aeb8 0%,#4d8498 58%,#386a82 100%)}
+  #mapstage:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(135deg,rgba(255,245,205,.13),transparent 38%,rgba(16,61,79,.10));mix-blend-mode:soft-light}
+  #board{background:#4d8498!important}
+
 </style>
 </head>
 <body>
@@ -649,7 +655,7 @@ const CONFIG_SCHEMA = [
 ];
 const END_MODES = ["dominion","last_stand","timed","open"];
 const KINGDOM_NAMES = ["Aldermark","Brevia","Corvane","Duskhold","Eastmere","Fenreach","Galloway","Hightower","Ismere","Jorvik","Kestrel","Lornwick","Maradir","Norhelm","Ostmark","Pellinor","Quillon","Ravencourt","Solmere","Thornfield","Ulstead","Veyra","Westhold","Yarrow"];
-const KINGDOM_COLORS = ["#e05d5d","#4da3ff","#4caf7d","#e0a94f","#b07de0","#5ad1d1","#e07fb8","#8bc34a","#ff8a65","#7e94e8","#c0ca5a","#5aa9e6","#d4a05a","#9ccc65","#ba68c8","#4db6ac","#f06292","#aed581","#9575cd","#4dd0e1","#ffb74d","#a1887f","#90a4ae","#dce775"];
+const KINGDOM_COLORS = ["#d93f4c","#287fd2","#16856b","#e29a22","#7e55b8","#008da8","#c94f91","#6c922b","#e46435","#4e5fc4","#9a9e22","#2476a8","#bd6d24","#4f8d35","#9a47ad","#087f78","#ce3e76","#719c46","#6650ad","#008b9e","#d98221","#80654e","#5c7480","#96a52d"];
 const factionColor=id=>KINGDOM_COLORS[((Number(id)||0)%KINGDOM_COLORS.length+KINGDOM_COLORS.length)%KINGDOM_COLORS.length];
 const STOCK_GOALS = ["Raider","Steward","Schemer","Merchant","Warlord","Hermit"];
 
@@ -1457,25 +1463,30 @@ function renderBoard(w, snap){
   const cv=$("board"), ctx=cv.getContext("2d");
   ctx.setTransform(1,0,0,1,0,0);
   const sea=ctx.createLinearGradient(0,0,0,cv.height);
-  sea.addColorStop(0,"#3f7392"); sea.addColorStop(1,"#244d6c");
+  sea.addColorStop(0,"#77aeb8"); sea.addColorStop(.58,"#4f879b"); sea.addColorStop(1,"#376b83");
   ctx.fillStyle=sea; ctx.fillRect(0,0,cv.width,cv.height);
   // broad low-poly water facets
   const facet=Math.max(70,cv.width/7);
   for(let y=0;y<cv.height+facet;y+=facet) for(let x=0;x<cv.width+facet;x+=facet){
     const odd=((x/facet+y/facet)|0)%2;
     ctx.beginPath(); ctx.moveTo(x-facet,y); ctx.lineTo(x,y-facet); ctx.lineTo(x+facet,y); ctx.lineTo(x,y+facet); ctx.closePath();
-    ctx.fillStyle=odd?"rgba(177,221,226,.045)":"rgba(7,41,65,.055)"; ctx.fill();
+    ctx.fillStyle=odd?"rgba(236,231,194,.10)":"rgba(17,67,84,.075)"; ctx.fill();
   }
   ctx.setTransform(mapView.s,0,0,mapView.s,mapView.tx,mapView.ty);
   const {cell,ox,oy}=boardGeom(w), W=w.cfg.width, H=w.cfg.height;
   const get=(x,y,f)=> snap ? snap[f][y*W+x] : null;
   const poly=(pts,fill)=>{ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i][0],pts[i][1]);ctx.closePath();ctx.fillStyle=fill;ctx.fill();};
+  // Treat the world as a physical atlas board, not a loose strip of tiles.
+  const pad=Math.max(6,cell*.45), radius=Math.max(8,cell*.55), bx=ox-pad, by=oy-pad, bw=W*cell+pad*2, bh=H*cell+pad*2;
+  ctx.save();ctx.shadowColor="rgba(25,43,47,.40)";ctx.shadowBlur=Math.max(10,cell*.8);ctx.shadowOffsetY=Math.max(5,cell*.35);
+  ctx.fillStyle="#e8d39b";ctx.beginPath();if(ctx.roundRect)ctx.roundRect(bx,by,bw,bh,radius);else ctx.rect(bx,by,bw,bh);ctx.fill();ctx.restore();
+  ctx.strokeStyle="rgba(101,76,39,.58)";ctx.lineWidth=Math.max(2,cell*.10);ctx.strokeRect(ox-1.5,oy-1.5,W*cell+3,H*cell+3);
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){
     const px=ox+x*cell, py=oy+y*cell;
     let owner,crop,shield,terrain,ore,settlement;
     if(snap){owner=get(x,y,"owners");crop=get(x,y,"crops");shield=get(x,y,"shields");terrain=get(x,y,"terrains")||"plain";ore=get(x,y,"ores")||0;settlement=get(x,y,"settlements");owner=owner===-1?null:owner;}
     else{const g=w.grid[y][x];owner=g.owner;crop=g.crop;shield=g.shield;terrain=g.terrain||"plain";ore=g.ore||0;settlement=g.settlement;}
-    const base=owner===null?"#8db65b":factionColor(owner);
+    const base=owner===null?"#cdbb78":factionColor(owner);
     // beveled toy tile: one shared visual grammar everywhere
     ctx.fillStyle=base;ctx.fillRect(px+.7,py+.7,cell-1.4,cell-1.4);
     poly([[px+1,py+1],[px+cell-1,py+1],[px+cell-1,py+cell*.24],[px+1,py+cell*.55]],"rgba(255,255,255,.16)");
@@ -1530,7 +1541,20 @@ function renderBoard(w, snap){
     }
     if(shield>0){ctx.strokeStyle="#fff1c7";ctx.lineWidth=Math.max(2,cell*.09);ctx.globalAlpha=.5+.2*shield;ctx.strokeRect(px+cell*.13,py+cell*.13,cell*.74,cell*.74);ctx.globalAlpha=1;}
   }
-  ctx.strokeStyle="rgba(246,226,181,.65)";ctx.lineWidth=2;ctx.strokeRect(ox-1,oy-1,W*cell+2,H*cell+2);
+  // Strong territory edges make all factions, including green, readable at phone scale.
+  const ownerAt=(x,y)=>{if(x<0||y<0||x>=W||y>=H)return null;const v=snap?snap.owners[y*W+x]:w.grid[y][x].owner;return v===-1?null:v;};
+  ctx.lineCap="square";ctx.lineWidth=Math.max(2.4,cell*.13);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const own=ownerAt(x,y);if(own===null)continue;
+    const px=ox+x*cell,py=oy+y*cell;ctx.strokeStyle=factionColor(own);
+    ctx.beginPath();
+    if(ownerAt(x,y-1)!==own){ctx.moveTo(px,py+1);ctx.lineTo(px+cell,py+1);}
+    if(ownerAt(x+1,y)!==own){ctx.moveTo(px+cell-1,py);ctx.lineTo(px+cell-1,py+cell);}
+    if(ownerAt(x,y+1)!==own){ctx.moveTo(px+cell,py+cell-1);ctx.lineTo(px,py+cell-1);}
+    if(ownerAt(x-1,y)!==own){ctx.moveTo(px+1,py+cell);ctx.lineTo(px+1,py);}
+    ctx.stroke();
+  }
+  ctx.strokeStyle="rgba(93,68,34,.78)";ctx.lineWidth=Math.max(2,cell*.10);ctx.strokeRect(ox-1,oy-1,W*cell+2,H*cell+2);
   const dispCell=cell*mapView.s*(cv.clientWidth?cv.clientWidth/cv.width:1);
   if(!snap&&dispCell>=10){
     ctx.textAlign="center";ctx.textBaseline="middle";
