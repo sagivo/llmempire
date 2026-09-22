@@ -747,10 +747,10 @@
     <article class="about-card"><h2>Core mechanics</h2><ul class="mechanics">
       <li><b>The map wraps.</b> The grid is toroidal, so every edge connects to its opposite edge. There is no safe corner.</li>
       <li><b>Public and private state differ.</b> Land and population are public to AI players. Army deployments are visible only to the human observer. Food, stamina, archetype, scratchpad and private letters are hidden from rivals but visible to the operator.</li>
-      <li><b>Two resources, two survival loops.</b> Crops make food for population. Mines make stock for the army. Each Dawn costs 1 food per person and 1 mine stock per soldier; deficits shrink the unsupported group.</li>
-      <li><b>Population sets capacity.</b> Territory raises the population cap. Army size cannot exceed population or the configured army cap.</li>
+      <li><b>Two resources, two survival loops.</b> Crops make food for population. Mines make minerals for the army and for housing. Each Dawn costs 1 food per person and 1 mineral per soldier; deficits shrink the unsupported group.</li>
+      <li><b>Houses house people.</b> Population needs housing: every house supports 4 people (configurable), each tile holds up to a max number of houses, and building one costs minerals. Army size cannot exceed population or the configured army cap.</li>
       <li><b>Stamina limits tempo.</b> Claiming, harvesting, training, fortifying and raiding cost stamina. Eating and resting restore it.</li>
-      <li><b>Combat is deterministic.</b> Attack power comes from army and high stamina. Defense uses only army groups on the attacked tile, plus settlement/mine position, shields and stamina. A successful raid captures the cell and steals food; ties hurt both sides.</li>
+      <li><b>Combat is deterministic.</b> Attack power comes from army and high stamina. Defense uses only army groups on the attacked tile, plus housing/mine position, shields and stamina. A successful raid captures the cell and steals food; ties hurt both sides.</li>
       <li><b>Diplomacy has range and limits.</b> Bulletins are public. Letters only reach nearby kingdoms. Message length and letters per tick are capped. Trade promises only matter when an agent chooses to honor them.</li>
       <li><b>Operator injects change the test.</b> Trigger drought, radio silence, selective mute, curfew or a cache drop, then see how the agents adapt.</li>
       <li><b>Everything is recorded.</b> Events and snapshots power the inspector, replay, export and AI log analysis for player tendencies, brilliant moves, blunders and turning points.</li>
@@ -904,14 +904,14 @@ const CONFIG_SCHEMA = [
   ["caps", [
     ["startFood",10,2,20,"Starting food"],["startMetal",6,0,20,"Starting mine stock"],["startPop",2,1,8,"Starting population"],
     ["startArmy",1,0,4,"Starting army"],["startStamina",4,0,6,"Starting stamina"],
-    ["foodCap",40,10,99,"Food storage cap"],["metalCap",40,10,99,"Mine storage cap"],["popBaseCap",2,1,8,"Pop capacity of capital"],
-    ["popPerCell",2,1,4,"Pop capacity per cell"],["armyCap",12,4,30,"Global army ceiling"],["armyMoveRange",3,1,6,"Army tiles per move"],
-    ["staminaCap",6,3,12,"Stamina cap"],["shieldCap",2,0,4,"Max shield per cell"],
+    ["foodCap",40,10,99,"Food storage cap"],["metalCap",40,10,99,"Mine storage cap"],["popBaseCap",2,1,8,"Pop supported with no houses"],
+    ["housePop",4,1,8,"People supported per house"],["maxHousesPerTile",3,1,6,"Max houses per tile"],["startHouses",1,0,6,"Houses at the capital"],["armyCap",12,4,30,"Global army ceiling"],["armyMoveRange",3,1,6,"Army tiles per move"],
+    ["staminaCap",6,3,12,"Stamina cap"],["staminaPerDawn",3,1,6,"Stamina recovered each Dawn"],["shieldCap",2,0,4,"Max shield per cell"],
     ["raidLootMax",3,1,10,"Max food looted per raid"]
   ]],
   ["costs", [
     ["plantCostFood",1,0,5,"Food to plant"],["eatStaminaGain",2,1,5,"Stamina per food eaten"],
-    ["trainCostMetal",2,1,5,"Mine stock to train +1 army"],["trainCostStamina",1,1,5,"Stamina to train +1 army"],
+    ["trainCostMetal",2,1,5,"Minerals to train +1 army"],["trainCostStamina",1,1,5,"Stamina to train +1 army"],["houseCostMetal",3,1,8,"Minerals to build a house"],
     ["letterRange",2,1,10,"Letter Chebyshev range"],["maxLetters",3,0,10,"Letters per kingdom per tick"],
     ["sentencesPerMsg",2,1,5,"Sentence limit on speech"]
   ]]
@@ -942,7 +942,7 @@ function createWorld(cfg, seed){
   // Topography drives the economy: fields grow food, mines yield resources, plains hold settlements.
   for (let y=0;y<cfg.height;y++){ const row=[]; for (let x=0;x<cfg.width;x++){
     const r=rng(),terrain=r<.29?"field":r<.43?"mine":r<.58?"forest":r<.68?"hill":"plain";
-    row.push({owner:null,terrain,crop:terrain==="field"&&rng()<.42?1:0,ore:terrain==="mine"?2+Math.floor(rng()*2):0,shield:0,settlement:null});
+    row.push({owner:null,terrain,crop:terrain==="field"&&rng()<.42?1:0,ore:terrain==="mine"?2+Math.floor(rng()*2):0,shield:0,houses:0});
   } grid.push(row); }
   // far-placed capitals: greedy max-min toroidal distance
   const caps = [];
@@ -960,10 +960,10 @@ function createWorld(cfg, seed){
   }
   const kingdoms = caps.map((c,i)=>{
     grid[c[1]][c[0]].owner=i; grid[c[1]][c[0]].terrain="plain";
-    grid[c[1]][c[0]].settlement={kind:"city",pop:cfg.startPop,cap:cfg.popBaseCap};
+    grid[c[1]][c[0]].houses=cfg.startHouses;
     // Every capital gets one mine in reach: a standing army is sustainable if the kingdom claims it.
     const spot=[[1,0],[-1,0],[0,1],[0,-1]].map(([dx,dy])=>[((c[0]+dx)%cfg.width+cfg.width)%cfg.width,((c[1]+dy)%cfg.height+cfg.height)%cfg.height]).find(([mx,my])=>!caps.some(cc=>cc[0]===mx&&cc[1]===my));
-    if(spot){const g=grid[spot[1]][spot[0]];g.terrain="mine";g.ore=2+Math.floor(rng()*2);g.crop=0;g.settlement=null;}
+    if(spot){const g=grid[spot[1]][spot[0]];g.terrain="mine";g.ore=2+Math.floor(rng()*2);g.crop=0;g.houses=0;}
     return { id:i, name:KINGDOM_NAMES[i%KINGDOM_NAMES.length]+" #"+(i+1), color:factionColor(i),
       alive:true, pop:cfg.startPop, army:cfg.startArmy, armyGroups:cfg.startArmy>0?[{id:"g1",x:c[0],y:c[1],size:cfg.startArmy,intent:"capital garrison"}]:[], armyPos:{x:c[0],y:c[1]}, armyIntent:"capital garrison", food:cfg.startFood, metal:cfg.startMetal, stamina:cfg.startStamina,
       goal:STOCK_GOALS[i%STOCK_GOALS.length], selfNote:"", bulletin:"", inbox:[], outbox:[],
@@ -977,15 +977,15 @@ function createWorld(cfg, seed){
 
 function wrap(world,x,y){ const W=world.cfg.width,H=world.cfg.height; return [((x%W)+W)%W, ((y%H)+H)%H]; }
 function cellsOf(world,kid){ const out=[]; for(let y=0;y<world.cfg.height;y++)for(let x=0;x<world.cfg.width;x++) if(world.grid[y][x].owner===kid) out.push([x,y]); return out; }
-function settlementCells(world,kid){return cellsOf(world,kid).filter(([x,y])=>world.grid[y][x].settlement);}
-function popCap(world,k){const ss=settlementCells(world,k.id);return ss.reduce((n,[x,y])=>n+(world.grid[y][x].settlement?.cap||0),0)||world.cfg.popBaseCap;}
-function syncSettlementPop(world,k){const ss=settlementCells(world,k.id);if(!ss.length)return;let left=Math.max(0,k.pop);for(const [x,y] of ss){const st=world.grid[y][x].settlement;st.pop=Math.min(st.cap,left);left-=st.pop;}}
+function settlementCells(world,kid){return cellsOf(world,kid).filter(([x,y])=>world.grid[y][x].houses>0);}
+function popCap(world,k){const cap=cellsOf(world,k.id).reduce((n,[x,y])=>n+(world.grid[y][x].houses||0)*world.cfg.housePop,0);return cap||world.cfg.popBaseCap;}
+function syncSettlementPop(world,k){/* population is kingdom-level; tiles only carry house counts */}
 function normalizeArmyGroups(world,k){
   const home=settlementCells(world,k.id)[0]||cellsOf(world,k.id)[0];
   const hadGroups=Array.isArray(k.armyGroups)&&k.armyGroups.length>0;
   if(!Array.isArray(k.armyGroups))k.armyGroups=[];
   if(!k.armyGroups.length&&k.army>0&&home)k.armyGroups=[{id:"g1",x:k.armyPos?.x??home[0],y:k.armyPos?.y??home[1],size:k.army,intent:k.armyIntent||"capital garrison"}];
-  k.armyGroups=k.armyGroups.filter(g=>g&&g.size>0&&world.grid[g.y]?.[g.x]?.owner===k.id).map((g,i)=>({id:g.id||("g"+(i+1)),x:g.x,y:g.y,size:Math.floor(g.size),intent:g.intent||"reserve"}));
+  k.armyGroups=k.armyGroups.filter(g=>g&&g.size>0&&world.grid[g.y]?.[g.x]?.owner===k.id).map((g,i)=>({id:g.id||("g"+(i+1)),x:g.x,y:g.y,size:Math.floor(g.size),intent:g.intent||"reserve",heading:g.heading||null}));
   let total=k.armyGroups.reduce((n,g)=>n+g.size,0);
   if(total<k.army&&home&&!hadGroups){const g=k.armyGroups[0];if(g)g.size+=k.army-total;else k.armyGroups=[{id:"g1",x:home[0],y:home[1],size:k.army,intent:"capital garrison"}];}
   if(total>k.army){let excess=total-k.army;for(let i=k.armyGroups.length-1;i>=0&&excess;i--){const cut=Math.min(excess,k.armyGroups[i].size);k.armyGroups[i].size-=cut;excess-=cut;}k.armyGroups=k.armyGroups.filter(g=>g.size>0);}
@@ -994,7 +994,7 @@ function normalizeArmyGroups(world,k){
 function validArmyPos(world,k){return normalizeArmyGroups(world,k).length>0;}
 function ensureArmyPos(world,k){const g=normalizeArmyGroups(world,k)[0];return g?[g.x,g.y]:null;}
 function moveReachable(world,k,group){const max=world.cfg.armyMoveRange||3,q=[[[group.x,group.y],0]],seen=new Set([group.x+","+group.y]),out=[[group.x,group.y]];while(q.length){const [p,d]=q.shift();if(d>=max)continue;for(const n of neighbors4(world,p[0],p[1])){const key=n.join(",");if(seen.has(key)||world.grid[n[1]][n[0]].owner!==k.id)continue;seen.add(key);out.push(n);q.push([n,d+1]);}}return out;}
-function chooseArmyPost(world,k,intent,group){const pool=moveReachable(world,k,group),score=([x,y])=>{const g=world.grid[y][x];let v=0;if(intent==="village")v+=g.settlement?100:0;if(intent==="mine")v+=g.terrain==="mine"?100:0;if(intent==="border")v+=neighbors4(world,x,y).some(([nx,ny])=>world.grid[ny][nx].owner!==k.id)?80:0;v+=g.shield*3;return v;};return pool.slice().sort((a,b)=>score(b)-score(a))[0]||[group.x,group.y];}
+function chooseArmyPost(world,k,intent,group){const pool=moveReachable(world,k,group),score=([x,y])=>{const g=world.grid[y][x];let v=0;if(intent==="village")v+=g.houses>0?100:0;if(intent==="mine")v+=g.terrain==="mine"?100:0;if(intent==="border")v+=neighbors4(world,x,y).some(([nx,ny])=>world.grid[ny][nx].owner!==k.id)?80:0;v+=g.shield*3;return v;};return pool.slice().sort((a,b)=>score(b)-score(a))[0]||[group.x,group.y];}
 function armyAt(world,k,x,y){return normalizeArmyGroups(world,k).filter(g=>g.x===x&&g.y===y).reduce((n,g)=>n+g.size,0);}
 function groupAt(world,k,x,y){return normalizeArmyGroups(world,k).find(g=>g.x===x&&g.y===y);}
 function nextGroupId(k){const used=new Set((k.armyGroups||[]).map(g=>g.id));let n=1;while(used.has("g"+n))n++;return "g"+n;}
@@ -1013,7 +1013,7 @@ function legalActions(world,k){
   if (cells.some(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="field"&&g.crop>=2;}) && k.stamina>=1) acts.push("harvest");
   if (cells.some(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="field"&&g.crop===0;}) && k.food>=cfg.plantCostFood) acts.push("plant");
   if (cells.some(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="mine"&&g.ore>0;}) && k.stamina>=1) acts.push("mine");
-  if (cells.some(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="plain"&&!g.settlement;}) && k.food>=3 && k.stamina>=1) acts.push("found_village");
+  if (cells.some(c=>{const g=world.grid[c[1]][c[0]];return (g.houses||0)<cfg.maxHousesPerTile;}) && k.metal>=cfg.houseCostMetal && k.stamina>=1) acts.push("build_house");
   if (k.food>=1 && k.stamina<=cfg.staminaCap-cfg.eatStaminaGain+1) acts.push("eat");
   if (cells.some(c=>neighbors4(world,c[0],c[1]).some(n=>world.grid[n[1]][n[0]].owner===null)) && k.stamina>=1) acts.push("claim");
     const raidCells=[];
@@ -1060,9 +1060,9 @@ function executeAct(world,kid,action,events){
     case "mine":{
       const c=pick(cells.filter(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="mine"&&g.ore>0;})),g=world.grid[c[1]][c[0]],y=Math.min(2,g.ore);
       g.ore-=y;k.stamina-=1;k.metal=Math.min(cfg.metalCap,k.metal+y);emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"mine",target:null,dir:null,note:action.note||("+"+y+" mine stock")});break;}
-    case "found_village":{
-      const c=pick(cells.filter(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="plain"&&!g.settlement;}));
-      world.grid[c[1]][c[0]].settlement={kind:"village",pop:1,cap:3};k.food-=3;k.stamina-=1;emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"found_village",target:null,dir:null,note:action.note||"village founded (cap 3)"});break;}
+    case "build_house":{
+      const c=pick(cells.filter(c=>{const g=world.grid[c[1]][c[0]];return (g.houses||0)<cfg.maxHousesPerTile;}));
+      world.grid[c[1]][c[0]].houses+=1;k.metal-=cfg.houseCostMetal;k.stamina-=1;emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"build_house",target:null,dir:null,note:action.note||("house built ("+world.grid[c[1]][c[0]].houses+" on tile)")});break;}
     case "eat":{
       k.food-=1; k.stamina=Math.min(cfg.staminaCap,k.stamina+cfg.eatStaminaGain);
       emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"eat",target:null,dir:null,note:action.note||""});
@@ -1088,6 +1088,9 @@ function executeAct(world,kid,action,events){
       });
       const minD=Math.min(...dists);
       opts=opts.filter((n,i)=>dists[i]<=minD+1);
+      // A hungry kingdom settles fields; a short-armed one settles mines - still along the war path.
+      if (k.food<3*k.pop){ const f=opts.filter(n=>world.grid[n[1]][n[0]].terrain==="field"); if (f.length) opts=f; }
+      else if (k.metal<k.army+cfg.houseCostMetal){ const mm=opts.filter(n=>world.grid[n[1]][n[0]].terrain==="mine"); if (mm.length) opts=mm; }
       const c=pick(opts); world.grid[c[1]][c[0]].owner=kid; k.stamina-=1;
       emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"claim",target:null,dir:null,note:action.note||("claim "+c)});
       break;}
@@ -1133,7 +1136,7 @@ function executeAct(world,kid,action,events){
       emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"move",target:null,dir:null,placement:intent,amount:action.amount||null,from,to:dest?{x:dest[0],y:dest[1]}:from,note:action.note||("deploy to "+intent)});
       break;}
     case "rest":
-      k.stamina=Math.min(cfg.staminaCap,k.stamina+1);
+      k.stamina=Math.min(cfg.staminaCap,k.stamina+2);
     k.army=Math.min(k.army,Math.min(cfg.armyCap,k.pop)); normalizeArmyGroups(world,k); // desertion: A <= min(armyCap, pop)
       emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"rest",target:null,dir:null,note:action.note||""});
       break;
@@ -1145,7 +1148,7 @@ function resolveCombat(world,attackerId,cell,note){
   const A=world.kingdoms[attackerId],D=world.kingdoms[defenderId];
   normalizeArmyGroups(world,A);normalizeArmyGroups(world,D);
   const attackers=A.armyGroups.filter(g=>neighbors4(world,g.x,g.y).some(n=>n[0]===cell[0]&&n[1]===cell[1])),attackGroup=attackers.sort((a,b)=>b.size-a.size)[0],attacking=attackGroup?.size||0, defending=armyAt(world,D,cell[0],cell[1]);
-  const placeBonus=g.settlement?2:(g.terrain==="mine"?1:0);
+  const placeBonus=g.houses>0?2:(g.terrain==="mine"?1:0);
   const pA=attacking+(A.stamina>=3?1:0),pD=defending+placeBonus+g.shield+(D.stamina>=3?1:0);
   let winnerId,loot=0;
   if(pA>pD){
@@ -1171,7 +1174,7 @@ function processDawn(world){
     else { const gap=foodNeed-k.food; k.food=0; const loss=Math.min(k.pop-1,Math.max(1,gap)); k.pop-=loss; if(loss>0)starvedPop[k.id]=loss; }
     if (k.metal>=metalNeed) k.metal-=metalNeed;
     else { const gap=metalNeed-k.metal; k.metal=0; const loss=Math.min(k.army,Math.max(1,Math.ceil(gap/2))); loseArmy(world,k,loss); if(loss>0)unsupportedArmy[k.id]=loss; }
-    k.stamina=Math.min(cfg.staminaCap,k.stamina+1);
+    k.stamina=Math.min(cfg.staminaCap,k.stamina+cfg.staminaPerDawn);
     k.army=Math.min(k.army,Math.min(cfg.armyCap,k.pop)); normalizeArmyGroups(world,k);
     if (k.pop<=1 && cellsOf(world,k.id).length===0){ k.alive=false; emit(world,{type:"Fall",tick:absTick(world),kingdomId:k.id,conqueredBy:-1}); }
     if (k.pop<=0){ k.pop=1; } syncSettlementPop(world,k);
@@ -1293,6 +1296,7 @@ function mockPhaseB(world,k){
     if (legal.includes("harvest")) return {act:"harvest",target:null,dir:null,note:"food upkeep first"};
     if (legal.includes("raid")&&k.army>=1){ const t=richest(()=>true)||pickT(()=>true); return {act:"raid",target:t,dir:null,note:"raid for food"}; }
     if (legal.includes("plant")&&hasEmpty) return {act:"plant",target:null,dir:null,note:"emergency planting"};
+    if (legal.includes("claim")) return {act:"claim",target:null,dir:null,note:"settle toward fields"};
     return {act:"rest",target:null,dir:null,note:"save stamina"};
   }
   if (k.metal<k.army){
@@ -1300,6 +1304,7 @@ function mockPhaseB(world,k){
     if (legal.includes("claim")) return {act:"claim",target:null,dir:null,note:"seek a mine"};
     return {act:"rest",target:null,dir:null,note:"army will shrink without mine stock"};
   }
+  if (legal.includes("mine")&&k.metal<cfg.trainCostMetal+2) return {act:"mine",target:null,dir:null,note:"stock minerals"};
   // 2. Split the force among assets and mobilize up to the configured range.
   const groups=normalizeArmyGroups(world,k),roles=new Set(groups.map(g=>g.intent));
   if(k.army>1&&legal.includes("move")){
@@ -1319,7 +1324,7 @@ function mockPhaseB(world,k){
     if (legal.includes("rest")) return {act:"rest",target:null,dir:null,note:"sharpen blades"};
   }
   // 4. agrarian archetypes: expand, settle, plant, harvest
-  if (legal.includes("found_village")&&k.pop>=popCap(world,k)-1) return {act:"found_village",target:null,dir:null,note:"found village"};
+  if (legal.includes("build_house")&&k.pop>=popCap(world,k)-1) return {act:"build_house",target:null,dir:null,note:"raise housing"};
   if (legal.includes("claim")&&land<target) return {act:"claim",target:null,dir:null,note:"expand"};
   if (legal.includes("plant")&&hasEmpty&&k.food>k.pop+cfg.plantCostFood) return {act:"plant",target:null,dir:null,note:"seed future food"};
   if (legal.includes("harvest")&&(k.food<3*k.pop||k.stamina>=cfg.staminaCap)) return {act:"harvest",target:null,dir:null,note:"cash in crops"};
@@ -1353,10 +1358,10 @@ function injectCacheDrop(world,x,y){ const c=wrap(world,x,y),g=world.grid[c[1]][
 // ---------- snapshots (compact, for replay/export) ----------
 function takeSnapshot(world){
   const W=world.cfg.width,H=world.cfg.height;
-  const owners=new Array(W*H), crops=new Array(W*H), shields=new Array(W*H), terrains=new Array(W*H), ores=new Array(W*H), settlements=new Array(W*H);
-  for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const g=world.grid[y][x],i=y*W+x; owners[i]=g.owner===null?-1:g.owner; crops[i]=g.crop; shields[i]=g.shield;terrains[i]=g.terrain;ores[i]=g.ore||0;settlements[i]=g.settlement?{...g.settlement}:null; }
+  const owners=new Array(W*H), crops=new Array(W*H), shields=new Array(W*H), terrains=new Array(W*H), ores=new Array(W*H), houses=new Array(W*H);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const g=world.grid[y][x],i=y*W+x; owners[i]=g.owner===null?-1:g.owner; crops[i]=g.crop; shields[i]=g.shield;terrains[i]=g.terrain;ores[i]=g.ore||0;houses[i]=g.houses||0; }
   return { day:world.day, tick:world.tick, over:world.over, winner:world.winner, rngState:world.rng.getState?.(), curfewUntil:world.curfewUntil, silenceUntil:world.silenceUntil,
-    owners, crops, shields, terrains, ores, settlements,
+    owners, crops, shields, terrains, ores, houses,
     kingdoms: world.kingdoms.map(k=>({id:k.id,alive:k.alive,pop:k.pop,army:k.army,armyGroups:normalizeArmyGroups(world,k).map(g=>({...g})),armyPos:k.armyPos?{...k.armyPos}:null,armyIntent:k.armyIntent||null,food:k.food,metal:k.metal,stamina:k.stamina,bulletin:k.bulletin,selfNote:k.selfNote,goal:k.goal,talkModel:k.talkModel,actModel:k.actModel,mutedUntil:k.mutedUntil,pendingOffers:k.pendingOffers.map(o=>({...o}))})) };
 }
 
@@ -1379,6 +1384,18 @@ function runTick(world,thinkers){
     world.tick+=1;
     if (world.tick>=world.cfg.ticksPerDay){ world.tick=0; processDawn(world); }
     checkVictory(world);
+    // Intent headings: groups with a deployment order point toward their post; anything else holds.
+    for (const k of world.kingdoms){ if (!k.alive) continue;
+      for (const g of normalizeArmyGroups(world,k)){
+        if (["village","mine","border"].includes(g.intent)){
+          const post=chooseArmyPost(world,k,g.intent,g);
+          let dx=post[0]-g.x, dy=post[1]-g.y;
+          if (dx>world.cfg.width/2) dx-=world.cfg.width; if (dx<-world.cfg.width/2) dx+=world.cfg.width;
+          if (dy>world.cfg.height/2) dy-=world.cfg.height; if (dy<-world.cfg.height/2) dy+=world.cfg.height;
+          g.heading=(dx||dy)?{dx,dy}:null;
+        } else g.heading=null;
+      }
+    }
     world.snapshots.push(takeSnapshot(world));
   })();
 }
@@ -1441,7 +1458,7 @@ function phaseAUser(world,k){
   return "CURRENT WORLD TICK: Round "+(world.tick+1)+" of Day "+world.day+" (Phase A)\n"+
   "YOUR SECRET STATE: Food Stores = "+k.food+" (next Dawn needs "+k.pop+"), Mine Stock = "+k.metal+" (next Dawn needs "+k.army+"), Stamina = "+k.stamina+", Stock Archetype = "+k.goal+"\n"+
   "YOUR STATE: Controlled Cells = "+cellsOf(world,k.id).length+", Army = "+k.army+", Population = "+k.pop+", Your army groups = "+JSON.stringify(normalizeArmyGroups(world,k))+"\n"+
-  "YOUR STRATEGIC TILES: "+JSON.stringify(cellsOf(world,k.id).map(([x,y])=>({x,y,terrain:world.grid[y][x].terrain,settlement:world.grid[y][x].settlement?.kind||null})))+"\n\n"+
+  "YOUR STRATEGIC TILES: "+JSON.stringify(cellsOf(world,k.id).map(([x,y])=>({x,y,terrain:world.grid[y][x].terrain,houses:world.grid[y][x].houses||0})))+"\n\n"+
   "VISIBLE PEERS (army sizes and positions are hidden from you):\n"+JSON.stringify(peers)+"\n\n"+
   "INBOX MESSAGES RECEIVED THIS ROUND:\n"+JSON.stringify(k.inbox.map(m=>({from:"#"+(m.from+1),text:m.text})))+"\n\n"+
   'PREVIOUS INTERNAL SCRATCHPAD NOTE:\n"'+String(k.selfNote||"").replace(/"/g,'\\"')+'"\n\n'+
@@ -1454,7 +1471,7 @@ function phaseBSystem(world,k){
   "ACTION EXECUTION RULES:\n"+
   "- 'harvest': Requires an owned FIELD tile with crop level >= 2. Consumes 1 stamina. Increases food.\n"+
   "- 'mine': Requires an owned MINE tile with ore. Consumes 1 stamina and adds mine stock. Mine stock does NOT feed people.\n"+
-  "- 'found_village': Requires an owned empty PLAIN tile, 3 food and 1 stamina. Adds a visible village with a 3-person cap.\n"+
+  "- 'build_house': Requires an owned tile below the house cap ("+cfg.maxHousesPerTile+" per tile), "+cfg.houseCostMetal+" minerals and 1 stamina. Each house supports "+cfg.housePop+" people.\n"+
   "- 'plant': Consumes "+cfg.plantCostFood+" food. Plants crop level 1 on an owned empty FIELD tile only.\n"+
   "- 'eat': Consumes 1 food. Restores +"+cfg.eatStaminaGain+" stamina.\n"+
   "- 'share': Consumes food from your store and transfers it to target kingdom adjacent to your border.\n"+
@@ -1467,7 +1484,7 @@ function phaseBSystem(world,k){
   "- 'move': Moves some or all of one army group through owned land, up to "+cfg.armyMoveRange+" tiles this turn. Use group_id, amount, and placement ('village', 'mine', or 'border'). Moving part of a group splits it; groups that meet merge. Split forces to garrison villages, guard mines, and form attack groups.\n"+
   "- 'rest': Consumes no resources. Restores +1 stamina up to stamina cap.\n\n"+
   "FOG OF WAR: You know all of your own army groups. You cannot see rival army size, groups, or position; do not assume an enemy tile is defended or empty. Choose deployments from your own assets and intent.\n\n"+
-  "SURVIVAL ECONOMICS: Every Dawn, pay 1 food per population and 1 mine stock per army. A food deficit shrinks population; a mine-stock deficit shrinks army. Reserve both BEFORE expanding or training.\n\n"+
+  "SURVIVAL ECONOMICS: Every Dawn, pay 1 food per population and 1 mineral per army. A food deficit shrinks population; a mineral deficit shrinks army. Population is capped by housing: "+cfg.housePop+" people per house, up to "+cfg.maxHousesPerTile+" houses per tile, each house costs "+cfg.houseCostMetal+" minerals. Reserve both BEFORE expanding or training.\n\n"+
   "LEGAL ACTIONS AVAILABLE THIS ROUND:\n"+JSON.stringify(legalActions(world,k))+"\n\n"+
   'OUTPUT SCHEMA REQUIREMENTS:\nRespond ONLY with a valid JSON object matching the following structure:\n'+
   '{\n  "act": string,\n  "target": number | null,\n  "dir": string | null,\n  "group_id": string | null,\n  "amount": number | null,\n  "placement": string | null,\n  "note": string\n}\nKingdom ids for target are 0-based: kingdom #n has id n-1.';
@@ -1536,7 +1553,7 @@ const DB={
 
 // ---------- setup screen ----------
 function buildSetup(){
-  const cfg=defaultConfig();
+  const cfg=savedConfigDefaults();
   const targets={world:$("cfg-world"),caps:$("cfg-caps"),costs:$("cfg-costs")};
   for (const [group,knobs] of CONFIG_SCHEMA){
     for (const [key,def,min,max,label] of knobs){
@@ -1554,6 +1571,11 @@ function buildSetup(){
   renderLLMPresets();
   const preferred=Storage.get("llmempire.defaultLLMPreset"),saved=getLLMPresets()[preferred];
   if(saved){applyLLMSetup(saved);renderLLMPresets(preferred)} else buildAgentOverrides();
+}
+function savedConfigDefaults(){
+  const base=defaultConfig();
+  try{const saved=JSON.parse(Storage.get("llmempire.configDefaults")||"{}");if(saved&&typeof saved==="object"&&!Array.isArray(saved))for(const k of Object.keys(base))if(Object.hasOwn(saved,k))base[k]=saved[k];}catch(e){}
+  return base;
 }
 const LLM_PRESETS_KEY="llmempire.llmPresets";
 function getLLMPresets(){try{const p=JSON.parse(Storage.get(LLM_PRESETS_KEY)||"{}");return (p&&typeof p==="object"&&!Array.isArray(p))?p:{}}catch(e){return {}}}
@@ -1575,6 +1597,7 @@ function readConfig(){
   LLM.temperature=finiteOr($("temperature").value,0.7); LLM.timeoutMs=finiteOr($("thinkTimeoutMs").value,20000);
   Storage.set("llmempire.apiBase",LLM.base); Storage.set("llmempire.apiKey",LLM.key);
   Storage.set("llmempire.defaultModel",$("modelA").value.trim()||"mock");
+  Storage.set("llmempire.configDefaults",JSON.stringify(cfg));
   const overrides={}; document.querySelectorAll(".agent-model input").forEach((el,i)=>{ if(el.value.trim()) overrides[i]=el.value.trim(); });
   Storage.set("llmempire.agentModels",JSON.stringify(overrides));
   return cfg;
@@ -1654,7 +1677,7 @@ function analysisList(items,kind){if(!Array.isArray(items)||!items.length)return
 function renderAnalysis(saved){const host=$("analysis");if(!saved?.report){host.innerHTML='<div class="analysis-empty">No AI analysis yet.</div>';return;}const r=saved.report;let out='<div id="analysisStatus">Analyzed with '+htmlSafe(saved.model)+' · '+htmlSafe(new Date(saved.createdAt).toLocaleString())+'</div><div class="analysis-card"><h3>Match read</h3><p>'+htmlSafe(r.summary||"")+'</p></div>';for(const p of(Array.isArray(r.players)?r.players:[]))out+='<div class="analysis-card"><h3>#'+htmlSafe(p.id)+' '+htmlSafe(p.name||"")+' · '+htmlSafe(p.style||"")+'</h3><p>'+htmlSafe((Array.isArray(p.traits)?p.traits:[]).join(" · "))+'</p><h4>Brilliant moves</h4>'+analysisList(p.brilliantMoves,"brilliant")+'<h4>Blunders</h4>'+analysisList(p.blunders,"blunder")+'<h4>Diplomacy</h4><p>'+htmlSafe(p.diplomacy||"")+'</p><h4>Lesson</h4><p>'+htmlSafe(p.lesson||"")+'</p></div>';if(r.turningPoints?.length)out+='<div class="analysis-card"><h3>Turning points</h3>'+analysisList(r.turningPoints,"brilliant")+'</div>';if(r.metaInsights?.length)out+='<div class="analysis-card"><h3>Meta insights</h3><ul>'+r.metaInsights.map(x=>'<li>'+htmlSafe(x)+'</li>').join("")+'</ul></div>';host.innerHTML=out;}
 
 // ---------- rendering ----------
-const ACTION_VISUALS={harvest:["🌾","Harvest"],plant:["🌱","Plant"],eat:["🍞","Eat"],train:["⚔️","Train"],fortify:["🛡️","Fortify"],claim:["🧭","Expand"],raid:["💥","Attack"],share:["🎁","Share"],trade_offer:["🤝","Offer trade"],honor:["✅","Honor trade"],move:["➜","Move"],rest:["💤","Rest"]};
+const ACTION_VISUALS={harvest:["🌾","Harvest"],plant:["🌱","Plant"],eat:["🍞","Eat"],train:["⚔️","Train"],fortify:["🛡️","Fortify"],claim:["🧭","Expand"],build_house:["🏠","Build house"],raid:["💥","Attack"],share:["🎁","Share"],trade_offer:["🤝","Offer trade"],honor:["✅","Honor trade"],move:["➜","Move"],rest:["💤","Rest"]};
 function spawnMapPing(x,y,color,icon,badge,label){
   const map=$("mapActions"); if(!map)return;
   const el=document.createElement("div");
@@ -1790,9 +1813,9 @@ function renderBoard(w, snap){
   ctx.strokeStyle=MAPC.boardEdge;ctx.lineWidth=Math.max(2,cell*.10);ctx.strokeRect(ox-1.5,oy-1.5,W*cell+3,H*cell+3);
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){
     const px=ox+x*cell, py=oy+y*cell;
-    let owner,crop,shield,terrain,ore,settlement;
-    if(snap){owner=get(x,y,"owners");crop=get(x,y,"crops");shield=get(x,y,"shields");terrain=get(x,y,"terrains")||"plain";ore=get(x,y,"ores")||0;settlement=get(x,y,"settlements");owner=owner===-1?null:owner;}
-    else{const g=w.grid[y][x];owner=g.owner;crop=g.crop;shield=g.shield;terrain=g.terrain||"plain";ore=g.ore||0;settlement=g.settlement;}
+    let owner,crop,shield,terrain,ore,houses;
+    if(snap){owner=get(x,y,"owners");crop=get(x,y,"crops");shield=get(x,y,"shields");terrain=get(x,y,"terrains")||"plain";ore=get(x,y,"ores")||0;houses=get(x,y,"houses")||0;owner=owner===-1?null:owner;}
+    else{const g=w.grid[y][x];owner=g.owner;crop=g.crop;shield=g.shield;terrain=g.terrain||"plain";ore=g.ore||0;houses=g.houses||0;}
     const base=owner===null?MAPC.land:factionColor(owner);
     // beveled toy tile: one shared visual grammar everywhere
     ctx.fillStyle=base;ctx.fillRect(px+.7,py+.7,cell-1.4,cell-1.4);
@@ -1832,17 +1855,16 @@ function renderBoard(w, snap){
       if(n>=3){dia(cx-cell*.085,base-h*.70,cell*.04,MAPC.crop);dia(cx+cell*.085,base-h*.70,cell*.04,MAPC.crop);ctx.strokeStyle=MAPC.cropBand;ctx.lineWidth=Math.max(1.4,cell*.04);ctx.beginPath();ctx.moveTo(cx-cell*.10,base-cell*.055);ctx.lineTo(cx+cell*.10,base-cell*.055);ctx.stroke();}
       ctx.restore();
     }
-    if(settlement&&cell>12){
-      const st=settlement,cx=px+cell*.5,isCity=st.kind==="city",roof=isCity?MAPC.roofCity:MAPC.roofVillage;
-      // Flat house mark: wall block + roof triangle. A city adds one tower, same family.
+    if(houses>0&&cell>12){
+      const cx=px+cell*.5;
+      // One flat house mark per tile; the count pill shows how many houses stand here.
       ctx.fillStyle=MAPC.buildingWall;ctx.fillRect(cx-cell*.20,py+cell*.42,cell*.40,cell*.28);
-      poly([[cx-cell*.26,py+cell*.44],[cx,py+cell*.20],[cx+cell*.26,py+cell*.44]],roof);
-      if(isCity){ctx.fillStyle=MAPC.buildingWall;ctx.fillRect(cx+cell*.10,py+cell*.30,cell*.13,cell*.40);poly([[cx+cell*.085,py+cell*.32],[cx+cell*.165,py+cell*.16],[cx+cell*.245,py+cell*.32]],roof);}
-      // Population label only when zoomed in enough to read it - overview stays clean.
-      if(dispCss>=28){
-        const label=(isCity?"CITY ":"VILLAGE ")+st.pop+"/"+st.cap,fs=Math.max(7,cell*.16);ctx.font="900 "+fs+"px Nunito,Segoe UI,sans-serif";const tw=ctx.measureText(label).width+cell*.12,lx=cx-tw/2,ly=py+cell*.76;
-        ctx.fillStyle=MAPC.labelBg;ctx.beginPath();if(ctx.roundRect)ctx.roundRect(lx,ly,tw,fs+cell*.10,Math.max(2,cell*.05));else ctx.rect(lx,ly,tw,fs+cell*.10);ctx.fill();ctx.fillStyle=MAPC.labelText;ctx.textAlign="center";ctx.textBaseline="top";ctx.fillText(label,cx,ly+cell*.035);
-      }
+      poly([[cx-cell*.26,py+cell*.44],[cx,py+cell*.20],[cx+cell*.26,py+cell*.44]],MAPC.roofVillage);
+      const label=String(houses),fs=Math.max(7,cell*.22);
+      ctx.font="900 "+fs+"px Nunito,Segoe UI,sans-serif";
+      const tw=ctx.measureText(label).width+cell*.12,lx=cx+cell*.10,ly=py+cell*.10;
+      ctx.fillStyle=MAPC.labelBg;ctx.beginPath();if(ctx.roundRect)ctx.roundRect(lx,ly,tw,fs+cell*.10,Math.max(2,cell*.05));else ctx.rect(lx,ly,tw,fs+cell*.10);ctx.fill();
+      ctx.fillStyle=MAPC.labelText;ctx.textAlign="center";ctx.textBaseline="top";ctx.fillText(label,lx+tw/2,ly+cell*.035);
     }
     if(shield>0){ctx.strokeStyle=MAPC.shield;ctx.lineWidth=Math.max(2,cell*.09);ctx.globalAlpha=.5+.2*shield;ctx.strokeRect(px+cell*.13,py+cell*.13,cell*.74,cell*.74);ctx.globalAlpha=1;}
   }
@@ -1878,6 +1900,18 @@ function renderBoard(w, snap){
       else if(g.size<=6){u([[-.48,-.55],[.48,-.55],[.48,.08],[0,.60],[-.48,.08]]);}
       else{u([[-.55,.45],[.55,.45],[.55,-.12],[.28,.14],[0,-.50],[-.28,.14],[-.55,-.12]]);}
       ctx.textAlign="left";ctx.fillText(num,sx+markW+gap,cy+.5);ctx.textAlign="center";
+      // Intent: flat arrow toward the planned post, or a hold pin when staying put.
+      if(g.heading&&(g.heading.dx||g.heading.dy)){
+        const ang=Math.atan2(g.heading.dy,g.heading.dx),al=size*.34,aw=size*.20;
+        const bx=cx+Math.cos(ang)*(r+al*.28),by=cy+Math.sin(ang)*(r+al*.28);
+        ctx.save();ctx.translate(bx,by);ctx.rotate(ang);
+        ctx.fillStyle=MAPC.unitGlyph;ctx.strokeStyle=MAPC.unitRing;ctx.lineWidth=Math.max(1,size*.045);
+        ctx.beginPath();ctx.moveTo(al*.55,0);ctx.lineTo(-al*.30,-aw*.55);ctx.lineTo(-al*.10,0);ctx.lineTo(-al*.30,aw*.55);ctx.closePath();ctx.fill();ctx.stroke();
+        ctx.restore();
+      } else {
+        ctx.fillStyle=MAPC.unitGlyph;ctx.strokeStyle=MAPC.unitRing;ctx.lineWidth=Math.max(1,size*.04);
+        ctx.beginPath();ctx.arc(cx,cy+r*.72,size*.075,0,Math.PI*2);ctx.fill();ctx.stroke();
+      }
       ctx.restore();    }}
   }
   ctx.setTransform(1,0,0,1,0,0);positionMapActions();
@@ -1982,7 +2016,7 @@ function validateReplay(data){
 function restoreSnapshot(snap){
   world.day=snap.day;world.tick=snap.tick;world.over=snap.over;world.winner=snap.winner;world.curfewUntil=snap.curfewUntil||0;world.silenceUntil=snap.silenceUntil||0;if(snap.rngState!==undefined)world.rng.setState?.(snap.rngState);
   const W=world.cfg.width;
-  for(let y=0;y<world.cfg.height;y++)for(let x=0;x<W;x++){const i=y*W+x,g=world.grid[y][x];g.owner=snap.owners[i]===-1?null:snap.owners[i];g.crop=snap.crops[i];g.shield=snap.shields[i];g.terrain=snap.terrains?.[i]||g.terrain||"plain";g.ore=snap.ores?.[i]||0;g.settlement=snap.settlements?.[i]||null;}
+  for(let y=0;y<world.cfg.height;y++)for(let x=0;x<W;x++){const i=y*W+x,g=world.grid[y][x];g.owner=snap.owners[i]===-1?null:snap.owners[i];g.crop=snap.crops[i];g.shield=snap.shields[i];g.terrain=snap.terrains?.[i]||g.terrain||"plain";g.ore=snap.ores?.[i]||0;g.houses=snap.houses?.[i]??(snap.settlements?.[i]?2:0);}
   snap.kingdoms.forEach((s,i)=>{const k=world.kingdoms[i];Object.assign(k,{alive:s.alive,pop:s.pop,army:s.army,armyGroups:s.armyGroups||null,armyPos:s.armyPos||null,armyIntent:s.armyIntent||"capital garrison",food:s.food,metal:s.metal??world.cfg.startMetal??defaultConfig().startMetal,stamina:s.stamina,bulletin:s.bulletin,selfNote:s.selfNote,goal:s.goal||k.goal,talkModel:s.talkModel||k.talkModel,actModel:s.actModel||k.actModel,mutedUntil:s.mutedUntil||0,pendingOffers:Array.isArray(s.pendingOffers)?s.pendingOffers.map(o=>({...o})):[]});normalizeArmyGroups(world,k);});
 }
 function loadReplay(data){
