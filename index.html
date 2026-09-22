@@ -409,16 +409,7 @@
   .roster-presets{margin-top:12px;padding:11px;border:1px solid var(--veil-11);border-radius:12px;background:var(--shade-46)}.roster-presets .key-row{grid-template-columns:minmax(0,1fr) auto auto}.roster-presets button{white-space:nowrap}
   /* Turn actions live on the map: one light icon per player, no card rail. */
   #turnViz{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-  .map-action{--kc:var(--cyan);position:absolute;z-index:8;width:30px;height:30px;margin:-15px 0 0 -15px;display:grid;place-items:center;pointer-events:none;filter:drop-shadow(0 1px 2px var(--shade-47));animation:mapAction .35s ease-out both}
-  .map-action::before{display:none}
-  .map-action .map-action-icon{position:relative;width:27px;height:27px;display:grid;place-items:center;border:2px solid var(--parch-6);border-radius:7px;background:var(--kc);font-size:15px;line-height:1;animation:actionPop .55s cubic-bezier(.2,.9,.25,1.25) both;box-shadow:0 2px 0 var(--shade-49)}
-  @keyframes pingFade{0%{opacity:0;transform:scale(.6)}12%{opacity:1;transform:scale(1)}70%{opacity:1}100%{opacity:0;transform:scale(.92)}}
-  .map-action.ping{animation:pingFade 1.9s ease forwards}
-  .map-action .map-action-who{position:absolute;right:-3px;top:-3px;min-width:14px;height:14px;padding:0 3px;display:grid;place-items:center;border:1px solid var(--veil-29);border-radius:9px;background:var(--kc);color:var(--night-9);font:900 8px/1 system-ui;box-shadow:0 1px 4px var(--night-14)}
-  .map-action .map-action-label{position:absolute;top:31px;left:50%;transform:translateX(-50%);padding:3px 5px;border:1px solid var(--parch-6);border-radius:5px;background:var(--kc);color:var(--foam-6);font:900 8px/1 system-ui;letter-spacing:.03em;text-transform:uppercase;white-space:nowrap;text-shadow:0 1px 2px var(--shade-61);box-shadow:0 2px 3px var(--shade-45)}
-  @keyframes actionPop{0%{transform:scale(.2) rotate(-18deg)}58%{transform:scale(1.28) rotate(5deg)}100%{transform:none}}
-  @keyframes actionRing{0%{opacity:0;transform:scale(.35)}22%{opacity:1}100%{opacity:0;transform:scale(2.15)}}
-  @keyframes mapAction{0%{opacity:0;transform:translateY(5px) scale(.7)}22%,78%{opacity:1;transform:none}100%{opacity:.94;transform:none}}
+
 
   /* Spectator-first mobile UX: story, characters, timeline, observe controls. */
   #liveStory{display:none}
@@ -719,30 +710,30 @@
   /* ===== Rankings table: replaces the player card strip ===== */
   #empirebar{display:block;width:100%;max-width:100%;height:auto!important;min-height:0!important;max-height:40dvh;overflow-y:auto;overflow-x:hidden;padding:2px 8px 6px;scrollbar-width:none}
   #empirebar::-webkit-scrollbar{display:none}
-  .rank-head{display:flex;align-items:center;gap:7px;min-height:34px;cursor:pointer;user-select:none;color:var(--foam-9);font-size:11px;font-weight:750}
-  .rank-head .chev{color:var(--cyan);font-size:12px;width:12px}
-  .rank-head .rank-lead{margin-left:auto;font-size:10px;font-weight:500;color:var(--sea-30);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rank-head{display:flex;align-items:center;gap:7px;min-height:34px;cursor:pointer;user-select:none;color:var(--ink);font-size:11px;font-weight:750}
+  .rank-head .chev{color:var(--orange-dark);font-size:12px;width:12px}
+  .rank-head .rank-lead{margin-left:auto;font-size:10px;font-weight:600;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #empirebar table{width:100%;border-collapse:collapse;font-size:11px;font-variant-numeric:tabular-nums}
-  #empirebar th{font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--sea-30);padding:4px;text-align:right;cursor:pointer;user-select:none;white-space:nowrap;font-weight:700}
-  #empirebar th.sorted{color:var(--cyan)}
+  #empirebar th{font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:4px;text-align:right;cursor:pointer;user-select:none;white-space:nowrap;font-weight:800}
+  #empirebar th.sorted{color:var(--orange-dark)}
   #empirebar th:nth-child(2){text-align:left;cursor:default}
-  #empirebar td{padding:4px;color:var(--foam-9);text-align:right}
-  #empirebar td.rno,#empirebar th.rno{text-align:left;width:20px;color:var(--sea-30)}
+  #empirebar td{padding:4px;color:var(--ink);text-align:right}
+  #empirebar td.rno,#empirebar th.rno{text-align:left;width:20px;color:var(--muted)}
   #empirebar td.rname{text-align:left;max-width:104px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
-  #empirebar tbody tr{cursor:pointer;border-top:1px solid var(--veil-5)}
-  #empirebar tbody tr.sel td{background:var(--sea-81)}
+  #empirebar tbody tr{cursor:pointer;border-top:1px solid var(--hair)}
+  #empirebar tbody tr.sel td{background:var(--sun-paper-soft)}
   #empirebar tbody tr.dead{opacity:.35}
 
   /* ===== Unified resource marks: one flat icon + its value, everywhere ===== */
   .ric{display:inline-flex;align-items:center;gap:3px;font-variant-numeric:tabular-nums;font-weight:600}
   .ric .rico{display:inline-flex;width:12px;height:12px;flex:0 0 12px}
   .ric .rico svg{width:100%;height:100%;display:block}
-  .ric-food{color:var(--map-crop-band)}
-  .ric-house{color:var(--map-roof-village)}
-  .ric-mineral{color:var(--map-ore)}
-  .ric-army{color:var(--map-symbol-ink)}
-  .ric-pop{color:var(--map-symbol-ink)}
-  .ric-land{color:var(--map-symbol-ink)}
+  .ric-food{color:var(--sun-green)}
+  .ric-house{color:var(--orange-dark)}
+  .ric-mineral{color:var(--sun-sea-deep)}
+  .ric-army{color:var(--ink)}
+  .ric-pop{color:var(--ink)}
+  .ric-land{color:var(--sea)}
   #empirebar th .ric .rico{width:13px;height:13px;flex-basis:13px}
   .agent-stats .ric{margin-right:10px;font-size:11px}
 </style>
@@ -1016,7 +1007,7 @@ function normalizeArmyGroups(world,k){
   const hadGroups=Array.isArray(k.armyGroups)&&k.armyGroups.length>0;
   if(!Array.isArray(k.armyGroups))k.armyGroups=[];
   if(!k.armyGroups.length&&k.army>0&&home)k.armyGroups=[{id:"g1",x:k.armyPos?.x??home[0],y:k.armyPos?.y??home[1],size:k.army,intent:k.armyIntent||"capital garrison"}];
-  k.armyGroups=k.armyGroups.filter(g=>g&&g.size>0&&world.grid[g.y]?.[g.x]?.owner===k.id).map((g,i)=>({id:g.id||("g"+(i+1)),x:g.x,y:g.y,size:Math.floor(g.size),intent:g.intent||"reserve",heading:g.heading||null}));
+  k.armyGroups=k.armyGroups.filter(g=>g&&g.size>0&&world.grid[g.y]?.[g.x]?.owner===k.id).map((g,i)=>({id:g.id||("g"+(i+1)),x:g.x,y:g.y,size:Math.floor(g.size),intent:g.intent||"reserve",heading:g.heading||null,moving:!!g.moving}));
   let total=k.armyGroups.reduce((n,g)=>n+g.size,0);
   if(total<k.army&&home&&!hadGroups){const g=k.armyGroups[0];if(g)g.size+=k.army-total;else k.armyGroups=[{id:"g1",x:home[0],y:home[1],size:k.army,intent:"capital garrison"}];}
   if(total>k.army){let excess=total-k.army;for(let i=k.armyGroups.length-1;i>=0&&excess;i--){const cut=Math.min(excess,k.armyGroups[i].size);k.armyGroups[i].size-=cut;excess-=cut;}k.armyGroups=k.armyGroups.filter(g=>g.size>0);}
@@ -1166,7 +1157,7 @@ function executeAct(world,kid,action,events){
     case "move":{
       const intent=["village","mine","border"].includes(action.placement)?action.placement:"border",groups=normalizeArmyGroups(world,k);
       let source=groups.find(g=>g.id===action.group_id)||groups.slice().sort((a,b)=>b.size-a.size)[0],from=source?{x:source.x,y:source.y}:null,dest=source?chooseArmyPost(world,k,intent,source):null;
-      if(source&&dest){let amount=Math.max(1,Math.min(source.size,Math.floor(action.amount||Math.ceil(source.size/2))));let moved=source;if(amount<source.size){source.size-=amount;moved={id:nextGroupId(k),x:source.x,y:source.y,size:amount,intent};k.armyGroups.push(moved);}moved.x=dest[0];moved.y=dest[1];moved.intent=intent;const same=k.armyGroups.filter(g=>g!==moved&&g.x===moved.x&&g.y===moved.y);for(const g of same){moved.size+=g.size;k.armyGroups.splice(k.armyGroups.indexOf(g),1);}normalizeArmyGroups(world,k);}
+      if(source&&dest){let amount=Math.max(1,Math.min(source.size,Math.floor(action.amount||Math.ceil(source.size/2))));let moved=source;const ox=source.x,oy=source.y;if(amount<source.size){source.size-=amount;moved={id:nextGroupId(k),x:source.x,y:source.y,size:amount,intent};k.armyGroups.push(moved);}moved.x=dest[0];moved.y=dest[1];moved.intent=intent;let dx=dest[0]-ox,dy=dest[1]-oy;if(dx>world.cfg.width/2)dx-=world.cfg.width;if(dx<-world.cfg.width/2)dx+=world.cfg.width;if(dy>world.cfg.height/2)dy-=world.cfg.height;if(dy<-world.cfg.height/2)dy+=world.cfg.height;moved.moving=!!(dx||dy);moved.heading=moved.moving?{dx,dy}:null;const same=k.armyGroups.filter(g=>g!==moved&&g.x===moved.x&&g.y===moved.y);for(const g of same){moved.size+=g.size;k.armyGroups.splice(k.armyGroups.indexOf(g),1);}normalizeArmyGroups(world,k);}
       emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"move",target:null,dir:null,placement:intent,amount:action.amount||null,from,to:dest?{x:dest[0],y:dest[1]}:from,note:action.note||("deploy to "+intent)});
       break;}
     case "rest":
@@ -1404,6 +1395,7 @@ function runTick(world,thinkers){
   // thinkers: {phaseA(world,k)->Promise<{bulletin,letters,self_note}>, phaseB(world,k)->Promise<{act,...}>}
   return (async ()=>{
     if (world.over) return;
+    for (const k of world.kingdoms) for (const g of normalizeArmyGroups(world,k)){ g.moving=false; g.heading=null; }
     // Phase A: communication
     for (const k of world.kingdoms){ if (!k.alive) continue;
       const a=await thinkers.phaseA(world,k);
@@ -1418,21 +1410,7 @@ function runTick(world,thinkers){
     world.tick+=1;
     if (world.tick>=world.cfg.ticksPerDay){ world.tick=0; processDawn(world); }
     checkVictory(world);
-    // Intent headings: attack groups face the nearest rival, deployed groups point to their post, the rest hold.
-    for (const k of world.kingdoms){ if (!k.alive) continue;
-      for (const g of normalizeArmyGroups(world,k)){
-        const norm=(dx,dy)=>{ if (dx>world.cfg.width/2) dx-=world.cfg.width; if (dx<-world.cfg.width/2) dx+=world.cfg.width; if (dy>world.cfg.height/2) dy-=world.cfg.height; if (dy<-world.cfg.height/2) dy+=world.cfg.height; return (dx||dy)?{dx,dy}:null; };
-        if (g.intent==="border"){
-          let best=null,bd=Infinity;
-          for (const o of world.kingdoms){ if (!o.alive||o.id===k.id) continue;
-            for (const c of cellsOf(world,o.id)){ const dd=chebyshev(world,[g.x,g.y],c); if (dd<bd){bd=dd;best=c;} } }
-          g.heading=best?norm(best[0]-g.x,best[1]-g.y):null;
-        } else if (["village","mine"].includes(g.intent)){
-          const post=chooseArmyPost(world,k,g.intent,g);
-          g.heading=norm(post[0]-g.x,post[1]-g.y);
-        } else g.heading=null;
-      }
-    }
+    // Movement arrows are set by actual move actions and cleared at the next tick.
     world.snapshots.push(takeSnapshot(world));
   })();
 }
@@ -1724,28 +1702,10 @@ function renderAnalysis(saved){const host=$("analysis");if(!saved?.report){host.
 
 // ---------- rendering ----------
 const ACTION_VISUALS={harvest:["🌾","Harvest"],plant:["🌱","Plant"],eat:["🍞","Eat"],train:["⚔️","Train"],fortify:["🛡️","Fortify"],claim:["🧭","Expand"],build_house:["🏠","Build house"],raid:["💥","Attack"],share:["🎁","Share"],trade_offer:["🤝","Offer trade"],honor:["✅","Honor trade"],move:["➜","Move"],rest:["💤","Rest"]};
-function spawnMapPing(x,y,color,icon,badge,label){
-  const map=$("mapActions"); if(!map)return;
-  const el=document.createElement("div");
-  el.className="map-action ping"; el.dataset.ax=x; el.dataset.ay=y; el.style.setProperty("--kc",color);
-  el.innerHTML='<span class="map-action-icon">'+icon+'</span>'
-    +(badge?'<span class="map-action-who">'+badge+'</span>':'')
-    +(label?'<span class="map-action-label">'+label+'</span>':'');
-  map.appendChild(el); positionMapActions();
-  setTimeout(()=>el.remove(),1900);
-}
 function showTurnActions(w,events){
   const acts=events.filter(e=>e.type==="Act"); if(!acts.length)return;
   const viz=$("turnViz");
   viz.textContent=acts.map(e=>{const k=w.kingdoms[e.kingdomId],v=ACTION_VISUALS[e.act]||["•",e.act];return "Player "+(k.id+1)+" "+k.name+": "+v[1];}).join(". ");
-  // Movement is visible on the map, not just logged: a faction-colored arrow lands
-  // on the destination tile for a couple of seconds, with the moved headcount.
-  for(const e of acts){
-    if(e.act!=="move"||!e.to)continue;
-    const k=w.kingdoms[e.kingdomId]; if(!k)continue;
-    const moved=e.from&&(e.from.x!==e.to.x||e.from.y!==e.to.y);
-    spawnMapPing(e.to.x,e.to.y,factionColor(k.id),"\u27a4",e.amount?String(e.amount):"",moved?"move":"post");
-  }
   renderEmpires(w);
 }
 function renderWorldTab(w){
@@ -1947,17 +1907,14 @@ function renderBoard(w, snap){
       else if(g.size<=6){u([[-.48,-.55],[.48,-.55],[.48,.08],[0,.60],[-.48,.08]]);}
       else{u([[-.55,.45],[.55,.45],[.55,-.12],[.28,.14],[0,-.50],[-.28,.14],[-.55,-.12]]);}
       ctx.textAlign="left";ctx.fillText(num,sx+markW+gap,cy+.5);ctx.textAlign="center";
-      // Intent: flat arrow toward the planned post, or a hold pin when staying put.
-      if(g.heading&&(g.heading.dx||g.heading.dy)){
+      // Show an arrow only for an army that actually moved this turn.
+      if(g.moving&&g.heading&&(g.heading.dx||g.heading.dy)){
         const ang=Math.atan2(g.heading.dy,g.heading.dx),al=size*.46,aw=size*.26;
         const bx=cx+Math.cos(ang)*(r+al*.42),by=cy+Math.sin(ang)*(r+al*.42);
         ctx.save();ctx.translate(bx,by);ctx.rotate(ang);
         ctx.fillStyle=MAPC.unitGlyph;ctx.strokeStyle=MAPC.unitRing;ctx.lineWidth=Math.max(1.2,size*.06);
         ctx.beginPath();ctx.moveTo(al*.55,0);ctx.lineTo(-al*.30,-aw*.55);ctx.lineTo(-al*.10,0);ctx.lineTo(-al*.30,aw*.55);ctx.closePath();ctx.fill();ctx.stroke();
         ctx.restore();
-      } else {
-        ctx.fillStyle=MAPC.unitGlyph;ctx.strokeStyle=MAPC.unitRing;ctx.lineWidth=Math.max(1,size*.04);
-        ctx.beginPath();ctx.arc(cx,cy+r*.72,size*.075,0,Math.PI*2);ctx.fill();ctx.stroke();
       }
       ctx.restore();    }}
   }
@@ -2006,10 +1963,13 @@ function evText(w,ev){
   }
 }
 let rankOpen=false, rankSort={key:"overall",dir:-1};
-function rankScore(k,land){ return land*1000+k.pop*10+k.food; } // the timed-win composite: the game's own definition of "best overall"
+const OVERALL_WEIGHTS={land:.45,pop:.15,army:.15,metal:.10,food:.08,houses:.07};
 function renderEmpires(w){
   const bar=$("empirebar"); if(!bar) return;
-  const rows=w.kingdoms.map(k=>{const land=cellsOf(w,k.id).length;return {k,land,score:rankScore(k,land)};});
+  const rows=w.kingdoms.map(k=>{const owned=cellsOf(w,k.id),land=owned.length,houses=owned.reduce((n,[x,y])=>n+(w.grid[y][x].houses||0),0);return {k,land,houses,score:0};});
+  const alive=rows.filter(r=>r.k.alive),totals={land:0,pop:0,army:0,metal:0,food:0,houses:0};
+  for(const r of alive)for(const key of Object.keys(totals))totals[key]+=key==="land"||key==="houses"?r[key]:r.k[key];
+  for(const r of rows)r.score=Object.entries(OVERALL_WEIGHTS).reduce((sum,[key,weight])=>{const value=key==="land"||key==="houses"?r[key]:r.k[key];return sum+weight*(totals[key]?value/totals[key]:1/Math.max(1,alive.length));},0);
   const keyFn={overall:r=>r.score,army:r=>r.k.army,pop:r=>r.k.pop,metal:r=>r.k.metal,land:r=>r.land}[rankSort.key]||(r=>r.score);
   rows.sort((a,b)=>((b.k.alive?1:0)-(a.k.alive?1:0))||(keyFn(b)-keyFn(a))*(rankSort.dir===1?-1:1)||b.land-a.land||b.k.pop-a.k.pop||b.k.army-a.k.army);
   const lead=rows.find(r=>r.k.alive)||rows[0];
