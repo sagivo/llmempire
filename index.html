@@ -1472,14 +1472,25 @@ const LLM = {
       // which browsers surface as an opaque NetworkError. Route the default gateway
       // through our same-origin Pages Function so callers receive the real HTTP error.
       const isVercelGateway=/^https:\/\/ai-gateway\.vercel\.sh\/v1$/i.test(base);
+      const key=this.key.trim();
+      const isOpenAIKey=/^sk-(?!ant-)[A-Za-z0-9_-]+$/.test(key);
+      const isAnthropicKey=/^sk-ant-[A-Za-z0-9_-]+$/.test(key);
+      const isOpenAIModel=/^openai\//i.test(model);
+      const isAnthropicModel=/^anthropic\//i.test(model);
+      const directProvider=isVercelGateway&&isOpenAIKey&&isOpenAIModel?"openai":isVercelGateway&&isAnthropicKey&&isAnthropicModel?"anthropic":"";
+      // Default providers use our same-origin proxy. OpenAI and Anthropic do not
+      // support this browser request directly, and Gateway hides some 401 responses.
       const endpoint=isVercelGateway?"/api/chat":base+"/chat/completions";
+      const provider=directProvider==="openai"?"OpenAI":directProvider==="anthropic"?"Anthropic":isVercelGateway?"Vercel AI Gateway":"Model provider";
+      const requestModel=directProvider?model.replace(/^[^/]+\//,""):model;
+      const headers={"Content-Type":"application/json","Authorization":"Bearer "+key};
+      if(directProvider) headers["X-LLM-Provider"]=directProvider;
       const res=await fetch(endpoint,{
-        method:"POST",signal:ctrl.signal,
-        headers:{"Content-Type":"application/json","Authorization":"Bearer "+this.key},
-        body:JSON.stringify({model,temperature:this.temperature,response_format:{type:"json_object"},
+        method:"POST",signal:ctrl.signal,headers,
+        body:JSON.stringify({model:requestModel,temperature:this.temperature,response_format:{type:"json_object"},
           messages:[{role:"system",content:system},{role:"user",content:user}]})
       });
-      if (!res.ok){const detail=await res.text().catch(()=>"");const err=new Error(res.status===401?"API key rejected":res.status===429?"Rate limited":res.status>=500?"Model service unavailable":"LLM request failed ("+res.status+")");err.code="http_"+res.status;err.detail=detail.slice(0,160);throw err;}
+      if (!res.ok){const detail=await res.text().catch(()=>"");const err=new Error(res.status===401?provider+" rejected the key":res.status===429?provider+" rate limited the request":res.status>=500?provider+" is unavailable":"LLM request failed ("+res.status+")");err.code="http_"+res.status;err.detail=detail.slice(0,160);throw err;}
       const j=await res.json();
       let text=j.choices?.[0]?.message?.content;
       if(Array.isArray(text)) text=text.map(p=>typeof p==="string"?p:(p&&typeof p.text==="string"?p.text:"")).join("");
