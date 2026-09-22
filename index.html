@@ -919,7 +919,7 @@ const CONFIG_SCHEMA = [
 const END_MODES = ["dominion","last_stand","timed","open"];
 const KINGDOM_NAMES = ["Aldermark","Brevia","Corvane","Duskhold","Eastmere","Fenreach","Galloway","Hightower","Ismere","Jorvik","Kestrel","Lornwick","Maradir","Norhelm","Ostmark","Pellinor","Quillon","Ravencourt","Solmere","Thornfield","Ulstead","Veyra","Westhold","Yarrow"];
 // Colors are parameters in THEME CONFIG (top of <style>); JS reads them, never hardcodes them.
-const themeColor=name=>getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const themeColor=name=>(typeof getComputedStyle==="function"&&typeof document!=="undefined")?getComputedStyle(document.documentElement).getPropertyValue(name).trim():"";
 const KINGDOM_COLORS = Array.from({length:24},(_,i)=>themeColor("--faction-"+(i+1)));
 const factionColor=id=>KINGDOM_COLORS[((Number(id)||0)%KINGDOM_COLORS.length+KINGDOM_COLORS.length)%KINGDOM_COLORS.length];
 const STOCK_GOALS = ["Raider","Steward","Schemer","Merchant","Warlord","Hermit"];
@@ -933,7 +933,8 @@ function defaultConfig(){
 // ---------- world construction ----------
 function createWorld(cfg, seed){
   cfg={...defaultConfig(),...cfg};
-  cfg.startPop=Math.min(cfg.startPop,cfg.popBaseCap);
+  cfg.startHouses=Math.min(cfg.startHouses,cfg.maxHousesPerTile);
+  cfg.startPop=Math.min(cfg.startPop,cfg.startHouses>0?cfg.startHouses*cfg.housePop:cfg.popBaseCap);
   cfg.startArmy=Math.min(cfg.startArmy,cfg.startPop,cfg.armyCap);
   cfg.startFood=Math.min(cfg.startFood,cfg.foodCap);
   cfg.startMetal=Math.min(cfg.startMetal,cfg.metalCap);
@@ -1488,7 +1489,7 @@ function phaseBSystem(world,k){
   "- 'claim': Consumes 1 stamina. Converts an unowned adjacent cell to your territory.\n"+
   "- 'raid': Consumes 1 stamina. Attacks a target adjacent cell owned by a peer kingdom.\n"+
   "- 'move': Moves some or all of one army group through owned land, up to "+cfg.armyMoveRange+" tiles this turn. Use group_id, amount, and placement ('village', 'mine', or 'border'). Moving part of a group splits it; groups that meet merge. Split forces to garrison villages, guard mines, and form attack groups.\n"+
-  "- 'rest': Consumes no resources. Restores +1 stamina up to stamina cap.\n\n"+
+  "- 'rest': Consumes no resources. Restores +2 stamina up to stamina cap.\n\n"+
   "FOG OF WAR: You know all of your own army groups. You cannot see rival army size, groups, or position; do not assume an enemy tile is defended or empty. Choose deployments from your own assets and intent.\n\n"+
   "SURVIVAL ECONOMICS: Every Dawn, pay 1 food per population and 1 mineral per army. A food deficit shrinks population; a mineral deficit shrinks army. Population is capped by housing: "+cfg.housePop+" people per house, up to "+cfg.maxHousesPerTile+" houses per tile, each house costs "+cfg.houseCostMetal+" minerals. Reserve both BEFORE expanding or training.\n\n"+
   "LEGAL ACTIONS AVAILABLE THIS ROUND:\n"+JSON.stringify(legalActions(world,k))+"\n\n"+
@@ -1755,7 +1756,7 @@ function focusKingdom(id,animate=false){
   if(!world||id===null||!world.kingdoms[id]?.alive)return;
   const cv=$("board"),g=boardGeom(world),k=world.kingdoms[id];
   const groups=normalizeArmyGroups(world,k),cells=cellsOf(world,id);
-  const anchor=groups[0]||cells[0]; if(!anchor)return;
+  const anchor=groups[0]||(cells[0]?{x:cells[0][0],y:cells[0][1]}:null); if(!anchor)return;
   const target=Math.max(1.35,Math.min(2.15,20/g.cell));
   mapView.s=target;
   mapView.tx=cv.width/2-(g.ox+(anchor.x+.5)*g.cell)*target;
@@ -1889,9 +1890,10 @@ function renderBoard(w, snap){
   }
   ctx.strokeStyle=MAPC.worldEdge;ctx.lineWidth=Math.max(2,cell*.10);ctx.strokeRect(ox-1,oy-1,W*cell+2,H*cell+2);
   const dispCell=cell*mapView.s*(cv.clientWidth?cv.clientWidth/cv.width:1);
-  if(!snap&&dispCell>=10){
+  if(dispCell>=10){
     ctx.textAlign="center";ctx.textBaseline="middle";
-    for(const k of w.kingdoms){if(!k.alive||k.army<=0)continue;for(const g of normalizeArmyGroups(w,k)){
+    const tokenKingdoms=snap?snap.kingdoms.map(k=>({id:k.id,alive:k.alive,army:k.army,groups:(k.armyGroups||[])})):w.kingdoms.map(k=>({id:k.id,alive:k.alive,army:k.army,groups:normalizeArmyGroups(w,k)}));
+    for(const k of tokenKingdoms){if(!k.alive||k.army<=0)continue;for(const g of k.groups){
       const cx=ox+g.x*cell+cell*.5,cy=oy+g.y*cell+cell*.5,kc=factionColor(k.id);
       const size=Math.max(cell*.58,Math.min(cell*.95,cell*.58+Math.min(g.size,12)*cell*.02)),r=size/2;
       ctx.save();ctx.shadowColor=MAPC.unitShadow;ctx.shadowBlur=4;ctx.fillStyle=kc;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle=MAPC.unitRing;ctx.lineWidth=Math.max(1.5,size*.07);ctx.stroke();
