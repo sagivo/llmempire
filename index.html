@@ -297,6 +297,7 @@
     .ecard .emeta{display:flex;flex-direction:column;gap:1px;min-width:0;font-style:normal}
     .ecard .emeta b{font-size:11px;font-weight:750;color:#e8eff9;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .ecard .emeta i{font-style:normal;font-size:9px;color:#8ba0bb;white-space:nowrap;font-variant-numeric:tabular-nums}
+    .ecard .eaction{display:flex;align-items:center;gap:3px;margin-top:1px;color:#e9c778!important;font-weight:850;font-size:9px!important;line-height:1;white-space:nowrap}
     .ecard.sel{border-color:var(--kc);background:linear-gradient(145deg,rgba(33,54,79,.98),rgba(14,24,43,.98));box-shadow:0 0 0 1px var(--kc),0 6px 18px rgba(0,0,0,.35)}
     .ecard.dead .emeta b{text-decoration:line-through}
   }
@@ -1219,11 +1220,11 @@ function renderAnalysis(saved){const host=$("analysis");if(!saved?.report){host.
 const ACTION_VISUALS={harvest:["🌾","Harvest"],plant:["🌱","Plant"],eat:["🍞","Eat"],train:["⚔️","Train"],fortify:["🛡️","Fortify"],claim:["🧭","Expand"],raid:["💥","Attack"],share:["🎁","Share"],trade_offer:["🤝","Offer trade"],honor:["✅","Honor trade"],move:["➜","Move"],rest:["💤","Rest"]};
 function showTurnActions(w,events){
   const acts=events.filter(e=>e.type==="Act"); if(!acts.length)return;
+  // Keep the map clear: current actions are consolidated into the player ribbon.
   const viz=$("turnViz"), map=$("mapActions");
   viz.textContent=acts.map(e=>{const k=w.kingdoms[e.kingdomId],v=ACTION_VISUALS[e.act]||["•",e.act];return "Player "+(k.id+1)+" "+k.name+": "+v[1];}).join(". ");
-  map.innerHTML=acts.map(e=>{const k=w.kingdoms[e.kingdomId],a=kingdomAnchor(w,k.id),v=ACTION_VISUALS[e.act]||["•",e.act];if(!a)return "";return '<span class="map-action" data-ax="'+a[0]+'" data-ay="'+a[1]+'" title="'+htmlSafe(k.name+' · '+v[1])+'" style="--kc:'+factionColor(k.id)+'"><span class="map-action-icon">'+v[0]+'</span><span class="map-action-who">'+(k.id+1)+'</span><span class="map-action-label">'+htmlSafe(v[1])+'</span></span>';}).join("");
-  positionMapActions();
-  map.getAnimations({subtree:true}).forEach(a=>{a.cancel();a.play()});
+  map.innerHTML="";
+  renderEmpires(w);
 }
 function renderWorldTab(w){
   const el=$("worldview"); if(!el)return;
@@ -1331,8 +1332,13 @@ function renderBoard(w, snap){
         poly([[px+cell*.10,py+cell*.72],[px+cell*.36,py+cell*.25],[px+cell*.52,py+cell*.48],[px+cell*.66,py+cell*.18],[px+cell*.91,py+cell*.72]],"#394550");
         poly([[px+cell*.20,py+cell*.65],[px+cell*.36,py+cell*.36],[px+cell*.47,py+cell*.53]],"#9baab2");
         ctx.fillStyle=ore>0?"#73e4f2":"#20262c";ctx.beginPath();ctx.arc(cx,py+cell*.61,cell*.15,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#f5fbff";ctx.lineWidth=Math.max(1.2,cell*.04);ctx.stroke();
-        if(ore>0){ctx.fillStyle="#092d38";for(let i=0;i<Math.min(3,ore);i++){ctx.beginPath();ctx.arc(cx+cell*(i-(Math.min(3,ore)-1)/2)*.075,py+cell*.61,Math.max(1.3,cell*.026),0,Math.PI*2);ctx.fill();}}
-        else{ctx.strokeStyle="#ff705d";ctx.lineWidth=Math.max(2,cell*.07);ctx.beginPath();ctx.moveTo(cx-cell*.08,py+cell*.53);ctx.lineTo(cx+cell*.08,py+cell*.69);ctx.moveTo(cx+cell*.08,py+cell*.53);ctx.lineTo(cx-cell*.08,py+cell*.69);ctx.stroke();}
+        if(ore>0){
+          // Ore level is an icon silhouette: one crystal, twin crystals, or a full cluster.
+          const n=Math.min(3,ore), gem=(gx,gy,sz)=>poly([[gx,gy-sz],[gx+sz*.72,gy-sz*.18],[gx+sz*.48,gy+sz],[gx-sz*.48,gy+sz],[gx-sz*.72,gy-sz*.18]],"#073847");
+          if(n===1)gem(cx,py+cell*.61,cell*.075);
+          else if(n===2){gem(cx-cell*.065,py+cell*.61,cell*.065);gem(cx+cell*.065,py+cell*.61,cell*.065);}
+          else{gem(cx,py+cell*.55,cell*.065);gem(cx-cell*.07,py+cell*.64,cell*.06);gem(cx+cell*.07,py+cell*.64,cell*.06);}
+        }else{ctx.strokeStyle="#ff705d";ctx.lineWidth=Math.max(2,cell*.07);ctx.beginPath();ctx.moveTo(cx-cell*.08,py+cell*.53);ctx.lineTo(cx+cell*.08,py+cell*.69);ctx.moveTo(cx+cell*.08,py+cell*.53);ctx.lineTo(cx-cell*.08,py+cell*.69);ctx.stroke();}
       }else if(terrain==="forest"){
         const trees=[[.30,.56,.23],[.52,.47,.28],[.72,.58,.21]];
         for(const [tx,ty,r] of trees){ctx.fillStyle="#174d36";ctx.fillRect(px+cell*(tx-.035),py+cell*(ty+.08),cell*.07,cell*.22);poly([[px+cell*tx,py+cell*(ty-r)],[px+cell*(tx-r*.72),py+cell*(ty+r*.46)],[px+cell*(tx+r*.72),py+cell*(ty+r*.46)]],"#166a45");poly([[px+cell*tx,py+cell*(ty-r*.65)],[px+cell*(tx-r*.58),py+cell*(ty+r*.05)],[px+cell*(tx+r*.58),py+cell*(ty+r*.05)]],"#2d965d");}
@@ -1347,8 +1353,10 @@ function renderBoard(w, snap){
       ctx.restore();
     }
     if(crop>0&&terrain==="field"){
-      const n=Math.min(3,crop);ctx.fillStyle="#fff5ad";ctx.strokeStyle="#5a3a18";ctx.lineWidth=Math.max(1,cell*.035);
-      for(let i=0;i<n;i++){const cx=px+cell*(.38+i*.12);ctx.beginPath();ctx.arc(cx,py+cell*.55,cell*.055,0,Math.PI*2);ctx.fill();ctx.stroke();}
+      // Crop maturity reads by icon, not dot count: sprout, stalk, then full sheaf.
+      const n=Math.min(3,crop),cx=px+cell*.5,base=py+cell*.70;ctx.save();ctx.strokeStyle="#fff3a2";ctx.fillStyle="#fff3a2";ctx.lineCap="round";ctx.lineJoin="round";ctx.lineWidth=Math.max(1.8,cell*.06);
+      if(n===1){ctx.beginPath();ctx.moveTo(cx,base);ctx.lineTo(cx,base-cell*.22);ctx.stroke();ctx.beginPath();ctx.ellipse(cx-cell*.07,base-cell*.19,cell*.08,cell*.04,-.55,0,Math.PI*2);ctx.ellipse(cx+cell*.07,base-cell*.14,cell*.08,cell*.04,.55,0,Math.PI*2);ctx.fill();}
+      else{const stalk=(x,h)=>{ctx.beginPath();ctx.moveTo(x,base);ctx.lineTo(x,base-h);ctx.stroke();for(const side of [-1,1])for(const y of [.08,.15]){ctx.beginPath();ctx.moveTo(x,base-h+y*cell);ctx.lineTo(x+side*cell*.065,base-h+y*cell-cell*.04);ctx.stroke();}};if(n===2)stalk(cx,cell*.31);else{stalk(cx-cell*.09,cell*.29);stalk(cx,cell*.36);stalk(cx+cell*.09,cell*.29);ctx.strokeStyle="#713f18";ctx.lineWidth=Math.max(1.5,cell*.045);ctx.beginPath();ctx.moveTo(cx-cell*.13,base-cell*.08);ctx.lineTo(cx+cell*.13,base-cell*.08);ctx.stroke();}}ctx.restore();
     }
     if(settlement&&cell>12){
       const st=settlement,cx=px+cell*.5,isCity=st.kind==="city",roof=isCity?"#7b2639":"#8b4b25";
@@ -1425,9 +1433,11 @@ function renderEmpires(w){
   let html="";
   for (const {k,land} of rows){
     const glyph=k.army<=0?"\u25CB":k.army===1?"\u265F":k.army<=3?"\u2694":k.army<=6?"\u265C":"\u265B";
+    const latest=[...w.events].reverse().find(e=>e.type==="Act"&&e.kingdomId===k.id);
+    const action=latest?(ACTION_VISUALS[latest.act]||["•",latest.act]):[k.alive?"…":"✕",k.alive?"Waiting":"Defeated"];
     html+='<div class="ecard'+(k.alive?"":" dead")+(selectedKingdom===k.id?" sel":"")+'" data-k="'+k.id+'" style="--kc:'+factionColor(k.id)+'">'
       +'<span class="edot">'+glyph+'</span>'
-      +'<span class="emeta"><b>'+htmlSafe(k.name)+'</b><i>\u2694'+k.army+' \u00B7 \u25CF'+k.pop+' \u00B7 \u25A6'+land+'</i></span></div>';
+      +'<span class="emeta"><b>'+htmlSafe(k.name)+'</b><i>\u2694'+k.army+' \u00B7 \u25CF'+k.pop+' \u00B7 \u25A6'+land+'</i><i class="eaction">'+action[0]+' '+htmlSafe(action[1])+'</i></span></div>';
   }
   bar.innerHTML=html;
   for (const c of bar.querySelectorAll(".ecard")) c.onclick=()=>{ selectedKingdom=+c.dataset.k; renderLeaderboard(world); renderEmpires(world); renderInspector(); showTab("insp"); setSheet("half"); };
@@ -1638,6 +1648,7 @@ DB.open().then(async ()=>{
 </script>
 </body>
 </html>
+
 
 
 
