@@ -1746,8 +1746,15 @@ function renderWorldTab(w){
 function renderViewPicker(){
   const el=$("viewSel");if(!el||!world)return;
   const chosen=viewKingdom===null?"all":String(viewKingdom);
-  el.innerHTML='<option value="all">View: all</option>'+world.kingdoms.map(k=>'<option value="'+k.id+'">View: #'+(k.id+1)+' '+htmlSafe(k.name)+'</option>').join("");
-  el.value=chosen;
+  // renderAll runs on every game tick; rebuilding the options each time resets the native
+  // mobile picker and makes it reopen over and over. Rebuild only when the list changed,
+  // and never while the picker is open (the select keeps focus).
+  const key=world.kingdoms.map(k=>k.id+":"+k.name).join("|");
+  if(el._listKey!==key&&document.activeElement!==el){
+    el.innerHTML='<option value="all">View: all</option>'+world.kingdoms.map(k=>'<option value="'+k.id+'">View: #'+(k.id+1)+' '+htmlSafe(k.name)+'</option>').join("");
+    el._listKey=key;
+  }
+  if(document.activeElement!==el&&el.value!==chosen)el.value=chosen;
 }
 function renderAll(){ if(!world)return; renderViewPicker(); $("app").classList.toggle("match-over",world.over); const end=$("matchEnd"); end.textContent=world.over?(world.winner?("🏆 "+world.kingdoms[world.winner.id].name+" wins by "+world.winner.how.replace("_"," ")+"."):"Every kingdom has fallen."):""; renderBoard(world); renderLeaderboard(world); renderEmpires(world); renderEvents(world); renderInspector(); renderClock(world); renderWorldTab(world); if(world.aiAnalysis)renderAnalysis(world.aiAnalysis); }
 function storyFor(w,ev){
@@ -1803,8 +1810,10 @@ function clampPan(){
   const g=boardGeom(world), W=world.cfg.width, H=world.cfg.height;
   const mw=g.boardW*mapView.s, mh=g.boardH*mapView.s;
   const bx=g.ox*mapView.s, by=g.oy*mapView.s;
-  mapView.tx=Math.min(cv.width/2-bx,Math.max(cv.width/2-bx-mw,mapView.tx));
-  mapView.ty=Math.min(cv.height/2-by,Math.max(cv.height/2-by-mh,mapView.ty));
+  // When the board is smaller than the canvas, center it - the old min/max collapsed and
+  // pinned the board edge to the canvas centerline, leaving half the map blank.
+  mapView.tx=mw<=cv.width?(cv.width-mw)/2-bx:Math.min(cv.width/2-bx,Math.max(cv.width/2-bx-mw,mapView.tx));
+  mapView.ty=mh<=cv.height?(cv.height-mh)/2-by:Math.min(cv.height/2-by,Math.max(cv.height/2-by-mh,mapView.ty));
 }
 function layoutBoard(){
   const stage=$("mapstage"),cv=$("board"); if(!stage||!cv)return;
@@ -2206,7 +2215,7 @@ $("board").addEventListener("click",(e)=>{
 // of detailed hexes for every raw pointer event was the source of mobile zoom jank.
 (function(){
   const cv=$("board"); cv.style.touchAction="none"; cv.style.transformOrigin="0 0"; cv.style.willChange="transform"; cv.addEventListener("contextmenu",e=>e.preventDefault());
-  const ptrs=new Map(); let pinch=null, moved=false, previewBase=null, wheelTimer=0;
+  const ptrs=new Map(); let pinch=null, moved=false, previewBase=null, wheelTimer=0, trailTimer=0;
   const toBacking=(cx,cy)=>{const r=cv.getBoundingClientRect();return [(cx-r.left)*cv.width/r.width,(cy-r.top)*cv.height/r.height];};
   const beginPreview=()=>{if(!previewBase)previewBase={s:mapView.s,tx:mapView.tx,ty:mapView.ty};};
   const paintPreview=()=>{
@@ -2215,7 +2224,12 @@ $("board").addEventListener("click",(e)=>{
     const bx=(mapView.tx-a*previewBase.tx)*(r.width/cv.width),by=(mapView.ty-a*previewBase.ty)*(r.height/cv.height);
     cv.style.transform=`matrix(${a},0,0,${a},${bx},${by})`;
   };
-  const commitPreview=()=>{if(!previewBase)return;previewBase=null;cv.style.transform="";renderBoard(world);};
+  const commitPreview=()=>{clearTimeout(trailTimer);if(!previewBase)return;previewBase=null;cv.style.transform="";renderBoard(world);};
+  // Mid-gesture trailing repaint: while fingers stay down the bitmap rides the compositor,
+  // but a pause >140ms repaints the real scene at the current zoom so zooming out never
+  // leaves blank sea around a shrunken bitmap, then re-anchors the preview baseline.
+  const trailRepaint=()=>{if(!previewBase)return;cv.style.transform="";renderBoard(world);previewBase={s:mapView.s,tx:mapView.tx,ty:mapView.ty};};
+  const scheduleTrail=()=>{clearTimeout(trailTimer);trailTimer=setTimeout(trailRepaint,140);};
   cv.addEventListener("pointerdown",e=>{
     if(!world)return;
     clearTimeout(wheelTimer);commitPreview();
@@ -2231,9 +2245,9 @@ $("board").addEventListener("click",(e)=>{
     if(ptrs.size===2&&pinch){
       const p=[...ptrs.values()],nd=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)||1,ns=Math.min(4,Math.max(1,pinch.s*nd/pinch.d));
       const m=toBacking((p[0].x+p[1].x)/2,(p[0].y+p[1].y)/2);
-      mapView.tx=m[0]-(pinch.c[0]-pinch.tx)*(ns/pinch.s);mapView.ty=m[1]-(pinch.c[1]-pinch.ty)*(ns/pinch.s);mapView.s=ns;clampPan();moved=true;paintPreview();
+      mapView.tx=m[0]-(pinch.c[0]-pinch.tx)*(ns/pinch.s);mapView.ty=m[1]-(pinch.c[1]-pinch.ty)*(ns/pinch.s);mapView.s=ns;clampPan();moved=true;paintPreview();scheduleTrail();
     }else if(ptrs.size===1&&mapView.s>1&&moved){
-      const r=cv.getBoundingClientRect();mapView.tx+=(e.clientX-prev.x)*cv.width/r.width;mapView.ty+=(e.clientY-prev.y)*cv.height/r.height;clampPan();paintPreview();
+      const r=cv.getBoundingClientRect();mapView.tx+=(e.clientX-prev.x)*cv.width/r.width;mapView.ty+=(e.clientY-prev.y)*cv.height/r.height;clampPan();paintPreview();scheduleTrail();
     }
   });
   const up=e=>{if(ptrs.has(e.pointerId)){ptrs.delete(e.pointerId);if(moved)suppressMapClickUntil=performance.now()+300;if(ptrs.size<2)pinch=null;if(ptrs.size===0)commitPreview();}};
@@ -2243,7 +2257,7 @@ $("board").addEventListener("click",(e)=>{
     if(!world)return;e.preventDefault();beginPreview();
     const m=toBacking(e.clientX,e.clientY),ns=Math.min(4,Math.max(1,mapView.s*(e.deltaY<0?1.15:1/1.15)));
     mapView.tx=m[0]-(m[0]-mapView.tx)*(ns/mapView.s);mapView.ty=m[1]-(m[1]-mapView.ty)*(ns/mapView.s);mapView.s=ns;clampPan();paintPreview();
-    clearTimeout(wheelTimer);wheelTimer=setTimeout(commitPreview,90);
+    clearTimeout(wheelTimer);wheelTimer=setTimeout(commitPreview,90);scheduleTrail();
   },{passive:false});
 })();
 
