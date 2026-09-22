@@ -732,6 +732,19 @@
   #empirebar tbody tr{cursor:pointer;border-top:1px solid var(--veil-5)}
   #empirebar tbody tr.sel td{background:var(--sea-81)}
   #empirebar tbody tr.dead{opacity:.35}
+
+  /* ===== Unified resource marks: one flat icon + its value, everywhere ===== */
+  .ric{display:inline-flex;align-items:center;gap:3px;font-variant-numeric:tabular-nums;font-weight:600}
+  .ric .rico{display:inline-flex;width:12px;height:12px;flex:0 0 12px}
+  .ric .rico svg{width:100%;height:100%;display:block}
+  .ric-food{color:var(--map-crop)}
+  .ric-house{color:var(--map-building-wall)}
+  .ric-mineral{color:var(--map-ore)}
+  .ric-army{color:var(--map-label-text)}
+  .ric-pop{color:var(--map-label-text)}
+  .ric-land{color:var(--map-label-text)}
+  #empirebar th .ric .rico{width:13px;height:13px;flex-basis:13px}
+  .agent-stats .ric{margin-right:10px;font-size:11px}
 </style>
 </head>
 <body>
@@ -1685,6 +1698,15 @@ function exportData(){ return { format:"commons.json", version:1, exportedAt:new
 
 // ---------- AI match analyst ----------
 function analysisLogPayload(w){const step=Math.max(1,w.cfg.ticksPerDay||8),sampled=w.snapshots.filter((s,i)=>i===0||i===w.snapshots.length-1||i%step===0).map(s=>({day:s.day,tick:s.tick,over:s.over,winner:s.winner,kingdoms:s.kingdoms.map(k=>({id:k.id+1,alive:k.alive,pop:k.pop,army:k.army,food:k.food,metal:k.metal,stamina:k.stamina,groups:k.armyGroups?.length||0})),land:s.owners.reduce((a,o)=>{if(o>=0)a[o]=(a[o]||0)+1;return a},[])}));return {match:{seed:w.seed,config:w.cfg,day:w.day,tick:w.tick,over:w.over,winner:w.winner},players:w.kingdoms.map(k=>({id:k.id+1,name:k.name,model:k.actModel,alive:k.alive,final:{land:cellsOf(w,k.id).length,pop:k.pop,army:k.army,armyGroups:normalizeArmyGroups(w,k).map(g=>({...g})),food:k.food,metal:k.metal,stamina:k.stamina}})),events:w.events,snapshots:sampled};}
+const RES_ICONS={
+  food:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 14V5" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M8 1.8 10.4 5 8 8.2 5.6 5z" fill="currentColor"/><path d="M4.4 6.8 6.2 9l-1.8 2.2-1.8-2.2z" fill="currentColor" opacity=".8"/><path d="M11.6 6.8 13.4 9l-1.8 2.2-1.8-2.2z" fill="currentColor" opacity=".8"/></svg>',
+  house:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.3 8.6 8 3.2l5.7 5.4z" fill="currentColor"/><rect x="4" y="8.6" width="8" height="5" fill="currentColor" opacity=".72"/></svg>',
+  mineral:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.2 12.6 6 8 13.8 3.4 6z" fill="currentColor"/><path d="M8 2.2 10.1 6 8 13.8z" fill="currentColor" opacity=".65"/></svg>',
+  army:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8 11.4 5.4 8 9 4.6 5.4z" fill="currentColor"/><rect x="7" y="8.8" width="2" height="5.4" fill="currentColor"/></svg>',
+  pop:'<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="4.8" r="2.6" fill="currentColor"/><path d="M2.8 13.8c0-3 2.3-4.6 5.2-4.6s5.2 1.6 5.2 4.6z" fill="currentColor"/></svg>',
+  land:'<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.4" y="2.4" width="11.2" height="11.2" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M2.4 9.2h11.2" stroke="currentColor" stroke-width="1.3"/></svg>'
+};
+function ric(name,num){return '<span class="ric ric-'+name+'"><i class="rico">'+RES_ICONS[name]+'</i>'+(num===undefined||num===null||num===''?'':'<b>'+num+'</b>')+'</span>';}
 function htmlSafe(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function parseJsonLoose(text){try{return JSON.parse(text);}catch(e){const a=text.indexOf("{"),b=text.lastIndexOf("}");if(a>=0&&b>a)return JSON.parse(text.slice(a,b+1));throw new Error("The model returned an unreadable report");}}
 function parseModelJson(text){if(typeof text!=="string")throw new Error("bad json");try{return JSON.parse(text);}catch(e){const a=text.indexOf("{"),b=text.lastIndexOf("}");if(a>=0&&b>a)return JSON.parse(text.slice(a,b+1));throw new Error("bad json");}}
@@ -1757,7 +1779,7 @@ function renderClock(w){
   $("curfewPill").style.display = absTick(w)<w.curfewUntil?"":"none";
   $("silencePill").style.display = absTick(w)<w.silenceUntil?"":"none";
   const ranked=w.kingdoms.map(k=>({k,land:cellsOf(w,k.id).length})).sort((a,b)=>b.land-a.land||b.k.army-a.k.army);
-  if($("pulseLeader")&&ranked[0]) $("pulseLeader").textContent=ranked[0].k.name+" · "+ranked[0].land+" land · ⚔ "+ranked[0].k.army;
+  if($("pulseLeader")&&ranked[0]) $("pulseLeader").innerHTML=htmlSafe(ranked[0].k.name)+" · "+ric("land",ranked[0].land)+" "+ric("army",ranked[0].k.army);
   const shift=[...w.events].reverse().find(e=>["Combat","Fall","Dawn","Transfer","Letter","Bulletin","ActRejected"].includes(e.type)||(e.type==="Control"&&e.operatorAction!=="match_start"));
   if($("pulseEvent")) $("pulseEvent").textContent=shift?evText(w,shift):"No major shift yet";
   if($("storyTitle")){const story=storyFor(w,shift);$("storyTitle").textContent=story.title;$("storyDetail").textContent=story.detail;}
@@ -1991,10 +2013,10 @@ function renderEmpires(w){
   const keyFn={overall:r=>r.score,army:r=>r.k.army,pop:r=>r.k.pop,metal:r=>r.k.metal,land:r=>r.land}[rankSort.key]||(r=>r.score);
   rows.sort((a,b)=>((b.k.alive?1:0)-(a.k.alive?1:0))||(keyFn(b)-keyFn(a))*(rankSort.dir===1?-1:1)||b.land-a.land||b.k.pop-a.k.pop||b.k.army-a.k.army);
   const lead=rows.find(r=>r.k.alive)||rows[0];
-  let html='<div class="rank-head" id="rankHead"><span class="chev">'+(rankOpen?"\u25be":"\u25b8")+'</span><b>Rankings</b><span class="rank-lead">'+(lead?htmlSafe(lead.k.name)+' leads \u00b7 '+lead.land+' land':'')+'</span></div>';
+  let html='<div class="rank-head" id="rankHead"><span class="chev">'+(rankOpen?"\u25be":"\u25b8")+'</span><b>Rankings</b><span class="rank-lead">'+(lead?htmlSafe(lead.k.name)+' leads \u00b7 '+ric("land",lead.land):'')+'</span></div>';
   if(rankOpen){
     html+='<table><thead><tr><th data-s="overall" class="rno '+(rankSort.key==="overall"?"sorted":"")+'">#'+(rankSort.key==="overall"?(rankSort.dir===1?" \u2191":" \u2193"):"")+'</th><th>Kingdom</th>'
-      +[["army","\u2694 Army"],["pop","\u25cf Pop"],["metal","\u26cf Min"],["land","\u25a6 Land"]].map(c=>'<th data-s="'+c[0]+'" class="'+(rankSort.key===c[0]?"sorted":"")+'">'+c[1]+(rankSort.key===c[0]?(rankSort.dir===1?" \u2191":" \u2193"):"")+'</th>').join("")+'</tr></thead><tbody>';
+      +[["army","army"],["pop","pop"],["metal","mineral"],["land","land"]].map(c=>'<th data-s="'+c[0]+'" class="'+(rankSort.key===c[0]?"sorted":"")+'">'+ric(c[1])+(rankSort.key===c[0]?(rankSort.dir===1?" \u2191":" \u2193"):"")+'</th>').join("")+'</tr></thead><tbody>';
     rows.forEach((r,i)=>{
       html+='<tr data-k="'+r.k.id+'" class="'+(r.k.alive?"":"dead")+(selectedKingdom===r.k.id?" sel":"")+'">'
         +'<td class="rno">'+(i+1)+'</td>'
@@ -2020,11 +2042,11 @@ function renderEvents(w){
 function renderInspector(){
   const el=$("insp");
   if(selectedKingdom===null||!world){el.innerHTML='<div class="analysis-empty">Tap an agent card or a kingdom on the map to see their plans, memories and recent behavior.</div>';return;}
-  const k=world.kingdoms[selectedKingdom],land=cellsOf(world,k.id).length;
+  const k=world.kingdoms[selectedKingdom],kCells=cellsOf(world,k.id),land=kCells.length,houseCount=kCells.reduce((n,[x,y])=>n+(world.grid[y][x].houses||0),0);
   const speech=world.events.filter(e=>(e.type==="Bulletin"&&e.kingdomId===k.id)||(e.type==="Letter"&&(e.from===k.id||e.to===k.id))).slice(-5).reverse();
   const acts=world.events.filter(e=>e.type==="Act"&&e.kingdomId===k.id).slice(-4).reverse();
   const latest=acts[0],v=latest?(ACTION_VISUALS[latest.act]||["•",latest.act]):["…","Waiting"];
-  el.innerHTML='<div class="agent-hero"><h2><span class="dot" style="background:'+factionColor(k.id)+'"></span>'+htmlSafe(k.name)+(k.alive?'':' (fallen)')+'</h2><div class="agent-stats"><span>👥 '+k.pop+' pop</span><span>⚔ '+k.army+' army</span><span>▦ '+land+' land</span><span>🌾 '+k.food+'/'+k.pop+' food</span><span>⛏ '+k.metal+'/'+k.army+' mine</span></div></div>'+
+  el.innerHTML='<div class="agent-hero"><h2><span class="dot" style="background:'+factionColor(k.id)+'"></span>'+htmlSafe(k.name)+(k.alive?'':' (fallen)')+'</h2><div class="agent-stats">'+ric("pop",k.pop)+ric("army",k.army)+ric("land",land)+ric("house",houseCount)+ric("food",k.food+"/"+k.pop)+ric("mineral",k.metal+"/"+k.army)+'</div></div>'+
   '<div class="agent-section"><label>Current plan</label><p>'+(htmlSafe((()=>{const note=k.selfNote||k.goal||"Watching the board before committing.";const m=note.match(/plan:([^|]+)/);return m?m[1].trim().replace(/^./,c=>c.toUpperCase()):note;})()))+'</p></div>'+
   '<div class="agent-section"><label>Latest action</label><div class="agent-action"><span>'+v[0]+'</span><span><b>'+htmlSafe(v[1])+'</b>'+(latest?.note?'<br>'+htmlSafe(latest.note):'')+'</span></div></div>'+
   '<div class="agent-section"><label>Recent conversation</label>'+(speech.length?speech.map(e=>'<div class="agent-action"><span>💬</span><span>'+htmlSafe(e.type==="Letter"?('#'+(e.from+1)+' → #'+(e.to+1)+': '+e.text):e.text)+'</span></div>').join(''):'<p>No messages yet.</p>')+'</div>'+
