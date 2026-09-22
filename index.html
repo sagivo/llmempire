@@ -1757,7 +1757,7 @@ function renderViewPicker(){
   // and never while the picker is open (the select keeps focus).
   const key=world.kingdoms.map(k=>k.id+":"+k.name).join("|");
   if(el._listKey!==key&&document.activeElement!==el){
-    el.innerHTML='<option value="all">View: all</option>'+world.kingdoms.map(k=>'<option value="'+k.id+'">View: #'+(k.id+1)+' '+htmlSafe(k.name)+'</option>').join("");
+    el.innerHTML='<option value="all">View: all</option>'+world.kingdoms.map(k=>'<option value="'+k.id+'">'+htmlSafe(k.name)+'</option>').join("");
     el._listKey=key;
   }
   if(document.activeElement!==el&&el.value!==chosen)el.value=chosen;
@@ -2049,15 +2049,18 @@ function renderBoard(w, snap){
       // Flat faceted sword, same low-poly family as the tile icons. The headcount lives
       // in a value pill like every other number on the board.
       {
-        const s=size*.62;
+        const s=size*.78;
         ctx.save();ctx.translate(cx,cy);ctx.rotate(Math.PI/4);
+        // blade: bright left facet, dark right facet
         ctx.fillStyle=MAPC.unitGlyph;
-        ctx.beginPath();ctx.moveTo(0,-s*.68);ctx.lineTo(s*.16,-s*.02);ctx.lineTo(0,s*.10);ctx.closePath();ctx.fill();
+        ctx.beginPath();ctx.moveTo(0,-s*.72);ctx.lineTo(s*.20,0);ctx.lineTo(0,s*.12);ctx.closePath();ctx.fill();
         ctx.fillStyle=MAPC.unitShadow;
-        ctx.beginPath();ctx.moveTo(0,-s*.68);ctx.lineTo(0,s*.10);ctx.lineTo(-s*.16,-s*.02);ctx.closePath();ctx.fill();
-        ctx.fillStyle=MAPC.unitRing;ctx.fillRect(-s*.30,s*.10,s*.60,s*.13);
-        ctx.fillRect(-s*.065,s*.23,s*.13,s*.28);
-        ctx.beginPath();ctx.arc(0,s*.57,s*.11,0,Math.PI*2);ctx.fill();
+        ctx.beginPath();ctx.moveTo(0,-s*.72);ctx.lineTo(0,s*.12);ctx.lineTo(-s*.20,0);ctx.closePath();ctx.fill();
+        // crossguard, grip, pommel
+        ctx.fillStyle=MAPC.unitRing;
+        ctx.beginPath();if(ctx.roundRect)ctx.roundRect(-s*.36,s*.12,s*.72,s*.16,s*.06);else ctx.rect(-s*.36,s*.12,s*.72,s*.16);ctx.fill();
+        ctx.fillRect(-s*.085,s*.28,s*.17,s*.30);
+        ctx.fillRect(-s*.14,s*.58,s*.28,s*.13);
         ctx.restore();
       }
       {
@@ -2235,7 +2238,7 @@ function tileVisible(x,y){
 function showTileInfo(x,y){
   const el=$("tileInfo"); if(!el||!world)return;
   tileInfoCell={x,y};
-  const close='<button class="ti-close" aria-label="Close">✕</button>';
+  const close='<button class="ti-close" aria-label="Close">×</button>';
   if(!tileVisible(x,y)){
     el.innerHTML=close+'<div class="ti-title">Uncharted land</div><div class="ti-row">Beyond '+htmlSafe(world.kingdoms[viewKingdom].name)+"'s sight.</div>";
     el.classList.remove("hidden"); el.querySelector(".ti-close").onclick=hideTileInfo; return;
