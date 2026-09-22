@@ -869,7 +869,7 @@
     <span class="pill" id="alivePill"></span>
     <span class="pill" id="curfewPill" style="display:none">curfew</span>
     <span class="pill" id="silencePill" style="display:none">radio silence</span>
-    <select id="viewSel" title="Map perspective" aria-label="Map perspective" style="width:auto"><option value="all">View: all</option></select>
+    <select id="viewSel" title="Map perspective" aria-label="Map perspective" style="width:auto"><option value="all">All</option></select>
     <span class="spacer"></span>
     <button id="toolsBtn">Tools</button>
     <button id="droughtBtn" title="Click, then drag a rectangle on the map">Drought</button>
@@ -1757,7 +1757,7 @@ function renderViewPicker(){
   // and never while the picker is open (the select keeps focus).
   const key=world.kingdoms.map(k=>k.id+":"+k.name).join("|");
   if(el._listKey!==key&&document.activeElement!==el){
-    el.innerHTML='<option value="all">View: all</option>'+world.kingdoms.map(k=>'<option value="'+k.id+'">'+htmlSafe(k.name)+'</option>').join("");
+    el.innerHTML='<option value="all">All</option>'+world.kingdoms.map(k=>'<option value="'+k.id+'">'+htmlSafe(k.name)+'</option>').join("");
     el._listKey=key;
   }
   if(document.activeElement!==el&&el.value!==chosen)el.value=chosen;
