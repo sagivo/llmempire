@@ -1777,52 +1777,50 @@ function renderBoard(w, snap){
     poly([[px+1,py+1],[px+cell-1,py+1],[px+cell-1,py+cell*.24],[px+1,py+cell*.55]],MAPC.tileGlint);
     poly([[px+1,py+cell*.55],[px+cell-1,py+cell*.24],[px+cell-1,py+cell-1],[px+1,py+cell-1]],MAPC.tileShade);
     ctx.strokeStyle=MAPC.tileEdge;ctx.lineWidth=Math.max(1,cell*.045);ctx.strokeRect(px+.8,py+.8,cell-1.6,cell-1.6);
-    // Bold map symbols: every terrain has its own silhouette, palette and status mark.
+    // Unified map marks: one flat geometric silhouette per tile, one shared visual grammar.
+    // Same fill treatment everywhere, theme palette only; empty tiles stay empty so the map stays calm.
+    const dia=(gx,gy,sz,fill)=>poly([[gx,gy-sz],[gx+sz*.7,gy],[gx,gy+sz],[gx-sz*.7,gy]],fill);
     if(cell>12){
-      const cx=px+cell*.5, cy=py+cell*.49, ink=MAPC.symbolInk;
-      ctx.save();ctx.lineCap="round";ctx.lineJoin="round";
+      const cx=px+cell*.5;
+      ctx.save();
       if(terrain==="field"){
-        ctx.fillStyle=MAPC.fieldGlow;ctx.fillRect(px+cell*.08,py+cell*.10,cell*.84,cell*.72);
-        ctx.strokeStyle=MAPC.fieldLine;ctx.lineWidth=Math.max(1.6,cell*.065);
-        for(let i=0;i<3;i++){const xx=px+cell*(.3+i*.2);ctx.beginPath();ctx.moveTo(xx,py+cell*.68);ctx.lineTo(xx,py+cell*.28);ctx.stroke();for(let j=0;j<2;j++){const yy=py+cell*(.38+j*.14);ctx.beginPath();ctx.moveTo(xx,yy);ctx.lineTo(xx-cell*.09,yy-cell*.07);ctx.moveTo(xx,yy+cell*.025);ctx.lineTo(xx+cell*.09,yy-cell*.045);ctx.stroke();}}
+        ctx.fillStyle=MAPC.fieldGlow;ctx.fillRect(px+cell*.10,py+cell*.12,cell*.80,cell*.68);
       }else if(terrain==="mine"){
-        poly([[px+cell*.10,py+cell*.72],[px+cell*.36,py+cell*.25],[px+cell*.52,py+cell*.48],[px+cell*.66,py+cell*.18],[px+cell*.91,py+cell*.72]],MAPC.mineRock);
-        poly([[px+cell*.20,py+cell*.65],[px+cell*.36,py+cell*.36],[px+cell*.47,py+cell*.53]],MAPC.mineSnow);
-        ctx.fillStyle=ore>0?MAPC.ore:MAPC.oreSpent;ctx.beginPath();ctx.arc(cx,py+cell*.61,cell*.15,0,Math.PI*2);ctx.fill();ctx.strokeStyle=MAPC.oreRing;ctx.lineWidth=Math.max(1.2,cell*.04);ctx.stroke();
-        if(ore>0){
-          // Ore level is an icon silhouette: one crystal, twin crystals, or a full cluster.
-          const n=Math.min(3,ore), gem=(gx,gy,sz)=>poly([[gx,gy-sz],[gx+sz*.72,gy-sz*.18],[gx+sz*.48,gy+sz],[gx-sz*.48,gy+sz],[gx-sz*.72,gy-sz*.18]],MAPC.oreGem);
-          if(n===1)gem(cx,py+cell*.61,cell*.075);
-          else if(n===2){gem(cx-cell*.065,py+cell*.61,cell*.065);gem(cx+cell*.065,py+cell*.61,cell*.065);}
-          else{gem(cx,py+cell*.55,cell*.065);gem(cx-cell*.07,py+cell*.64,cell*.06);gem(cx+cell*.07,py+cell*.64,cell*.06);}
-        }else{ctx.strokeStyle=MAPC.oreEmptyMark;ctx.lineWidth=Math.max(2,cell*.07);ctx.beginPath();ctx.moveTo(cx-cell*.08,py+cell*.53);ctx.lineTo(cx+cell*.08,py+cell*.69);ctx.moveTo(cx+cell*.08,py+cell*.53);ctx.lineTo(cx-cell*.08,py+cell*.69);ctx.stroke();}
+        poly([[cx-cell*.34,py+cell*.64],[cx,py+cell*.20],[cx+cell*.34,py+cell*.64]],MAPC.mineRock);
+        poly([[cx-cell*.10,py+cell*.33],[cx,py+cell*.20],[cx+cell*.10,py+cell*.33]],MAPC.mineSnow);
+        const n=Math.max(1,Math.min(3,ore));
+        for(let i=0;i<n;i++)dia(cx+(i-(n-1)/2)*cell*.16,py+cell*.76,cell*.05,ore>0?MAPC.ore:MAPC.oreSpent);
       }else if(terrain==="forest"){
-        const trees=[[.30,.56,.23],[.52,.47,.28],[.72,.58,.21]];
-        for(const [tx,ty,r] of trees){ctx.fillStyle=MAPC.treeTrunk;ctx.fillRect(px+cell*(tx-.035),py+cell*(ty+.08),cell*.07,cell*.22);poly([[px+cell*tx,py+cell*(ty-r)],[px+cell*(tx-r*.72),py+cell*(ty+r*.46)],[px+cell*(tx+r*.72),py+cell*(ty+r*.46)]],MAPC.treeDark);poly([[px+cell*tx,py+cell*(ty-r*.65)],[px+cell*(tx-r*.58),py+cell*(ty+r*.05)],[px+cell*(tx+r*.58),py+cell*(ty+r*.05)]],MAPC.treeLight);}
+        poly([[cx,py+cell*.30],[cx-cell*.26,py+cell*.62],[cx+cell*.26,py+cell*.62]],MAPC.treeDark);
+        poly([[cx,py+cell*.17],[cx-cell*.17,py+cell*.44],[cx+cell*.17,py+cell*.44]],MAPC.treeLight);
+        ctx.fillStyle=MAPC.treeTrunk;ctx.fillRect(cx-cell*.035,py+cell*.60,cell*.07,cell*.16);
       }else if(terrain==="hill"){
-        ctx.strokeStyle=MAPC.hillEdge;ctx.lineWidth=Math.max(2,cell*.075);ctx.fillStyle=MAPC.hill;
-        ctx.beginPath();ctx.moveTo(px+cell*.08,py+cell*.72);ctx.quadraticCurveTo(px+cell*.30,py+cell*.22,px+cell*.56,py+cell*.72);ctx.quadraticCurveTo(px+cell*.72,py+cell*.38,px+cell*.94,py+cell*.72);ctx.closePath();ctx.fill();ctx.stroke();
-        ctx.strokeStyle=MAPC.hillSnow;ctx.lineWidth=Math.max(1.2,cell*.035);ctx.beginPath();ctx.moveTo(px+cell*.22,py+cell*.54);ctx.quadraticCurveTo(px+cell*.31,py+cell*.36,px+cell*.40,py+cell*.53);ctx.stroke();
-      }else{
-        ctx.strokeStyle=MAPC.plainTuft;ctx.lineWidth=Math.max(1.5,cell*.055);
-        for(const tx of [.28,.52,.74]){ctx.beginPath();ctx.moveTo(px+cell*tx,py+cell*.68);ctx.lineTo(px+cell*(tx-.08),py+cell*.48);ctx.moveTo(px+cell*tx,py+cell*.68);ctx.lineTo(px+cell*(tx+.07),py+cell*.45);ctx.stroke();}
+        poly([[cx-cell*.34,py+cell*.68],[cx,py+cell*.24],[cx+cell*.34,py+cell*.68]],MAPC.hill);
+        poly([[cx-cell*.09,py+cell*.36],[cx,py+cell*.24],[cx+cell*.09,py+cell*.36]],MAPC.hillSnow);
       }
+      // plain: no mark - the calm background every other icon reads against
       ctx.restore();
     }
     if(crop>0&&terrain==="field"){
-      // Crop maturity reads by icon, not dot count: sprout, stalk, then full sheaf.
-      const n=Math.min(3,crop),cx=px+cell*.5,base=py+cell*.70;ctx.save();ctx.strokeStyle=MAPC.crop;ctx.fillStyle=MAPC.crop;ctx.lineCap="round";ctx.lineJoin="round";ctx.lineWidth=Math.max(1.8,cell*.06);
-      if(n===1){ctx.beginPath();ctx.moveTo(cx,base);ctx.lineTo(cx,base-cell*.22);ctx.stroke();ctx.beginPath();ctx.ellipse(cx-cell*.07,base-cell*.19,cell*.08,cell*.04,-.55,0,Math.PI*2);ctx.ellipse(cx+cell*.07,base-cell*.14,cell*.08,cell*.04,.55,0,Math.PI*2);ctx.fill();}
-      else{const stalk=(x,h)=>{ctx.beginPath();ctx.moveTo(x,base);ctx.lineTo(x,base-h);ctx.stroke();for(const side of [-1,1])for(const y of [.08,.15]){ctx.beginPath();ctx.moveTo(x,base-h+y*cell);ctx.lineTo(x+side*cell*.065,base-h+y*cell-cell*.04);ctx.stroke();}};if(n===2)stalk(cx,cell*.31);else{stalk(cx-cell*.09,cell*.29);stalk(cx,cell*.36);stalk(cx+cell*.09,cell*.29);ctx.strokeStyle=MAPC.cropBand;ctx.lineWidth=Math.max(1.5,cell*.045);ctx.beginPath();ctx.moveTo(cx-cell*.13,base-cell*.08);ctx.lineTo(cx+cell*.13,base-cell*.08);ctx.stroke();}}ctx.restore();
+      // Crop maturity: the same flat wheat mark grows - stem, stem with grain, full sheaf.
+      const n=Math.min(3,crop),cx=px+cell*.5,base=py+cell*.72;ctx.save();ctx.strokeStyle=MAPC.crop;ctx.lineCap="round";ctx.lineWidth=Math.max(1.6,cell*.05);
+      const h=cell*(.12+.08*n);
+      ctx.beginPath();ctx.moveTo(cx,base);ctx.lineTo(cx,base-h);ctx.stroke();
+      if(n>=2)dia(cx,base-h,cell*.055,MAPC.crop);
+      if(n>=3){dia(cx-cell*.085,base-h*.70,cell*.04,MAPC.crop);dia(cx+cell*.085,base-h*.70,cell*.04,MAPC.crop);ctx.strokeStyle=MAPC.cropBand;ctx.lineWidth=Math.max(1.4,cell*.04);ctx.beginPath();ctx.moveTo(cx-cell*.10,base-cell*.055);ctx.lineTo(cx+cell*.10,base-cell*.055);ctx.stroke();}
+      ctx.restore();
     }
     if(settlement&&cell>12){
       const st=settlement,cx=px+cell*.5,isCity=st.kind==="city",roof=isCity?MAPC.roofCity:MAPC.roofVillage;
-      ctx.save();ctx.shadowColor=MAPC.buildingShadow;ctx.shadowBlur=Math.max(2,cell*.08);ctx.shadowOffsetY=Math.max(1,cell*.04);
-      if(isCity){ctx.fillStyle=MAPC.buildingWall;ctx.fillRect(cx-cell*.31,py+cell*.34,cell*.62,cell*.38);for(const dx of [-.25,.25]){ctx.fillRect(cx+cell*dx-cell*.075,py+cell*.22,cell*.15,cell*.50);poly([[cx+cell*dx-cell*.10,py+cell*.23],[cx+cell*dx,py+cell*.11],[cx+cell*dx+cell*.10,py+cell*.23]],roof);}}
-      else{ctx.fillStyle=MAPC.buildingWall;ctx.fillRect(cx-cell*.25,py+cell*.38,cell*.50,cell*.34);poly([[cx-cell*.31,py+cell*.40],[cx,py+cell*.17],[cx+cell*.31,py+cell*.40]],roof);}
-      ctx.restore();
-      const label=(isCity?"CITY ":"VILLAGE ")+st.pop+"/"+st.cap,fs=Math.max(7,cell*.16);ctx.font="900 "+fs+"px Nunito,Segoe UI,sans-serif";const tw=ctx.measureText(label).width+cell*.12,lx=cx-tw/2,ly=py+cell*.76;
-      ctx.fillStyle=MAPC.labelBg;ctx.beginPath();if(ctx.roundRect)ctx.roundRect(lx,ly,tw,fs+cell*.10,Math.max(2,cell*.05));else ctx.rect(lx,ly,tw,fs+cell*.10);ctx.fill();ctx.fillStyle=MAPC.labelText;ctx.textAlign="center";ctx.textBaseline="top";ctx.fillText(label,cx,ly+cell*.035);
+      // Flat house mark: wall block + roof triangle. A city adds one tower, same family.
+      ctx.fillStyle=MAPC.buildingWall;ctx.fillRect(cx-cell*.20,py+cell*.42,cell*.40,cell*.28);
+      poly([[cx-cell*.26,py+cell*.44],[cx,py+cell*.20],[cx+cell*.26,py+cell*.44]],roof);
+      if(isCity){ctx.fillStyle=MAPC.buildingWall;ctx.fillRect(cx+cell*.10,py+cell*.30,cell*.13,cell*.40);poly([[cx+cell*.085,py+cell*.32],[cx+cell*.165,py+cell*.16],[cx+cell*.245,py+cell*.32]],roof);}
+      // Population label only when zoomed in enough to read it - overview stays clean.
+      if(cell*mapView.s>=30){
+        const label=(isCity?"CITY ":"VILLAGE ")+st.pop+"/"+st.cap,fs=Math.max(7,cell*.16);ctx.font="900 "+fs+"px Nunito,Segoe UI,sans-serif";const tw=ctx.measureText(label).width+cell*.12,lx=cx-tw/2,ly=py+cell*.76;
+        ctx.fillStyle=MAPC.labelBg;ctx.beginPath();if(ctx.roundRect)ctx.roundRect(lx,ly,tw,fs+cell*.10,Math.max(2,cell*.05));else ctx.rect(lx,ly,tw,fs+cell*.10);ctx.fill();ctx.fillStyle=MAPC.labelText;ctx.textAlign="center";ctx.textBaseline="top";ctx.fillText(label,cx,ly+cell*.035);
+      }
     }
     if(shield>0){ctx.strokeStyle=MAPC.shield;ctx.lineWidth=Math.max(2,cell*.09);ctx.globalAlpha=.5+.2*shield;ctx.strokeRect(px+cell*.13,py+cell*.13,cell*.74,cell*.74);ctx.globalAlpha=1;}
   }
@@ -1845,10 +1843,20 @@ function renderBoard(w, snap){
     ctx.textAlign="center";ctx.textBaseline="middle";
     for(const k of w.kingdoms){if(!k.alive||k.army<=0)continue;for(const g of normalizeArmyGroups(w,k)){
       const cx=ox+g.x*cell+cell*.72,cy=oy+g.y*cell+cell*.25,kc=factionColor(k.id);
-      const glyph=g.size===1?"♟":g.size<=3?"⚔":g.size<=6?"♜":"♛",size=Math.max(16,Math.min(31,cell*.35+g.size*.8)),r=size/2;
+      const size=Math.max(16,Math.min(31,cell*.35+g.size*.8)),r=size/2;
       ctx.save();ctx.shadowColor=MAPC.unitShadow;ctx.shadowBlur=4;ctx.fillStyle=kc;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle=MAPC.unitRing;ctx.lineWidth=Math.max(1.5,size*.07);ctx.stroke();
-      ctx.fillStyle=MAPC.unitGlyph;ctx.font="900 "+Math.max(11,size*.48)+"px Nunito,Segoe UI,sans-serif";ctx.fillText(glyph+String(g.size),cx,cy+.5);ctx.restore();
-    }}
+      // Flat unit mark in the same family as the tile icons, plus the headcount.
+      const num=String(g.size),markW=size*.30,gap=size*.06;
+      ctx.font="900 "+Math.max(10,size*.42)+"px Nunito,Segoe UI,sans-serif";
+      const nw=ctx.measureText(num).width,total=markW+gap+nw,sx=cx-total/2,mx=sx+markW/2;
+      ctx.fillStyle=MAPC.unitGlyph;
+      const u=(pts)=>{const s=markW*.9;ctx.beginPath();ctx.moveTo(mx+pts[0][0]*s,cy+pts[0][1]*s);for(let i=1;i<pts.length;i++)ctx.lineTo(mx+pts[i][0]*s,cy+pts[i][1]*s);ctx.closePath();ctx.fill();};
+      if(g.size===1){u([[0,-.6],[.30,-.05],[0,.18],[-.30,-.05]]);ctx.fillRect(mx-markW*.07,cy+markW*.05,markW*.14,markW*.55);}
+      else if(g.size<=3){ctx.save();ctx.translate(mx,cy);for(const a of [-.6,.6]){ctx.save();ctx.rotate(a);ctx.fillRect(-markW*.07,-markW*.42,markW*.14,markW*.84);ctx.restore();}ctx.restore();}
+      else if(g.size<=6){u([[-.48,-.55],[.48,-.55],[.48,.08],[0,.60],[-.48,.08]]);}
+      else{u([[-.55,.45],[.55,.45],[.55,-.12],[.28,.14],[0,-.50],[-.28,.14],[-.55,-.12]]);}
+      ctx.textAlign="left";ctx.fillText(num,sx+markW+gap,cy+.5);ctx.textAlign="center";
+      ctx.restore();    }}
   }
   ctx.setTransform(1,0,0,1,0,0);positionMapActions();
   cv.style.cursor=!snap&&pendingInject?"crosshair":mapView.s>1?"grab":"default";
