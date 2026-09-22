@@ -779,9 +779,9 @@ function processDawn(world){
     if (!k.alive) continue;
     const foodNeed=k.pop, metalNeed=k.army;
     if (k.food>=foodNeed){ k.food-=foodNeed; k.pop=Math.min(popCap(world,k),k.pop+1); }
-    else { const gap=foodNeed-k.food; k.food=0; const loss=Math.min(k.pop-1,Math.max(1,gap)); k.pop-=loss; starvedPop[k.id]=loss; }
+    else { const gap=foodNeed-k.food; k.food=0; const loss=Math.min(k.pop-1,Math.max(1,gap)); k.pop-=loss; if(loss>0)starvedPop[k.id]=loss; }
     if (k.metal>=metalNeed) k.metal-=metalNeed;
-    else { const gap=metalNeed-k.metal; k.metal=0; const loss=Math.min(k.army,Math.max(1,gap)); k.army-=loss; unsupportedArmy[k.id]=loss; }
+    else { const gap=metalNeed-k.metal; k.metal=0; const loss=Math.min(k.army,Math.max(1,gap)); k.army-=loss; if(loss>0)unsupportedArmy[k.id]=loss; }
     k.stamina=Math.min(cfg.staminaCap,k.stamina+1);
     k.army=Math.min(k.army,Math.min(cfg.armyCap,k.pop));
     if (k.pop<=1 && cellsOf(world,k.id).length===0){ k.alive=false; emit(world,{type:"Fall",tick:absTick(world),kingdomId:k.id,conqueredBy:-1}); }
@@ -1489,7 +1489,7 @@ function restoreSnapshot(snap){
   world.day=snap.day;world.tick=snap.tick;world.over=snap.over;world.winner=snap.winner;
   const W=world.cfg.width;
   for(let y=0;y<world.cfg.height;y++)for(let x=0;x<W;x++){const i=y*W+x,g=world.grid[y][x];g.owner=snap.owners[i]===-1?null:snap.owners[i];g.crop=snap.crops[i];g.shield=snap.shields[i];g.terrain=snap.terrains?.[i]||g.terrain||"plain";g.ore=snap.ores?.[i]||0;g.settlement=snap.settlements?.[i]||null;}
-  snap.kingdoms.forEach((s,i)=>{const k=world.kingdoms[i];Object.assign(k,{alive:s.alive,pop:s.pop,army:s.army,food:s.food,metal:s.metal??world.cfg.startMetal,stamina:s.stamina,bulletin:s.bulletin,selfNote:s.selfNote,goal:s.goal||k.goal,talkModel:s.talkModel||k.talkModel,actModel:s.actModel||k.actModel});});
+  snap.kingdoms.forEach((s,i)=>{const k=world.kingdoms[i];Object.assign(k,{alive:s.alive,pop:s.pop,army:s.army,food:s.food,metal:s.metal??world.cfg.startMetal??defaultConfig().startMetal,stamina:s.stamina,bulletin:s.bulletin,selfNote:s.selfNote,goal:s.goal||k.goal,talkModel:s.talkModel||k.talkModel,actModel:s.actModel||k.actModel});});
 }
 function loadReplay(data){
   validateReplay(data); replayData=data; replayIdx=0;
