@@ -835,9 +835,10 @@ function truncateSentences(text,n){
 }
 function speak(world,k,phaseA){
   const cfg=world.cfg;
-  if (absTick(world)<world.silenceUntil) return; // radio silence
+  // Internal thought still advances during speech controls; silence and mute affect output only.
+  k.selfNote=String(phaseA.self_note||phaseA.selfNote||k.selfNote||"");
+  if (absTick(world)<world.silenceUntil || k.mutedUntil>absTick(world)) { k.bulletin=""; return; }
   let bulletin=phaseA.bulletin, letters=phaseA.letters||[];
-  if (bulletin && k.mutedUntil>absTick(world)) bulletin=null;
   if (bulletin){
     const r=truncateSentences(bulletin,cfg.sentencesPerMsg);
     if (r.truncated) emit(world,{type:"TalkTruncated",tick:absTick(world),kingdomId:k.id,originalText:bulletin,truncatedText:r.text});
@@ -856,7 +857,6 @@ function speak(world,k,phaseA){
     emit(world,{type:"Letter",tick:absTick(world),from:k.id,to:L.to,text:r.text});
     sent++;
   }
-  k.selfNote=String(phaseA.self_note||phaseA.selfNote||k.selfNote||"");
 }
 
 // ---------- mock policy (deterministic, archetype-driven) ----------
@@ -970,7 +970,7 @@ function injectDrought(world,x0,y0,x1,y1){
 function injectSilence(world,ticks){ world.silenceUntil=absTick(world)+ticks; emit(world,{type:"Control",tick:absTick(world),operatorAction:"radio_silence",parameters:{ticks}}); }
 function injectMute(world,kid,ticks){ world.kingdoms[kid].mutedUntil=absTick(world)+ticks; emit(world,{type:"Control",tick:absTick(world),operatorAction:"mute",parameters:{kingdom:kid,ticks}}); }
 function injectCurfew(world,ticks){ world.curfewUntil=absTick(world)+ticks; emit(world,{type:"Control",tick:absTick(world),operatorAction:"curfew",parameters:{ticks}}); }
-function injectCacheDrop(world,x,y){ const c=wrap(world,x,y); if(world.grid[c[1]][c[0]].owner!==null)return false; world.grid[c[1]][c[0]].crop=3; emit(world,{type:"Control",tick:absTick(world),operatorAction:"cache_drop",parameters:{x:c[0],y:c[1]}}); return true; }
+function injectCacheDrop(world,x,y){ const c=wrap(world,x,y),g=world.grid[c[1]][c[0]]; if(g.owner!==null)return false; g.terrain="field";g.crop=3; emit(world,{type:"Control",tick:absTick(world),operatorAction:"cache_drop",parameters:{x:c[0],y:c[1]}}); return true; }
 
 // ---------- snapshots (compact, for replay/export) ----------
 function takeSnapshot(world){
@@ -1108,7 +1108,7 @@ async function thinkPhaseB(world,k){
     const j=JSON.parse(r.text);
     const legal=legalActions(world,k);
     if (!j||!legal.includes(j.act)) throw new Error("illegal act "+(j&&j.act));
-    return {act:j.act,target:(j.target===undefined?null:j.target),dir:j.dir||null,note:String(j.note||"").slice(0,80)};
+    return {act:j.act,target:(j.target===undefined?null:j.target),dir:j.dir||null,group_id:j.group_id||null,amount:Number.isFinite(+j.amount)?Math.floor(+j.amount):null,placement:j.placement||null,note:String(j.note||"").slice(0,80)};
   }catch(e){
     emit(world,{type:"ThinkTimeout",tick:absTick(world),kingdomId:k.id,phase:"B",fallbackExecuted:"mock"});
     return mockPhaseB(world,k);
@@ -1124,7 +1124,7 @@ function logUsage(world,k,model,u){
 <script>
 "use strict";
 // ---------- UI state ----------
-let world=null, playing=false, timer=null, selectedKingdom=null, pendingInject=null;
+let world=null, playing=false, timer=null, selectedKingdom=null, pendingInject=null, tickInFlight=false;
 let replayData=null, replayIdx=0, renderedEventCount=0, eventView="highlights";
 const $=(id)=>document.getElementById(id);
 let aboutOrigin="home";
@@ -1218,19 +1218,24 @@ function newMatch(cfg,seed){
   resetMapView(); setSheet("peek",true); setTimeout(layoutBoard,80);
   toast("Match started - seed "+world.seed);
   renderAll();
+  DB.save({id:"latest",savedAt:Date.now(),data:exportData()});
 }
 function pause(){ playing=false; $("playBtn").textContent="Play"; $("playBtn").classList.remove("playing"); if(timer){clearTimeout(timer);timer=null;} }
 function scheduleTick(){ if(!playing)return; timer=setTimeout(async()=>{await tickOnce();scheduleTick();},+$("speedSel").value); }
 function play(){ if(!world||world.over||playing)return; playing=true; $("playBtn").textContent="Pause"; $("playBtn").classList.add("playing"); scheduleTick(); }
 async function tickOnce(){
   if (!world||world.over){ pause(); return; }
-  const eventStart=world.events.length;
-  await runTick(world,{phaseA:thinkPhaseA,phaseB:thinkPhaseB});
-  const turnEvents=world.events.slice(eventStart);
-  DB.save({id:"latest",savedAt:Date.now(),data:exportData()});
-  renderAll();
-  showTurnActions(world,turnEvents);
-  if (world.over){ pause(); showTab("world"); toast(world.winner?("Match over: "+world.kingdoms[world.winner.id].name+" wins by "+world.winner.how.replace("_"," ")):"Match over: all kingdoms fell"); }
+  if(tickInFlight)return;
+  tickInFlight=true;
+  try{
+    const eventStart=world.events.length;
+    await runTick(world,{phaseA:thinkPhaseA,phaseB:thinkPhaseB});
+    const turnEvents=world.events.slice(eventStart);
+    DB.save({id:"latest",savedAt:Date.now(),data:exportData()});
+    renderAll();
+    showTurnActions(world,turnEvents);
+    if (world.over){ pause(); showTab("world"); toast(world.winner?("Match over: "+world.kingdoms[world.winner.id].name+" wins by "+world.winner.how.replace("_"," ")):"Match over: all kingdoms fell"); }
+  } finally { tickInFlight=false; }
 }
 function exportData(){ return { format:"commons.json", version:1, exportedAt:new Date().toISOString(),
   config:world.cfg, seed:world.seed, usage:world.usage, events:world.events, snapshots:world.snapshots, aiAnalysis:world.aiAnalysis||null }; }
@@ -1608,7 +1613,8 @@ for(const group of document.querySelectorAll("#setup .cols>div")){const h=group.
 $("homeSettings").onclick=()=>showScreen("setup");
 $("configureMatch").onclick=()=>showScreen("setup");
 $("settingsBack").onclick=()=>showScreen("home");
-$("quickStart").onclick=()=>{ const cfg=readConfig(); newMatch(cfg); };
+function launchConfiguredMatch(){const cfg=readConfig(),models=[$("modelA").value.trim(),...[...document.querySelectorAll(".agent-model input")].map(x=>x.value.trim())].filter(Boolean);if(models.some(m=>m!=="mock")&&!LLM.key){showScreen("setup");$("setupMsg").textContent="Add an API key before launching a real-model roster.";toast("API key required for the selected model");return;}newMatch(cfg);}
+$("quickStart").onclick=launchConfiguredMatch;
 function toast(msg){ const t=$("toast"); t.textContent=msg; t.style.display="block"; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display="none",3200); }
 $("playBtn").onclick=()=>{ replayData?null:(playing?pause():play()); };
 $("stepBtn").onclick=()=>{ if(!replayData){pause();tickOnce();} };
@@ -1621,11 +1627,12 @@ $("exportBtn").onclick=()=>{
   a.download="commons-day"+world.day+"-tick"+world.tick+".commons.json"; a.click();
   toast("Exported "+world.events.length+" events, "+world.snapshots.length+" snapshots");
 };
-$("droughtBtn").onclick=()=>{ pendingInject="drought"; toast("Click the map: drought clears crops in a 5x5 box"); };
-$("cacheBtn").onclick=()=>{ pendingInject="cache"; toast("Click an unowned cell to drop a level-3 crop"); };
-$("silenceBtn").onclick=()=>{ injectSilence(world,8); toast("Radio silence for 8 ticks"); renderAll(); };
-$("curfewBtn").onclick=()=>{ injectCurfew(world,16); toast("Curfew: raids disabled for 16 ticks"); renderAll(); };
-$("muteBtn").onclick=()=>{ if(selectedKingdom===null){toast("Select a kingdom first (leaderboard)");return;} injectMute(world,selectedKingdom,16); toast(world.kingdoms[selectedKingdom].name+" muted for 16 ticks"); renderAll(); };
+function canInject(){if(!world||replayData){toast("Operator powers need a live match");return false}if(world.over){toast("This match is over - start a new match to use powers");return false}return true}
+$("droughtBtn").onclick=()=>{ if(!canInject())return;pendingInject="drought"; toast("Click the map: drought clears crops in a 5x5 box"); };
+$("cacheBtn").onclick=()=>{ if(!canInject())return;pendingInject="cache"; toast("Click an unowned cell to drop a level-3 crop"); };
+$("silenceBtn").onclick=()=>{ if(!canInject())return;injectSilence(world,8); toast("Radio silence for 8 ticks"); renderAll(); };
+$("curfewBtn").onclick=()=>{ if(!canInject())return;injectCurfew(world,16); toast("Curfew: raids disabled for 16 ticks"); renderAll(); };
+$("muteBtn").onclick=()=>{ if(!canInject())return;if(selectedKingdom===null){toast("Select a kingdom first (leaderboard)");return;} injectMute(world,selectedKingdom,16); toast(world.kingdoms[selectedKingdom].name+" muted for 16 ticks"); renderAll(); };
 $("savePresetBtn").onclick=saveLLMPreset;
 $("loadPresetBtn").onclick=loadLLMPreset;
 $("deletePresetBtn").onclick=deleteLLMPreset;
@@ -1633,7 +1640,7 @@ $("llmPreset").onchange=()=>{const n=$("llmPreset").value;if(n)$("presetName").v
 $("toggleKey").onclick=()=>{ const key=$("apiKey"); const reveal=key.type==="password"; key.type=reveal?"text":"password"; $("toggleKey").textContent=reveal?"Hide":"Show"; };
 document.addEventListener("change",e=>{ if(e.target.id==="cfg_playerCount") buildAgentOverrides(); });
 $("modelA").addEventListener("change",()=>{ if($("modelA").value.trim()==="mock") $("setupMsg").textContent="Mock mode runs locally with no key."; else $("setupMsg").textContent=$("apiKey").value.trim()?"Model ready.":"Add an API key to use this model."; });
-$("startBtn").onclick=()=>{ const cfg=readConfig(); newMatch(cfg); };
+$("startBtn").onclick=launchConfiguredMatch;
 $("loadReplayBtn").onclick=()=>$("replayFile").click();
 $("replayFile").onchange=(e)=>{ const f=e.target.files[0]; if(!f)return;
   f.text().then(t=>{ try{ loadReplay(JSON.parse(t)); }catch(err){ $("setupMsg").textContent="Could not load replay: "+err.message; } finally { e.target.value=""; } }); };
@@ -1679,6 +1686,7 @@ DB.open().then(async ()=>{
 </script>
 </body>
 </html>
+
 
 
 
