@@ -677,6 +677,42 @@
     #operatorDrawer{background:var(--sun-paper-mid)!important;box-shadow:0 12px 30px var(--shade-29)}
   }
 
+
+  /* ===== Mobile-first field UI: map first, chrome second ===== */
+  #overviewBtn{display:none}
+  @media(max-width:759px){
+    #app{position:relative}
+    #topbar{height:48px;min-height:48px;flex:0 0 48px;padding:4px 6px;grid-template-columns:44px 38px 56px 1fr 40px;gap:4px;border-bottom-width:1px;box-shadow:none}
+    #topbar button,#topbar select{height:38px;min-height:38px;border-radius:10px;padding:0 5px}
+    #topbar #playBtn{border-width:1px;box-shadow:none}
+    #topbar .clock{font-size:9px;line-height:1.05}
+    #operatorDrawer{top:50px;left:6px;right:6px;border-radius:13px}
+    #main{flex:1 1 auto}
+    #boardwrap{position:relative;flex:1 1 auto;min-height:0;overflow:hidden;background:var(--sun-paper-deep)}
+    #mapstage{position:relative;flex:1 1 auto;min-height:0;width:100%;overflow:hidden}
+    #mapframe{position:absolute;inset:0;width:100%;height:100%}
+    #board{width:100%!important;height:100%!important}
+    #overviewBtn{display:grid;place-items:center;position:absolute;z-index:12;right:8px;bottom:8px;width:42px;height:42px;min-height:42px;padding:0;border:1px solid var(--wood-28);border-radius:13px;background:var(--sun-paper-soft);color:var(--sun-ink);box-shadow:0 3px 0 var(--shade-20);font-size:18px}
+    #overviewBtn:active{transform:translateY(2px);box-shadow:none}
+    #empirebar{height:54px;min-height:54px;padding:3px 56px 4px 6px;gap:5px;border-top-width:1px;scroll-padding-left:6px}
+    .ecard{height:46px;padding:4px 9px 4px 5px;gap:6px;border-radius:11px}
+    .ecard .edot{width:28px;height:28px;flex-basis:28px;font-size:13px}
+    .ecard .emeta b{font-size:10px;max-width:88px}.ecard .emeta i{font-size:8px}
+    #side{flex:0 0 45dvh;border-radius:0;box-shadow:none;transition:flex-basis .22s ease}
+    #app.sheet-peek #side{flex-basis:58px}
+    #sheetGrab{display:none}
+    #tabs{height:58px;flex:0 0 58px;padding:0;border-bottom:0}
+    #tabs button{min-height:58px;touch-action:manipulation}
+    #tabs button:before{font-size:17px!important;line-height:19px!important}
+    #tabs button:after{font-size:9px!important;line-height:13px!important}
+    #tabs button.on{background:var(--sun-paper-deep)!important}
+    #app.sheet-peek #sidebody{display:none}
+    #sidebody{padding:8px 10px max(18px,env(safe-area-inset-bottom))}
+    .world-brief{padding:5px 2px}.world-brief p{margin-top:3px!important}
+    #toast{bottom:70px}
+  }
+  @media(min-width:760px){#overviewBtn{display:none}}
+
 </style>
 </head>
 <body>
@@ -825,7 +861,7 @@
     <button id="exitReplayBtn">Exit replay</button>
   </div>
   <div id="main">
-    <div id="boardwrap"><div id="mapstage"><div id="mapframe"><canvas id="board" width="960" height="640"></canvas><div id="mapActions" aria-hidden="true"></div></div></div><div id="matchEnd"></div><div id="turnViz" aria-live="polite"></div><div id="empirebar"></div></div>
+    <div id="boardwrap"><div id="mapstage"><div id="mapframe"><canvas id="board" width="960" height="640"></canvas><div id="mapActions" aria-hidden="true"></div></div><button id="overviewBtn" type="button" title="Show the whole world" aria-label="Show the whole world">⌗</button></div><div id="matchEnd"></div><div id="turnViz" aria-live="polite"></div><div id="empirebar"></div></div>
     <div id="side">
       <div id="lb"></div>
       <div id="sheetGrab" aria-hidden="true"><i></i></div>
@@ -1664,7 +1700,7 @@ function boardGeom(w){
   return {cell, ox:Math.floor((cv.width-cell*W)/2), oy:Math.floor((cv.height-cell*H)/2)};
 }
 const mapView={s:1,tx:0,ty:0};
-function resetMapView(){mapView.s=1;mapView.tx=0;mapView.ty=0;}
+function resetMapView(){mapView.s=1;mapView.tx=0;mapView.ty=0;const cv=$("board");if(cv)delete cv.dataset.mobileViewReady;}
 function focusKingdom(id,animate=false){
   if(!world||id===null||!world.kingdoms[id]?.alive)return;
   const cv=$("board"),g=boardGeom(world),k=world.kingdoms[id];
@@ -1692,7 +1728,15 @@ function layoutBoard(){
   const bw=Math.max(120,Math.round(r.width*dpr)), bh=Math.max(90,Math.round(r.height*dpr));
   cv.style.width=Math.floor(r.width)+"px"; cv.style.height=Math.floor(r.height)+"px";
   if(cv.width!==bw||cv.height!==bh){ cv.width=bw; cv.height=bh; }
-  if(world)renderBoard(world);
+  if(world){
+    if(innerWidth<760 && !cv.dataset.mobileViewReady){
+      cv.dataset.mobileViewReady="1";
+      const g=boardGeom(world), worldH=g.cell*world.cfg.height;
+      const useful=Math.min(1.65,Math.max(1,Math.min(r.height/(worldH/dpr)*.72,1.65)));
+      mapView.s=useful; mapView.tx=(cv.width-cv.width*useful)/2; mapView.ty=(cv.height-cv.height*useful)/2; clampPan();
+    }
+    renderBoard(world);
+  }
 }
 let sheetMode="half";
 function setSheet(m,skipLayout){
@@ -2009,6 +2053,8 @@ $("settingsBack").onclick=()=>showScreen("home");
 function launchConfiguredMatch(){const cfg=readConfig(),models=[$("modelA").value.trim(),...[...document.querySelectorAll(".agent-model input")].map(x=>x.value.trim())].filter(Boolean);if(models.some(m=>m!=="mock")&&!LLM.key){showScreen("setup");$("setupMsg").textContent="Add an API key before launching a real-model roster.";toast("API key required for the selected model");return;}newMatch(cfg);}
 $("quickStart").onclick=launchConfiguredMatch;
 function toast(msg){ const t=$("toast"); t.textContent=msg; t.style.display="block"; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display="none",3200); }
+const overviewBtn=$("overviewBtn");
+if(overviewBtn) overviewBtn.onclick=()=>{ resetMapView(); const cv=$("board"); if(cv)cv.dataset.mobileViewReady="1"; renderBoard(world); toast("Whole world"); };
 $("playBtn").onclick=()=>{ replayData?null:(playing?pause():play()); };
 $("stepBtn").onclick=()=>{ if(!replayData){pause();tickOnce();} };
 $("speedSel").onchange=()=>{ if(playing){pause();play();} };
