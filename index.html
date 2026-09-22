@@ -1384,15 +1384,18 @@ function runTick(world,thinkers){
     world.tick+=1;
     if (world.tick>=world.cfg.ticksPerDay){ world.tick=0; processDawn(world); }
     checkVictory(world);
-    // Intent headings: groups with a deployment order point toward their post; anything else holds.
+    // Intent headings: attack groups face the nearest rival, deployed groups point to their post, the rest hold.
     for (const k of world.kingdoms){ if (!k.alive) continue;
       for (const g of normalizeArmyGroups(world,k)){
-        if (["village","mine","border"].includes(g.intent)){
+        const norm=(dx,dy)=>{ if (dx>world.cfg.width/2) dx-=world.cfg.width; if (dx<-world.cfg.width/2) dx+=world.cfg.width; if (dy>world.cfg.height/2) dy-=world.cfg.height; if (dy<-world.cfg.height/2) dy+=world.cfg.height; return (dx||dy)?{dx,dy}:null; };
+        if (g.intent==="border"){
+          let best=null,bd=Infinity;
+          for (const o of world.kingdoms){ if (!o.alive||o.id===k.id) continue;
+            for (const c of cellsOf(world,o.id)){ const dd=chebyshev(world,[g.x,g.y],c); if (dd<bd){bd=dd;best=c;} } }
+          g.heading=best?norm(best[0]-g.x,best[1]-g.y):null;
+        } else if (["village","mine"].includes(g.intent)){
           const post=chooseArmyPost(world,k,g.intent,g);
-          let dx=post[0]-g.x, dy=post[1]-g.y;
-          if (dx>world.cfg.width/2) dx-=world.cfg.width; if (dx<-world.cfg.width/2) dx+=world.cfg.width;
-          if (dy>world.cfg.height/2) dy-=world.cfg.height; if (dy<-world.cfg.height/2) dy+=world.cfg.height;
-          g.heading=(dx||dy)?{dx,dy}:null;
+          g.heading=norm(post[0]-g.x,post[1]-g.y);
         } else g.heading=null;
       }
     }
