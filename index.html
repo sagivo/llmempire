@@ -306,6 +306,44 @@
     #board{display:block}
   }
 
+
+
+  /* ===== Sunstone Atlas: one coherent low-poly toy-world theme ===== */
+  :root{--bg:#172437;--panel:#f4e8c8;--panel2:#ead8ad;--line:#9f8454;--txt:#2d3a3d;--dim:#746b57;--acc:#ef9c31;--good:#4d9a62;--bad:#c9574d;--warn:#e2b64d;--hair:rgba(65,52,31,.2)}
+  body{background:#172437;color:var(--txt);font-family:Nunito,-apple-system,"Segoe UI",sans-serif}
+  button,select,input[type=text],input[type=number],input[type=password]{border:2px solid #806b45;background:#f7edcf;color:#31403f;border-radius:12px;box-shadow:0 3px 0 #665334;font-weight:750}
+  button:hover{border-color:#5e4c30;transform:translateY(-1px)} button:active{transform:translateY(2px);box-shadow:0 1px 0 #665334}
+  button.primary{background:#f3a63a;border-color:#9a5a1d;color:#342819;box-shadow:0 3px 0 #884b17}
+  #app{background:#1b2d42}
+  #topbar{background:linear-gradient(#f7edcf,#e9d6a9);border-bottom:3px solid #846f48;color:#31403f;box-shadow:0 4px 0 rgba(20,29,39,.28)}
+  #topbar .clock,#topbar .pill{color:#463b29;background:#fff5d7;border:2px solid #a18a5c;border-radius:12px;font-weight:900;box-shadow:0 2px 0 #806a44}
+  #boardwrap{background:#17283c}
+  #mapstage{background:radial-gradient(circle at 50% 35%,#315879 0,#203c58 54%,#16283b 100%)}
+  #board{background:#284c69;border:0!important}
+  #empirebar{background:#e7d3a3;border-top:3px solid #8d7549;scrollbar-color:#9b7d49 transparent}
+  .ecard{background:#f6e9c6!important;border:2px solid #9d8352!important;border-radius:14px!important;box-shadow:0 3px 0 #705b39!important;color:#31403f!important}
+  .ecard .edot{border-radius:9px!important;border:2px solid rgba(63,48,31,.45);box-shadow:inset 0 2px 0 rgba(255,255,255,.34),0 2px 0 #685231!important;color:#fff!important;text-shadow:0 1px 0 rgba(0,0,0,.45)}
+  .ecard .emeta b{color:#30403f!important;font-weight:900!important}.ecard .emeta i{color:#74684f!important;font-weight:750}
+  .ecard.sel{border-color:var(--kc)!important;background:#fff7db!important;box-shadow:0 0 0 2px var(--kc),0 4px 0 #6f5937!important}
+  #side{background:#efe0b9;border-color:#806b45;color:#31403f;box-shadow:0 -5px 0 rgba(19,29,41,.22)}
+  #sheetGrab{background:#ead5a6}#sheetGrab i{background:#8e7549!important;height:5px!important;border-radius:4px!important}
+  #tabs{background:#e5cf9d;border-color:#937849}
+  #tabs button{color:#756747;background:transparent;border:0;box-shadow:none;border-radius:0;font-weight:900}
+  #tabs button:hover{transform:none}.tabs button:active{transform:none}
+  #tabs button.on{color:#33413f;background:#f6e9c6;border-bottom:4px solid #e89027!important}
+  #sidebody{background:#f6e9c6;color:#35413f}
+  .analysis-card,.insp-card,.world-card,.observe-toggle,.ev{background:#fff3d2!important;border:2px solid #b69b68!important;border-left-width:5px!important;border-radius:12px!important;box-shadow:0 2px 0 rgba(101,79,43,.18);color:#384442}
+  .ev .t,.observe-note,.analysis-empty,#analysisStatus{color:#766b54!important}
+  #liveStory{background:#f5e4ba!important;border:2px solid #a8884d!important;color:#35403e!important;box-shadow:0 3px 0 rgba(60,43,22,.3)}
+  .story-title{color:#4a3b23!important;font-weight:950}.story-detail{color:#76664a!important}
+  #matchEnd{background:#f4e4b9!important;border:2px solid #d18d2a!important;color:#3c3628!important;box-shadow:0 3px 0 #8e682c}
+  #replaybar{background:#ead6a8!important;border-color:#8c744a!important;color:#3d443f!important}
+  #replaybar button{background:#f9edcb!important}
+  #toolsPanel,.modal-card,.setup-card{background:#f4e7c7!important;border:2px solid #8d7448!important;color:#35413f!important;box-shadow:0 8px 0 rgba(15,24,33,.3)}
+  #setup{background:#ead8ae;color:#35413f}.note,label,h2{color:#72664f!important}
+  .dot{border-radius:3px;border:1px solid rgba(50,40,25,.4)}
+  @media(max-width:759px){#side{border-top:3px solid #806b45!important}#topbar{box-shadow:0 3px 0 rgba(20,29,39,.3)}#mapstage:before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(135deg,rgba(255,255,255,.04),transparent 45%)}}
+
 </style>
 </head>
 <body>
@@ -1227,59 +1265,65 @@ function setSheet(m,skipLayout){
 function renderBoard(w, snap){
   const cv=$("board"), ctx=cv.getContext("2d");
   ctx.setTransform(1,0,0,1,0,0);
-  const bg=ctx.createLinearGradient(0,0,0,cv.height);
-  bg.addColorStop(0,"#0c1424"); bg.addColorStop(1,"#070b13");
-  ctx.fillStyle=bg; ctx.fillRect(0,0,cv.width,cv.height);
-  const gr=ctx.createRadialGradient(cv.width/2,cv.height/2,10,cv.width/2,cv.height/2,Math.max(cv.width,cv.height)*0.62);
-  gr.addColorStop(0,"rgba(70,120,200,.10)"); gr.addColorStop(1,"rgba(70,120,200,0)");
-  ctx.fillStyle=gr; ctx.fillRect(0,0,cv.width,cv.height);
+  const sea=ctx.createLinearGradient(0,0,0,cv.height);
+  sea.addColorStop(0,"#3f7392"); sea.addColorStop(1,"#244d6c");
+  ctx.fillStyle=sea; ctx.fillRect(0,0,cv.width,cv.height);
+  // broad low-poly water facets
+  const facet=Math.max(70,cv.width/7);
+  for(let y=0;y<cv.height+facet;y+=facet) for(let x=0;x<cv.width+facet;x+=facet){
+    const odd=((x/facet+y/facet)|0)%2;
+    ctx.beginPath(); ctx.moveTo(x-facet,y); ctx.lineTo(x,y-facet); ctx.lineTo(x+facet,y); ctx.lineTo(x,y+facet); ctx.closePath();
+    ctx.fillStyle=odd?"rgba(177,221,226,.045)":"rgba(7,41,65,.055)"; ctx.fill();
+  }
   ctx.setTransform(mapView.s,0,0,mapView.s,mapView.tx,mapView.ty);
   const {cell,ox,oy}=boardGeom(w), W=w.cfg.width, H=w.cfg.height;
-  ctx.fillStyle="#0c1524"; ctx.fillRect(ox,oy,W*cell,H*cell);
   const get=(x,y,f)=> snap ? snap[f][y*W+x] : null;
+  const poly=(pts,fill)=>{ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i][0],pts[i][1]);ctx.closePath();ctx.fillStyle=fill;ctx.fill();};
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){
     const px=ox+x*cell, py=oy+y*cell;
     let owner,crop,shield;
-    if (snap){ owner=get(x,y,"owners"); crop=get(x,y,"crops"); shield=get(x,y,"shields"); owner=owner===-1?null:owner; }
-    else { const g=w.grid[y][x]; owner=g.owner; crop=g.crop; shield=g.shield; }
-    if (owner===null){
-      ctx.fillStyle="#151f2e"; ctx.fillRect(px+0.5,py+0.5,cell-1,cell-1);
-    } else {
-      const col=snap?KINGDOM_COLORS[owner%KINGDOM_COLORS.length]:w.kingdoms[owner].color;
-      ctx.globalAlpha=0.6; ctx.fillStyle=col; ctx.fillRect(px,py,cell,cell); ctx.globalAlpha=1;
-      ctx.strokeStyle=col; ctx.lineWidth=1.2; ctx.strokeRect(px+0.6,py+0.6,cell-1.2,cell-1.2);
-      if (shield>0){ ctx.lineWidth=2; ctx.strokeStyle="#e8ecf4"; ctx.globalAlpha=shield/ (w.cfg.shieldCap||2) *0.85; ctx.strokeRect(px+3,py+3,cell-6,cell-6); ctx.globalAlpha=1; }
+    if(snap){owner=get(x,y,"owners");crop=get(x,y,"crops");shield=get(x,y,"shields");owner=owner===-1?null:owner;}
+    else{const g=w.grid[y][x];owner=g.owner;crop=g.crop;shield=g.shield;}
+    const base=owner===null?"#8db65b":(snap?KINGDOM_COLORS[owner%KINGDOM_COLORS.length]:w.kingdoms[owner].color);
+    // beveled toy tile: one shared visual grammar everywhere
+    ctx.fillStyle=base;ctx.fillRect(px+.7,py+.7,cell-1.4,cell-1.4);
+    poly([[px+1,py+1],[px+cell-1,py+1],[px+cell-1,py+cell*.24],[px+1,py+cell*.55]],"rgba(255,255,255,.16)");
+    poly([[px+1,py+cell*.55],[px+cell-1,py+cell*.24],[px+cell-1,py+cell-1],[px+1,py+cell-1]],"rgba(32,40,28,.10)");
+    ctx.strokeStyle="rgba(47,52,38,.28)";ctx.lineWidth=Math.max(1,cell*.045);ctx.strokeRect(px+.8,py+.8,cell-1.6,cell-1.6);
+    const seed=(x*17+y*31)%11;
+    if(owner===null && crop===0 && cell>18){
+      if(seed===2||seed===8){ // tiny geometric pine
+        poly([[px+cell*.5,py+cell*.2],[px+cell*.28,py+cell*.62],[px+cell*.72,py+cell*.62]],"#2f714d");
+        poly([[px+cell*.5,py+cell*.36],[px+cell*.22,py+cell*.82],[px+cell*.78,py+cell*.82]],"#245e45");
+        ctx.fillStyle="#76502e";ctx.fillRect(px+cell*.46,py+cell*.77,cell*.08,cell*.16);
+      } else if(seed===5){ // faceted mountain
+        poly([[px+cell*.16,py+cell*.78],[px+cell*.49,py+cell*.18],[px+cell*.82,py+cell*.78]],"#79877e");
+        poly([[px+cell*.49,py+cell*.18],[px+cell*.82,py+cell*.78],[px+cell*.53,py+cell*.7]],"#596c68");
+        poly([[px+cell*.49,py+cell*.18],[px+cell*.37,py+cell*.4],[px+cell*.56,py+cell*.36]],"#f2e8d3");
+      }
     }
-    if (crop>0){
-      const g=["#4c8a34","#7fbc4c","#b9e37f"][crop-1]||"#b9e37f";
-      ctx.fillStyle=g; const r=(cell-8)*(crop/3)/2+1.5;
-      ctx.beginPath(); ctx.arc(px+cell/2,py+cell/2,r,0,7); ctx.fill();
+    if(crop>0){ // three simple diamond crops, no mismatched emoji
+      const n=Math.min(3,crop),cy=py+cell*.55;
+      for(let i=0;i<n;i++){const cx=px+cell*(.5+(i-(n-1)/2)*.2);poly([[cx,cy-cell*.2],[cx+cell*.1,cy],[cx,cy+cell*.2],[cx-cell*.1,cy]],i%2?"#f5d34d":"#ffdf63");}
+    }
+    if(shield>0){ctx.strokeStyle="#fff1c7";ctx.lineWidth=Math.max(2,cell*.09);ctx.globalAlpha=.5+.2*shield;ctx.strokeRect(px+cell*.13,py+cell*.13,cell*.74,cell*.74);ctx.globalAlpha=1;}
+  }
+  ctx.strokeStyle="rgba(246,226,181,.65)";ctx.lineWidth=2;ctx.strokeRect(ox-1,oy-1,W*cell+2,H*cell+2);
+  const dispCell=cell*mapView.s*(cv.clientWidth?cv.clientWidth/cv.width:1);
+  if(!snap&&dispCell>=10){
+    ctx.textAlign="center";ctx.textBaseline="middle";
+    for(const k of w.kingdoms){if(!k.alive)continue;const a=kingdomAnchor(w,k.id);if(!a)continue;
+      const cx=ox+a[0]*cell+cell/2,cy=oy+a[1]*cell+cell/2,r=Math.max(7,Math.min(cell*.29,15));
+      // faction standard: square heraldic badge shared with the UI chips
+      ctx.fillStyle="rgba(45,38,26,.35)";ctx.fillRect(cx-r+2,cy-r+3,r*2,r*2);
+      ctx.fillStyle=k.color;ctx.fillRect(cx-r,cy-r,r*2,r*2);
+      poly([[cx-r,cy-r],[cx+r,cy-r],[cx+r,cy-r*.25],[cx-r,cy+r*.25]],"rgba(255,255,255,.22)");
+      ctx.strokeStyle="#fff1cf";ctx.lineWidth=1.5;ctx.strokeRect(cx-r+.5,cy-r+.5,r*2-1,r*2-1);
+      ctx.fillStyle="#fff8e7";ctx.font="900 "+Math.max(9,r*.95)+"px Nunito,Segoe UI,sans-serif";ctx.fillText(String(k.army),cx,cy+.5);
     }
   }
-  ctx.strokeStyle="rgba(125,162,220,.3)"; ctx.lineWidth=1.5;
-  ctx.strokeRect(ox-0.75,oy-0.75,W*cell+1.5,H*cell+1.5);
-  const dispCell = cell * mapView.s * (cv.clientWidth ? cv.clientWidth / cv.width : 1);
-  if (!snap && dispCell >= 10){
-    ctx.textAlign="center"; ctx.textBaseline="middle";
-    for (const k of w.kingdoms){
-      if (!k.alive) continue;
-      const a=kingdomAnchor(w,k.id); if(!a) continue;
-      const cx=ox+a[0]*cell+cell/2, cy=oy+a[1]*cell+cell/2;
-      const strengthAsset=k.army<=0?"\u25CB":k.army===1?"\u265F":k.army<=3?"\u2694":k.army<=6?"\u265C":"\u265B";
-      const label=dispCell<22?strengthAsset:(strengthAsset+" "+k.army);
-      ctx.font="bold "+Math.max(dispCell<22?8:10,Math.floor(cell*(dispCell<22?0.44:0.32)))+"px -apple-system,Segoe UI,Roboto,sans-serif";
-      const tw=ctx.measureText(label).width+(dispCell<22?7:12), th=Math.max(dispCell<22?12:15,Math.floor(cell*(dispCell<22?0.7:0.46)));
-      ctx.beginPath();
-      ctx.roundRect(cx-tw/2, cy-th/2, tw, th, th/2);
-      ctx.fillStyle=k.color; ctx.fill();
-      ctx.strokeStyle="rgba(255,255,255,.42)"; ctx.lineWidth=1; ctx.stroke();
-      ctx.fillStyle="rgba(7,14,24,.94)";
-      ctx.fillText(label, cx, cy+0.5);
-    }
-  }
-  ctx.setTransform(1,0,0,1,0,0);
-  positionMapActions();
-  if (!snap && pendingInject){ cv.style.cursor="crosshair"; } else cv.style.cursor=mapView.s>1?"grab":"default";
+  ctx.setTransform(1,0,0,1,0,0);positionMapActions();
+  cv.style.cursor=!snap&&pendingInject?"crosshair":mapView.s>1?"grab":"default";
 }
 function positionMapActions(){
   const map=$("mapActions"); if(!map||!world)return;
@@ -1540,4 +1584,5 @@ DB.open().then(async ()=>{
 </script>
 </body>
 </html>
+
 
