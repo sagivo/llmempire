@@ -364,7 +364,7 @@
     
     body{background:var(--night-13);font-size:13px}
     #app{height:100dvh;background:radial-gradient(90% 55% at 50% 8%,var(--shade-22),transparent 70%),var(--night-13);overflow:hidden}
-    #topbar{height:62px;flex:0 0 62px;display:grid;grid-template-columns:52px 46px 64px 1fr 48px;gap:7px;padding:9px 10px;background:var(--shade-63);border:0;border-bottom:1px solid var(--hair);backdrop-filter:blur(20px)}
+    #topbar{height:62px;flex:0 0 62px;display:grid;grid-template-columns:52px 46px 62px 1fr 62px 46px;gap:6px;padding:9px 10px;background:var(--shade-63);border:0;border-bottom:1px solid var(--hair);backdrop-filter:blur(20px)}
     #topbar button,#topbar select{height:44px;min-height:44px;border-radius:13px;border:1px solid var(--hair);background:var(--shade-60);font-weight:750;font-size:12px;padding:0 8px;box-shadow:inset 0 1px var(--veil-1)}
     #topbar #playBtn{font-size:0;background:linear-gradient(135deg,var(--sea-13),var(--sea-24));border:0;box-shadow:0 8px 24px var(--veil-23)}
     #topbar #playBtn:before{content:'▶';font-size:17px;color:var(--night-9)}
@@ -2244,7 +2244,7 @@ function launchConfiguredMatch(){const cfg=readConfig(),models=[$("modelA").valu
 $("quickStart").onclick=launchConfiguredMatch;
 function toast(msg){ const t=$("toast"); t.textContent=msg; t.style.display="block"; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display="none",3200); }
 const overviewBtn=$("overviewBtn");
-$("viewSel").onchange=()=>{viewKingdom=$("viewSel").value==="all"?null:+$("viewSel").value;renderBoard(world);toast(viewKingdom===null?"Viewing the whole world":"Viewing as "+world.kingdoms[viewKingdom].name);};
+$("viewSel").onchange=()=>{viewKingdom=$("viewSel").value==="all"?null:+$("viewSel").value;if(viewKingdom===null){resetMapView();const cv=$("board");if(cv)cv.dataset.mobileViewReady="1";renderBoard(world);}else{const cells=cellsOf(world,viewKingdom),cv=$("board"),g=boardGeom(world);if(cells.length){let ax=0,ay=0;for(const c of cells){ax+=c[0];ay+=c[1];}ax/=cells.length;ay/=cells.length;const target=Math.max(1.35,Math.min(2.15,20/g.cell));mapView.s=target;mapView.tx=cv.width/2-(g.ox+(ax+.5)*g.cell)*target;mapView.ty=cv.height/2-(g.oy+(ay+.5)*g.cell)*target;clampPan();}renderBoard(world);}toast(viewKingdom===null?"Viewing the whole world":"Viewing as "+world.kingdoms[viewKingdom].name);};
 if(overviewBtn) overviewBtn.onclick=()=>{ resetMapView(); const cv=$("board"); if(cv)cv.dataset.mobileViewReady="1"; renderBoard(world); toast("Whole world"); };
 $("playBtn").onclick=()=>{ replayData?null:(playing?pause():play()); };
 $("stepBtn").onclick=()=>{ if(!replayData){pause();tickOnce();} };
@@ -2341,6 +2341,7 @@ DB.open().then(async ()=>{
 </script>
 </body>
 </html>
+
 
 
 
