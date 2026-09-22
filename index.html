@@ -1905,10 +1905,10 @@ function renderBoard(w, snap){
       ctx.textAlign="left";ctx.fillText(num,sx+markW+gap,cy+.5);ctx.textAlign="center";
       // Intent: flat arrow toward the planned post, or a hold pin when staying put.
       if(g.heading&&(g.heading.dx||g.heading.dy)){
-        const ang=Math.atan2(g.heading.dy,g.heading.dx),al=size*.34,aw=size*.20;
-        const bx=cx+Math.cos(ang)*(r+al*.28),by=cy+Math.sin(ang)*(r+al*.28);
+        const ang=Math.atan2(g.heading.dy,g.heading.dx),al=size*.46,aw=size*.26;
+        const bx=cx+Math.cos(ang)*(r+al*.42),by=cy+Math.sin(ang)*(r+al*.42);
         ctx.save();ctx.translate(bx,by);ctx.rotate(ang);
-        ctx.fillStyle=MAPC.unitGlyph;ctx.strokeStyle=MAPC.unitRing;ctx.lineWidth=Math.max(1,size*.045);
+        ctx.fillStyle=MAPC.unitGlyph;ctx.strokeStyle=MAPC.unitRing;ctx.lineWidth=Math.max(1.2,size*.06);
         ctx.beginPath();ctx.moveTo(al*.55,0);ctx.lineTo(-al*.30,-aw*.55);ctx.lineTo(-al*.10,0);ctx.lineTo(-al*.30,aw*.55);ctx.closePath();ctx.fill();ctx.stroke();
         ctx.restore();
       } else {
