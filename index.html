@@ -927,10 +927,10 @@ const CONFIG_SCHEMA = [
     ["playerCount",4,2,24,"Kingdoms spawned"],["ticksPerDay",8,4,12,"Ticks between Dawn cycles"],
     ["maxDays",30,5,200,"Hard day limit (timed mode)"],
     ["endMode","timed",null,null,"dominion | last_stand | timed | open"],
-    ["dominionPct",40,25,80,"% of map cells for dominion victory"]
+    ["dominionPct",25,20,80,"% of map cells for dominion victory"]
   ]],
   ["caps", [
-    ["startFood",10,2,20,"Starting food"],["startMetal",6,0,20,"Starting mine stock"],["startPop",2,1,8,"Starting population"],
+    ["startFood",12,2,20,"Starting food"],["startMetal",8,0,20,"Starting mine stock"],["startPop",2,1,8,"Starting population"],
     ["startArmy",1,0,4,"Starting army"],["startStamina",4,0,6,"Starting stamina"],
     ["foodCap",40,10,99,"Food storage cap"],["metalCap",40,10,99,"Mine storage cap"],["popBaseCap",2,1,8,"Pop supported with no houses"],
     ["housePop",4,1,8,"People supported per house"],["maxHousesPerTile",3,1,6,"Max houses per tile"],["startHouses",1,0,6,"Houses at the capital"],["armyCap",12,4,30,"Global army ceiling"],["armyMoveRange",3,1,6,"Army tiles per move"],
@@ -939,7 +939,7 @@ const CONFIG_SCHEMA = [
   ]],
   ["costs", [
     ["plantCostFood",1,0,5,"Food to plant"],["eatStaminaGain",2,1,5,"Stamina per food eaten"],
-    ["trainCostMetal",2,1,5,"Minerals to train +1 army"],["trainCostStamina",1,1,5,"Stamina to train +1 army"],["houseCostMetal",3,1,8,"Minerals to build a house"],
+    ["trainCostMetal",2,1,5,"Minerals to train +1 army"],["trainCostStamina",1,1,5,"Stamina to train +1 army"],["houseCostMetal",2,1,8,"Minerals to build a house"],
     ["letterRange",2,1,10,"Letter Chebyshev range"],["maxLetters",3,0,10,"Letters per kingdom per tick"],
     ["sentencesPerMsg",2,1,5,"Sentence limit on speech"]
   ]]
@@ -971,7 +971,7 @@ function createWorld(cfg, seed){
   // Topography drives the economy: fields grow food, mines yield resources, plains hold settlements.
   for (let y=0;y<cfg.height;y++){ const row=[]; for (let x=0;x<cfg.width;x++){
     const r=rng(),terrain=r<.29?"field":r<.43?"mine":r<.58?"forest":r<.68?"hill":"plain";
-    row.push({owner:null,terrain,crop:terrain==="field"&&rng()<.42?1:0,ore:terrain==="mine"?2+Math.floor(rng()*2):0,shield:0,houses:0});
+    row.push({owner:null,terrain,crop:terrain==="field"&&rng()<.42?1:0,ore:terrain==="mine"?3+Math.floor(rng()*3):0,shield:0,houses:0});
   } grid.push(row); }
   // far-placed capitals: greedy max-min toroidal distance
   const caps = [];
@@ -992,9 +992,9 @@ function createWorld(cfg, seed){
     grid[c[1]][c[0]].houses=cfg.startHouses;
     // Every capital gets one mine in reach: a standing army is sustainable if the kingdom claims it.
     const spot=neighbors6({cfg},c[0],c[1]).find(([mx,my])=>!caps.some(cc=>cc[0]===mx&&cc[1]===my));
-    if(spot){const g=grid[spot[1]][spot[0]];g.terrain="mine";g.ore=2+Math.floor(rng()*2);g.crop=0;g.houses=0;}
+    if(spot){const g=grid[spot[1]][spot[0]];g.terrain="mine";g.ore=3+Math.floor(rng()*3);g.crop=0;g.houses=0;}
     return { id:i, name:KINGDOM_NAMES[i%KINGDOM_NAMES.length]+" #"+(i+1), color:factionColor(i),
-      alive:true, pop:cfg.startPop, army:cfg.startArmy, armyGroups:cfg.startArmy>0?[{id:"g1",x:c[0],y:c[1],size:cfg.startArmy,intent:"capital garrison"}]:[], armyPos:{x:c[0],y:c[1]}, armyIntent:"capital garrison", food:cfg.startFood, metal:cfg.startMetal, stamina:cfg.startStamina,
+      alive:true, pop:cfg.startPop, army:cfg.startArmy, armyGroups:cfg.startArmy>0?[{id:"g1",x:c[0],y:c[1],size:cfg.startArmy,intent:"capital garrison"}]:[], capital:{x:c[0],y:c[1]}, armyPos:{x:c[0],y:c[1]}, armyIntent:"capital garrison", food:cfg.startFood, metal:cfg.startMetal, stamina:cfg.startStamina,
       goal:STOCK_GOALS[i%STOCK_GOALS.length], selfNote:"", bulletin:"", inbox:[], outbox:[],
       talkModel:"mock", actModel:"mock", mutedUntil:0, pendingOffers:[] };
   });
@@ -1023,7 +1023,7 @@ function normalizeArmyGroups(world,k){
 function validArmyPos(world,k){return normalizeArmyGroups(world,k).length>0;}
 function ensureArmyPos(world,k){const g=normalizeArmyGroups(world,k)[0];return g?[g.x,g.y]:null;}
 function moveReachable(world,k,group){const max=world.cfg.armyMoveRange||3,q=[[[group.x,group.y],0]],seen=new Set([group.x+","+group.y]),out=[[group.x,group.y]];while(q.length){const [p,d]=q.shift();if(d>=max)continue;for(const n of neighbors6(world,p[0],p[1])){const key=n.join(",");if(seen.has(key)||world.grid[n[1]][n[0]].owner!==k.id)continue;seen.add(key);out.push(n);q.push([n,d+1]);}}return out;}
-function chooseArmyPost(world,k,intent,group){const pool=moveReachable(world,k,group),score=([x,y])=>{const g=world.grid[y][x];let v=0;if(intent==="village")v+=g.houses>0?100:0;if(intent==="mine")v+=g.terrain==="mine"?100:0;if(intent==="border")v+=neighbors6(world,x,y).some(([nx,ny])=>world.grid[ny][nx].owner!==k.id)?80:0;v+=g.shield*3;return v;};return pool.slice().sort((a,b)=>score(b)-score(a))[0]||[group.x,group.y];}
+function chooseArmyPost(world,k,intent,group){const pool=moveReachable(world,k,group),score=([x,y])=>{const g=world.grid[y][x];let v=0;if(intent==="village")v+=g.houses>0?100:0;if(intent==="mine")v+=g.terrain==="mine"?100:0;if(intent==="border"){const frontier=neighbors6(world,x,y).some(([nx,ny])=>world.grid[ny][nx].owner!==k.id);v+=frontier?80:0;if(frontier){let d=Infinity;for(const r of world.kingdoms)if(r.alive&&r.id!==k.id&&r.capital)d=Math.min(d,hexDistance(world,[x,y],[r.capital.x,r.capital.y]));v-=d*4;}}v+=g.shield*3;return v;};return pool.slice().sort((a,b)=>score(b)-score(a))[0]||[group.x,group.y];}
 function armyAt(world,k,x,y){return normalizeArmyGroups(world,k).filter(g=>g.x===x&&g.y===y).reduce((n,g)=>n+g.size,0);}
 function groupAt(world,k,x,y){return normalizeArmyGroups(world,k).find(g=>g.x===x&&g.y===y);}
 function nextGroupId(k){const used=new Set((k.armyGroups||[]).map(g=>g.id));let n=1;while(used.has("g"+n))n++;return "g"+n;}
@@ -1095,7 +1095,7 @@ function executeAct(world,kid,action,events){
   switch(action.act){
     case "harvest":{
       const c=pick(cells.filter(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="field"&&g.crop>=2;}));
-      const y=2;
+      const y=3;
       world.grid[c[1]][c[0]].crop=0; k.stamina-=1; k.food=Math.min(cfg.foodCap,k.food+y);
       emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"harvest",target:null,dir:null,note:action.note||("+"+y+" food")});
       break;}
@@ -1105,7 +1105,7 @@ function executeAct(world,kid,action,events){
       emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"plant",target:null,dir:null,note:action.note||"field planted"});
       break;}
     case "mine":{
-      const c=pick(cells.filter(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="mine"&&g.ore>0;})),g=world.grid[c[1]][c[0]],y=Math.min(2,g.ore);
+      const c=pick(cells.filter(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="mine"&&g.ore>0;})),g=world.grid[c[1]][c[0]],y=Math.min(3,g.ore);
       g.ore-=y;k.stamina-=1;k.metal=Math.min(cfg.metalCap,k.metal+y);emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"mine",target:null,dir:null,note:action.note||("+"+y+" mine stock")});break;}
     case "build_house":{
       // Urbanize: stack on the most-built-up eligible tile so towns visibly grow toward the cap.
@@ -1203,7 +1203,7 @@ function resolveCombat(world,attackerId,cell,note){
   normalizeArmyGroups(world,A);normalizeArmyGroups(world,D);
   const attackers=A.armyGroups.filter(g=>neighbors6(world,g.x,g.y).some(n=>n[0]===cell[0]&&n[1]===cell[1])),attackGroup=attackers.sort((a,b)=>b.size-a.size)[0],attacking=attackGroup?.size||0, defending=armyAt(world,D,cell[0],cell[1]);
   const placeBonus=g.houses>0?2:(g.terrain==="mine"?1:0);
-  const pA=attacking+(A.stamina>=3?1:0),pD=defending+placeBonus+g.shield+(D.stamina>=3?1:0);
+  const warCombat=cfg.endMode==="dominion"||cfg.endMode==="last_stand",pA=attacking+(A.stamina>=3?1:0)+(warCombat?1:0),pD=defending+(warCombat?0:placeBonus+g.shield)+(D.stamina>=3?1:0);
   let winnerId,loot=0;
   if(pA>pD){
     const dLoss=Math.min(defending,Math.max(1,Math.ceil(attacking/2)));loseArmy(world,D,dLoss,cell[0],cell[1]);
@@ -1215,7 +1215,7 @@ function resolveCombat(world,attackerId,cell,note){
   }else{loseArmy(world,A,1,attackGroup?.x,attackGroup?.y);loseArmy(world,D,1,cell[0],cell[1]);if(A.food>0)A.food-=1;if(D.food>0)D.food-=1;winnerId=-1;}
   emit(world,{type:"Act",tick:absTick(world),kingdomId:attackerId,act:"raid",target:defenderId,dir:null,note:note||("local power "+pA+" vs "+pD)});
   emit(world,{type:"Combat",tick:absTick(world),attackerId,defenderId,cell,winnerId,attackingArmy:attacking,defendingArmy:defending,foodLooted:loot});
-  if(cellsOf(world,defenderId).length===0&&D.alive){D.alive=false;D.pendingOffers=[];D.army=0;D.armyGroups=[];D.armyPos=null;emit(world,{type:"Fall",tick:absTick(world),kingdomId:defenderId,conqueredBy:attackerId});}
+  const warMode=cfg.endMode==="dominion"||cfg.endMode==="last_stand",capitalTaken=winnerId===attackerId&&warMode&&D.capital&&cell[0]===D.capital.x&&cell[1]===D.capital.y;if((capitalTaken||cellsOf(world,defenderId).length===0)&&D.alive){D.alive=false;D.pendingOffers=[];D.army=0;D.armyGroups=[];D.armyPos=null;for(let y=0;y<cfg.height;y++)for(let x=0;x<cfg.width;x++)if(world.grid[y][x].owner===defenderId)world.grid[y][x].owner=attackerId;emit(world,{type:"Fall",tick:absTick(world),kingdomId:defenderId,conqueredBy:attackerId});}
 }
 
 // ---------- dawn ----------
@@ -1223,17 +1223,17 @@ function processDawn(world){
   const cfg=world.cfg, starvedPop={}, unsupportedArmy={}, grown=[];
   for (const k of world.kingdoms){
     if (!k.alive) continue;
-    const foodNeed=k.pop, metalNeed=k.army;
+    const foodNeed=k.pop, metalNeed=(cfg.endMode==="dominion"||cfg.endMode==="last_stand")?0:k.army;
     if (k.food>=foodNeed){ k.food-=foodNeed; k.pop=Math.min(popCap(world,k),k.pop+1); }
-    else { const gap=foodNeed-k.food; k.food=0; const loss=Math.min(k.pop-1,Math.max(1,gap)); k.pop-=loss; if(loss>0)starvedPop[k.id]=loss; }
+    else { const gap=foodNeed-k.food; k.food=0; const floor=(cfg.endMode==="dominion"||cfg.endMode==="last_stand")?2:1,loss=Math.min(Math.max(0,k.pop-floor),Math.max(1,gap)); k.pop-=loss; if(loss>0)starvedPop[k.id]=loss; }
     if (k.metal>=metalNeed) k.metal-=metalNeed;
     else { const gap=metalNeed-k.metal; k.metal=0; const loss=Math.min(k.army,Math.max(1,Math.ceil(gap/2))); loseArmy(world,k,loss); if(loss>0)unsupportedArmy[k.id]=loss; }
     k.stamina=Math.min(cfg.staminaCap,k.stamina+cfg.staminaPerDawn);
-    k.army=Math.min(k.army,Math.min(cfg.armyCap,k.pop)); normalizeArmyGroups(world,k);
+    k.army=Math.min(k.army,Math.min(cfg.armyCap,k.pop)); if((cfg.endMode==="dominion"||cfg.endMode==="last_stand")&&k.army===0&&k.pop>0){k.army=1;} normalizeArmyGroups(world,k);
     if (k.pop<=1 && cellsOf(world,k.id).length===0){ k.alive=false; emit(world,{type:"Fall",tick:absTick(world),kingdomId:k.id,conqueredBy:-1}); }
     if (k.pop<=0){ k.pop=1; } syncSettlementPop(world,k);
   }
-  for (let y=0;y<cfg.height;y++)for(let x=0;x<cfg.width;x++){ const c=world.grid[y][x]; if (c.terrain==="field"&&c.crop>0&&c.crop<3){c.crop+=1;grown.push([x,y]);} if(c.terrain==="mine"&&c.ore<3)c.ore+=1; }
+  for (let y=0;y<cfg.height;y++)for(let x=0;x<cfg.width;x++){ const c=world.grid[y][x]; if (c.terrain==="field"&&c.crop>0&&c.crop<3){c.crop+=1;grown.push([x,y]);} if(c.terrain==="mine"&&c.ore<5)c.ore+=1; }
   world.day+=1;
   emit(world,{type:"Dawn",tick:absTick(world)-1,day:world.day,starvedPop,unsupportedArmy,grownCrops:grown});
 }
@@ -1343,8 +1343,9 @@ function mockPhaseB(world,k){
   const pickT=(pred)=>{ const adj=adjacentKingdoms(world,k.id).filter(pred); return adj.length?adj[Math.floor(world.rng()*adj.length)]:null; };
   const richest=(pred)=>{const adj=adjacentKingdoms(world,k.id).filter(pred);return adj.length?adj[Math.floor(world.rng()*adj.length)]:null;};
   const hasEmpty=cells.some(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="field"&&g.crop===0;});
-  const aggressive=(k.goal==="Raider"||k.goal==="Warlord"||k.goal==="Schemer");
-  const target=Math.max(4,Math.min(7,k.pop+3));
+  const warMode=cfg.endMode==="dominion"||cfg.endMode==="last_stand";
+  const aggressive=warMode||(k.goal==="Raider"||k.goal==="Warlord"||k.goal==="Schemer");
+  const target=warMode?cfg.width*cfg.height:Math.max(4,Math.min(7,k.pop+3));
   // 1. survival: crops feed population; mine stock supports the army every Dawn
   if (k.food<k.pop){
     if (legal.includes("harvest")) return {act:"harvest",target:null,dir:null,note:"food upkeep first"};
@@ -1369,8 +1370,8 @@ function mockPhaseB(world,k){
   }
   // 3. military archetypes: mine before training, then march and raid
   if (aggressive){
-    if (legal.includes("raid")&&k.army>=2){ const t=richest(()=>true)||richest(()=>true)||pickT(()=>true); return {act:"raid",target:t,dir:null,note:k.goal+" strikes"}; }
-    if (legal.includes("train")&&k.metal>=cfg.trainCostMetal+k.army+1&&world.rng()<0.7) return {act:"train",target:null,dir:null,note:"raise the host"};
+    if (legal.includes("raid")&&k.army>=1){ const t=richest(()=>true)||pickT(()=>true); return {act:"raid",target:t,dir:null,note:k.goal+" strikes"}; }
+    if (legal.includes("train")&&k.metal>=cfg.trainCostMetal+k.army+1&&world.rng()<0.9) return {act:"train",target:null,dir:null,note:"raise the host"};
     if (legal.includes("claim")) return {act:"claim",target:null,dir:null,note:"march on rivals"};
     if (legal.includes("plant")&&hasEmpty&&k.food>2*k.pop+2) return {act:"plant",target:null,dir:null,note:"work conquered fields"};
     if (legal.includes("harvest")) return {act:"harvest",target:null,dir:null,note:"loot the fields"};
@@ -1443,6 +1444,7 @@ function runTick(world,thinkers){
     world.snapshots.push(takeSnapshot(world));
   })();
 }
+
 /*ENGINE-END*/
 </script>
 
@@ -2444,6 +2446,7 @@ DB.open().then(async ()=>{
 </script>
 </body>
 </html>
+
 
 
 
