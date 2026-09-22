@@ -1859,15 +1859,38 @@ function renderBoard(w, snap){
         poly([[cx-cell*.09,cy-cell*.12],[cx,cy-cell*.24],[cx+cell*.09,cy-cell*.12]],MAPC.hillSnow);
       }else if(terrain==="mine"){
         poly([[cx-cell*.30,cy+cell*.10],[cx,cy-cell*.26],[cx+cell*.30,cy+cell*.10]],MAPC.mineSnow);
-        dia(cx,cy+cell*.22,cell*.075,ore>0?MAPC.ore:MAPC.oreSpent);
+        // depletion stages: one gem per ore left, a hollow mark once the vein is spent
+        if(ore>0){const n=Math.min(3,ore),s=n===1?cell*.085:cell*.06,gx=cx-(n-1)*s*1.5/2;
+          for(let i=0;i<n;i++)dia(gx+i*s*1.5,cy+cell*.22,s,MAPC.ore);
+        }else{
+          const s=cell*.08,gy=cy+cell*.22;
+          ctx.strokeStyle=MAPC.oreEmptyMark;ctx.lineWidth=Math.max(1.3,cell*.045);ctx.lineJoin="round";
+          ctx.beginPath();ctx.moveTo(cx,gy-s);ctx.lineTo(cx+s*.7,gy);ctx.lineTo(cx,gy+s);ctx.lineTo(cx-s*.7,gy);ctx.closePath();ctx.stroke();
+        }
       }else if(terrain==="field"&&crop>0){
-        // one flat wheat sheaf; the pill carries the maturity value
-        ctx.strokeStyle=MAPC.crop;ctx.lineCap="round";ctx.lineWidth=Math.max(1.6,cell*.05);
-        const h=cell*.30,base=cy+cell*.16;
-        ctx.beginPath();ctx.moveTo(cx,base);ctx.lineTo(cx,base-h);ctx.stroke();
-        dia(cx,base-h,cell*.06,MAPC.crop);
-        dia(cx-cell*.09,base-h*.66,cell*.045,MAPC.crop);dia(cx+cell*.09,base-h*.66,cell*.045,MAPC.crop);
-        ctx.strokeStyle=MAPC.cropBand;ctx.lineWidth=Math.max(1.4,cell*.04);ctx.beginPath();ctx.moveTo(cx-cell*.10,base-cell*.05);ctx.lineTo(cx+cell*.10,base-cell*.05);ctx.stroke();
+        // the crop reads its growth stage: sprout -> half-grown stalk -> ripe sheaf
+        ctx.lineCap="round";
+        const base=cy+cell*.16;
+        if(crop===1){
+          // fresh sprout: two young shoots
+          ctx.strokeStyle=MAPC.treeLight;ctx.lineWidth=Math.max(1.7,cell*.055);
+          ctx.beginPath();ctx.moveTo(cx-cell*.05,base);ctx.lineTo(cx-cell*.10,base-cell*.17);ctx.moveTo(cx+cell*.05,base);ctx.lineTo(cx+cell*.10,base-cell*.17);ctx.stroke();
+          dia(cx-cell*.10,base-cell*.19,cell*.05,MAPC.treeLight);dia(cx+cell*.10,base-cell*.19,cell*.05,MAPC.treeLight);
+        }else if(crop===2){
+          // half-grown: a single stalk with a small grain head
+          ctx.strokeStyle=MAPC.crop;ctx.lineWidth=Math.max(1.6,cell*.05);
+          const h=cell*.20;
+          ctx.beginPath();ctx.moveTo(cx,base);ctx.lineTo(cx,base-h);ctx.stroke();
+          dia(cx,base-h,cell*.05,MAPC.crop);
+        }else{
+          // ripe: full sheaf, side grains, tie band
+          ctx.strokeStyle=MAPC.crop;ctx.lineWidth=Math.max(1.6,cell*.05);
+          const h=cell*.30;
+          ctx.beginPath();ctx.moveTo(cx,base);ctx.lineTo(cx,base-h);ctx.stroke();
+          dia(cx,base-h,cell*.06,MAPC.crop);
+          dia(cx-cell*.09,base-h*.66,cell*.045,MAPC.crop);dia(cx+cell*.09,base-h*.66,cell*.045,MAPC.crop);
+          ctx.strokeStyle=MAPC.cropBand;ctx.lineWidth=Math.max(1.4,cell*.04);ctx.beginPath();ctx.moveTo(cx-cell*.10,base-cell*.05);ctx.lineTo(cx+cell*.10,base-cell*.05);ctx.stroke();
+        }
       }else if(terrain==="plain"&&houses===0&&(x*7+y*13)%3===0){
         // quiet grass tufts on some plains so the field is not sterile
         ctx.strokeStyle=MAPC.plainTuft;ctx.lineCap="round";ctx.lineWidth=Math.max(1.2,cell*.04);
@@ -1875,9 +1898,17 @@ function renderBoard(w, snap){
         ctx.beginPath();ctx.moveTo(cx-cell*.06,ty);ctx.lineTo(cx-cell*.09,ty-cell*.09);ctx.moveTo(cx,ty);ctx.lineTo(cx,ty-cell*.12);ctx.moveTo(cx+cell*.06,ty);ctx.lineTo(cx+cell*.09,ty-cell*.09);ctx.stroke();
       }
       if(houses>0){
-        // flat house mark; the pill carries the count
-        ctx.fillStyle=MAPC.buildingWall;ctx.fillRect(cx-cell*.18,cy-cell*.02,cell*.36,cell*.24);
-        poly([[cx-cell*.24,cy],[cx,cy-cell*.22],[cx+cell*.24,cy]],MAPC.roofVillage);
+        // settlement reads its size: hut -> village pair -> town keep with the city roof
+        const hut=(hx,by,s,roof)=>{
+          ctx.fillStyle=MAPC.buildingWall;ctx.fillRect(hx-s,by-s*1.2,s*2,s*1.2);
+          poly([[hx-s*1.3,by-s*1.1],[hx,by-s*2.32],[hx+s*1.3,by-s*1.1]],roof);
+        };
+        if(houses===1)hut(cx,cy+cell*.22,cell*.18,MAPC.roofVillage);
+        else if(houses===2){hut(cx-cell*.14,cy+cell*.22,cell*.13,MAPC.roofVillage);hut(cx+cell*.14,cy+cell*.22,cell*.13,MAPC.roofVillage);}
+        else{
+          ctx.fillStyle=MAPC.buildingWall;ctx.fillRect(cx-cell*.12,cy-cell*.12,cell*.24,cell*.34);
+          poly([[cx-cell*.16,cy-cell*.11],[cx,cy-cell*.30],[cx+cell*.16,cy-cell*.11]],MAPC.roofCity);
+        }
       }
       ctx.restore();
       if(houses>0)pill(houses,MAPC.labelText);
@@ -2230,7 +2261,6 @@ DB.open().then(async ()=>{
 </script>
 </body>
 </html>
-
 
 
 
