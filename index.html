@@ -733,6 +733,7 @@
   .ric{display:inline-flex;align-items:center;gap:3px;font-variant-numeric:tabular-nums;font-weight:600}
   .ric .rico{display:inline-flex;width:12px;height:12px;flex:0 0 12px}
   .ric .rico svg{width:100%;height:100%;display:block}
+  .ric .rico .army-emoji{font-size:13px;line-height:12px;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif}
   .ric-food{color:var(--sun-green)}
   .ric-house{color:var(--orange-dark)}
   .ric-mineral{color:var(--sun-sea-deep)}
@@ -814,7 +815,7 @@
           <option value="deepseek/deepseek-r1"></option>
           <option value="meta/llama-4-maverick"></option>
         </datalist>
-        <p class="note">Pick a common Vercel AI Gateway model or type any <b>provider/model</b> ID.</p>
+        <p class="note">Pick a common Vercel AI Gateway model or type any <b>provider/model</b> ID. <a href="https://vercel.com/docs/ai-gateway/models-and-providers" target="_blank" rel="noopener">See available model names in Vercel docs ↗</a></p>
       </div>
       <div>
         <label>API key</label>
@@ -1712,7 +1713,7 @@ const RES_ICONS={
   food:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 14V5" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M8 1.8 10.4 5 8 8.2 5.6 5z" fill="currentColor"/><path d="M4.4 6.8 6.2 9l-1.8 2.2-1.8-2.2z" fill="currentColor" opacity=".8"/><path d="M11.6 6.8 13.4 9l-1.8 2.2-1.8-2.2z" fill="currentColor" opacity=".8"/></svg>',
   house:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.3 8.6 8 3.2l5.7 5.4z" fill="currentColor"/><rect x="4" y="8.6" width="8" height="5" fill="currentColor" opacity=".72"/></svg>',
   mineral:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.2 12.6 6 8 13.8 3.4 6z" fill="currentColor"/><path d="M8 2.2 10.1 6 8 13.8z" fill="currentColor" opacity=".65"/></svg>',
-  army:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.1 1.7 6.9 6.5 5.5 7.9.7 3.1.4.4zM13.9 1.7 9.1 6.5l1.4 1.4 4.8-4.8.3-2.7z" fill="currentColor"/><path d="m4.4 8.1 3.5 3.5-1.2 1.2-3.5-3.5zM11.6 8.1 8.1 11.6l1.2 1.2 3.5-3.5z" fill="currentColor"/><path d="M5.6 11.6 3.4 13.8M10.4 11.6l2.2 2.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="2.9" cy="14.3" r="1" fill="currentColor"/><circle cx="13.1" cy="14.3" r="1" fill="currentColor"/></svg>',
+  army:'<span class="army-emoji" role="img" aria-label="army">🛡️</span>',
   pop:'<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="4.8" r="2.6" fill="currentColor"/><path d="M2.8 13.8c0-3 2.3-4.6 5.2-4.6s5.2 1.6 5.2 4.6z" fill="currentColor"/></svg>',
   land:'<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.4" y="2.4" width="11.2" height="11.2" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M2.4 9.2h11.2" stroke="currentColor" stroke-width="1.3"/></svg>'
 };
@@ -2048,22 +2049,17 @@ function renderBoard(w, snap){
       const hc=hexCenter({cell,ox,oy},g.x,g.y),cx=hc[0],cy=hc[1],kc=factionColor(k.id);
       const size=Math.max(cell*.58,Math.min(cell*.95,cell*.58+Math.min(g.size,12)*cell*.02)),r=size/2;
       ctx.save();ctx.shadowColor=MAPC.unitShadow;ctx.shadowBlur=4;ctx.fillStyle=MAPC.unitGlyph;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle=kc;ctx.lineWidth=Math.max(2,size*.11);ctx.stroke();
-      // Faction-colored crossed swords and ring on a light disc: the token reads as
-      // the kingdom color at token scale. The headcount remains in the same
-      // faction-colored value pill as the other board resources.
+      // Shield is the standing army mark; crossed swords replace it for the group
+      // that took part in combat during the just-completed tick. Keep the token's
+      // faction-colored ring, headcount pill and movement arrow unchanged.
       {
-        const s=size*.72;
-        ctx.save();ctx.translate(cx,cy);
-        for(const dir of[-1,1]){
-          ctx.save();ctx.rotate(dir*Math.PI/4);
-          ctx.fillStyle=kc;ctx.strokeStyle=MAPC.symbolInk;ctx.lineWidth=Math.max(.8,s*.045);ctx.lineJoin="round";
-          ctx.beginPath();ctx.moveTo(0,-s*.62);ctx.lineTo(s*.13,s*.28);ctx.lineTo(0,s*.39);ctx.lineTo(-s*.13,s*.28);ctx.closePath();ctx.fill();ctx.stroke();
-          ctx.beginPath();if(ctx.roundRect)ctx.roundRect(-s*.26,s*.23,s*.52,s*.13,s*.05);else ctx.rect(-s*.26,s*.23,s*.52,s*.13);ctx.fill();ctx.stroke();
-          ctx.fillRect(-s*.07,s*.34,s*.14,s*.22);
-          ctx.beginPath();ctx.arc(0,s*.60,s*.10,0,Math.PI*2);ctx.fill();ctx.stroke();
-          ctx.restore();
-        }
-        ctx.restore();
+        const combatTick=absTick(w)-1;
+        const inCombat=w.events.some(ev=>ev.type==="Combat"&&ev.tick===combatTick&&(
+          (ev.defenderId===k.id&&g.x===ev.cell[0]&&g.y===ev.cell[1])||
+          (ev.attackerId===k.id&&((ev.winnerId===k.id&&g.x===ev.cell[0]&&g.y===ev.cell[1])||(ev.winnerId!==k.id&&neighbors6(w,g.x,g.y).some(n=>n[0]===ev.cell[0]&&n[1]===ev.cell[1]))))
+        ));
+        ctx.font=Math.max(12,size*.62)+'px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+        ctx.fillStyle=MAPC.symbolInk;ctx.fillText(inCombat?"⚔️":"🛡️",cx,cy+size*.03);
       }
       {
         const label=String(g.size),fs=Math.max(7,cell*.26);
@@ -2446,6 +2442,7 @@ DB.open().then(async ()=>{
 </script>
 </body>
 </html>
+
 
 
 
