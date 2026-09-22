@@ -770,7 +770,8 @@
       <li><b>Public and private state differ.</b> Land and population are public to AI players. Army deployments are visible only to the human observer. Food, stamina, archetype, scratchpad and private letters are hidden from rivals but visible to the operator.</li>
       <li><b>Two resources, two survival loops.</b> Crops make food for population. Mines make minerals for the army and for housing. Each Dawn costs 1 food per person and 1 mineral per soldier; deficits shrink the unsupported group.</li>
       <li><b>Houses house people.</b> Population needs housing: every house supports 4 people (configurable), each tile holds up to a max number of houses, and building one costs minerals. Army size cannot exceed population or the configured army cap.</li>
-      <li><b>Stamina limits tempo.</b> Claiming, harvesting, training, fortifying and raiding cost stamina. Eating and resting restore it.</li>
+      <li><b>Armies take ground.</b> Even an empty tile must be conquered: an army group on the frontier spends 1 stamina and advances into it. A kingdom with no army cannot expand until it trains one.</li>
+      <li><b>Stamina limits tempo.</b> Conquering, harvesting, training, fortifying and raiding cost stamina. Eating and resting restore it.</li>
       <li><b>Combat is deterministic.</b> Attack power comes from army and high stamina. Defense uses only army groups on the attacked tile, plus housing/mine position, shields and stamina. A successful raid captures the cell and steals food; ties hurt both sides.</li>
       <li><b>Diplomacy has range and limits.</b> Bulletins are public. Letters only reach nearby kingdoms. Message length and letters per tick are capped. Trade promises only matter when an agent chooses to honor them.</li>
       <li><b>Operator injects change the test.</b> Trigger drought, radio silence, selective mute, curfew or a cache drop, then see how the agents adapt.</li>
@@ -863,6 +864,7 @@
     <span class="pill" id="alivePill"></span>
     <span class="pill" id="curfewPill" style="display:none">curfew</span>
     <span class="pill" id="silencePill" style="display:none">radio silence</span>
+    <select id="viewSel" title="Map perspective" aria-label="Map perspective" style="width:auto"><option value="all">View: all</option></select>
     <span class="spacer"></span>
     <button id="toolsBtn">Tools</button>
     <button id="droughtBtn" title="Click, then drag a rectangle on the map">Drought</button>
@@ -1037,7 +1039,8 @@ function legalActions(world,k){
   if (cells.some(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="mine"&&g.ore>0;}) && k.stamina>=1) acts.push("mine");
   if (cells.some(c=>{const g=world.grid[c[1]][c[0]];return (g.houses||0)<cfg.maxHousesPerTile;}) && k.metal>=cfg.houseCostMetal && k.stamina>=1) acts.push("build_house");
   if (k.food>=1 && k.stamina<=cfg.staminaCap-cfg.eatStaminaGain+1) acts.push("eat");
-  if (cells.some(c=>neighbors4(world,c[0],c[1]).some(n=>world.grid[n[1]][n[0]].owner===null)) && k.stamina>=1) acts.push("claim");
+  // Expansion is a military action: an army group must stand on the frontier and enters the tile it conquers.
+  if (k.stamina>=1 && claimOptions(world,k).length) acts.push("claim");
     const raidCells=[];
   if (absTick(world)>=world.curfewUntil && k.stamina>=1 && k.army>=1){
     for(const g of normalizeArmyGroups(world,k))for(const n of neighbors4(world,g.x,g.y)){const o=world.grid[n[1]][n[0]].owner;if(o!==null&&o!==k.id&&world.kingdoms[o].alive)raidCells.push(n);}
@@ -1053,6 +1056,18 @@ function legalActions(world,k){
   acts.push("rest");
   if(k.army>0&&normalizeArmyGroups(world,k).length)acts.push("move");
   return acts;
+}
+function claimOptions(world,k){
+  const out=[],seen=new Set();
+  for(const group of normalizeArmyGroups(world,k)){
+    if(group.size<1)continue;
+    for(const n of neighbors4(world,group.x,group.y)){
+      if(world.grid[n[1]][n[0]].owner!==null)continue;
+      const key=n[0]+","+n[1]+","+group.id;
+      if(!seen.has(key)){seen.add(key);out.push({cell:n,group});}
+    }
+  }
+  return out;
 }
 function adjacentKingdoms(world,kid){
   const set=new Set();
@@ -1102,22 +1117,26 @@ function executeAct(world,kid,action,events){
       emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"fortify",target:null,dir:null,note:action.note||""});
       break;}
     case "claim":{
-      let opts=[];
-      for (const c of cells) for (const n of neighbors4(world,c[0],c[1])) if (world.grid[n[1]][n[0]].owner===null) opts.push(n);
-      // expand toward the nearest rival: borders meet, conflict happens
-      let bestD=Infinity; const dists=opts.map(n=>{
+      let opts=claimOptions(world,k);
+      // Respect an LLM-selected force when it is actually on a frontier; otherwise use the best available vanguard.
+      if(action.group_id){const chosen=opts.filter(o=>o.group.id===action.group_id);if(chosen.length)opts=chosen;}
+      // Conquer toward the nearest rival so fronts meet instead of producing isolated passive empires.
+      const dists=opts.map(o=>{
         let d=Infinity;
-        for (const o of world.kingdoms){ if (!o.alive||o.id===kid) continue;
-          for (const oc of cellsOf(world,o.id)){ const dd=chebyshev(world,n,oc); if(dd<d)d=dd; } }
+        for (const rival of world.kingdoms){ if (!rival.alive||rival.id===kid) continue;
+          for (const oc of cellsOf(world,rival.id)){ const dd=chebyshev(world,o.cell,oc); if(dd<d)d=dd; } }
         return d;
       });
       const minD=Math.min(...dists);
-      opts=opts.filter((n,i)=>dists[i]<=minD+1);
-      // A hungry kingdom settles fields; a short-armed one settles mines - still along the war path.
-      if (k.food<3*k.pop){ const f=opts.filter(n=>world.grid[n[1]][n[0]].terrain==="field"); if (f.length) opts=f; }
-      else if (k.metal<k.army+cfg.houseCostMetal){ const mm=opts.filter(n=>world.grid[n[1]][n[0]].terrain==="mine"); if (mm.length) opts=mm; }
-      const c=pick(opts); world.grid[c[1]][c[0]].owner=kid; k.stamina-=1;
-      emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"claim",target:null,dir:null,note:action.note||("claim "+c)});
+      opts=opts.filter((o,i)=>dists[i]<=minD+1);
+      // Survival resources break ties, but only among tiles an army can physically enter.
+      if (k.food<3*k.pop){ const f=opts.filter(o=>world.grid[o.cell[1]][o.cell[0]].terrain==="field"); if (f.length) opts=f; }
+      else if (k.metal<k.army+cfg.houseCostMetal){ const mm=opts.filter(o=>world.grid[o.cell[1]][o.cell[0]].terrain==="mine"); if (mm.length) opts=mm; }
+      const conquest=pick(opts),c=conquest.cell,group=conquest.group,from={x:group.x,y:group.y};
+      world.grid[c[1]][c[0]].owner=kid; k.stamina-=1;
+      group.x=c[0];group.y=c[1];group.intent="conquest frontier";group.moving=true;
+      let dx=c[0]-from.x,dy=c[1]-from.y;if(dx>cfg.width/2)dx-=cfg.width;if(dx<-cfg.width/2)dx+=cfg.width;if(dy>cfg.height/2)dy-=cfg.height;if(dy<-cfg.height/2)dy+=cfg.height;group.heading={dx,dy};normalizeArmyGroups(world,k);
+      emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"claim",target:null,dir:null,from,to:{x:c[0],y:c[1]},amount:group.size,note:action.note||("army conquered empty tile "+c)});
       break;}
     case "raid":{
       let targets=[];for(const g of normalizeArmyGroups(world,k))for(const n of neighbors4(world,g.x,g.y)){const o=world.grid[n[1]][n[0]].owner;if(o!==null&&o!==kid&&world.kingdoms[o].alive)targets.push(n);}
@@ -1494,12 +1513,12 @@ function phaseBSystem(world,k){
   "- 'honor': Fulfills a previously negotiated trade proposal.\n"+
   "- 'train': Consumes "+cfg.trainCostMetal+" mine stock and "+cfg.trainCostStamina+" stamina. Increases standing army by +1.\n"+
   "- 'fortify': Consumes 1 stamina. Increases shield level of an owned cell by +1 (Max "+cfg.shieldCap+").\n"+
-  "- 'claim': Consumes 1 stamina. Converts an unowned adjacent cell to your territory.\n"+
+  "- 'claim': Requires one of your army groups on a frontier tile and 1 stamina. The group advances into an adjacent unowned tile and conquers it without casualties. With no army, you cannot expand; train a new unit at a settlement first. Use group_id to choose the vanguard.\n"+
   "- 'raid': Consumes 1 stamina. Attacks a target adjacent cell owned by a peer kingdom.\n"+
   "- 'move': Moves some or all of one army group through owned land, up to "+cfg.armyMoveRange+" tiles this turn. Use group_id, amount, and placement ('village', 'mine', or 'border'). Moving part of a group splits it; groups that meet merge. Split forces to garrison villages, guard mines, and form attack groups.\n"+
   "- 'rest': Consumes no resources. Restores +2 stamina up to stamina cap.\n\n"+
   "FOG OF WAR: You know all of your own army groups. You cannot see rival army size, groups, or position; do not assume an enemy tile is defended or empty. Choose deployments from your own assets and intent.\n\n"+
-  "SURVIVAL ECONOMICS: Every Dawn, pay 1 food per population and 1 mineral per army. A food deficit shrinks population; a mineral deficit shrinks army. Population is capped by housing: "+cfg.housePop+" people per house, up to "+cfg.maxHousesPerTile+" houses per tile, each house costs "+cfg.houseCostMetal+" minerals. Reserve both BEFORE expanding or training.\n\n"+
+  "SURVIVAL ECONOMICS: Every Dawn, pay 1 food per population and 1 mineral per army. Armies are also the only way to conquer unowned land, so an unsupported army loss stops expansion until you train again. A food deficit shrinks population; a mineral deficit shrinks army. Population is capped by housing: "+cfg.housePop+" people per house, up to "+cfg.maxHousesPerTile+" houses per tile, each house costs "+cfg.houseCostMetal+" minerals. Reserve both BEFORE expanding or training.\n\n"+
   "LEGAL ACTIONS AVAILABLE THIS ROUND:\n"+JSON.stringify(legalActions(world,k))+"\n\n"+
   'OUTPUT SCHEMA REQUIREMENTS:\nRespond ONLY with a valid JSON object matching the following structure:\n'+
   '{\n  "act": string,\n  "target": number | null,\n  "dir": string | null,\n  "group_id": string | null,\n  "amount": number | null,\n  "placement": string | null,\n  "note": string\n}\nKingdom ids for target are 0-based: kingdom #n has id n-1.';
@@ -1547,7 +1566,7 @@ function logUsage(world,k,model,u){
 // Map colors come from THEME CONFIG too; resolved once at boot.
 const MAPC={};for(const [k,t] of [["sea1","--map-sea-1"],["sea2","--map-sea-2"],["sea3","--map-sea-3"],["waterGlint","--map-water-glint"],["waterShade","--map-water-shade"],["boardShadow","--map-board-shadow"],["board","--map-board"],["boardEdge","--map-board-edge"],["land","--map-land"],["grass","--sun-green"],["tileGlint","--map-tile-glint"],["tileShade","--map-tile-shade"],["tileEdge","--map-tile-edge"],["symbolInk","--map-symbol-ink"],["fieldGlow","--map-field-glow"],["fieldLine","--map-field-line"],["mineRock","--map-mine-rock"],["mineSnow","--map-mine-snow"],["ore","--map-ore"],["oreSpent","--map-ore-spent"],["oreRing","--map-ore-ring"],["oreGem","--map-ore-gem"],["oreEmptyMark","--map-ore-empty-mark"],["treeTrunk","--map-tree-trunk"],["treeDark","--map-tree-dark"],["treeLight","--map-tree-light"],["hillEdge","--map-hill-edge"],["hill","--map-hill"],["hillSnow","--map-hill-snow"],["plainTuft","--map-plain-tuft"],["crop","--map-crop"],["cropBand","--map-crop-band"],["roofCity","--map-roof-city"],["roofVillage","--map-roof-village"],["buildingShadow","--map-building-shadow"],["buildingWall","--map-building-wall"],["labelBg","--map-label-bg"],["labelText","--map-label-text"],["shield","--map-shield"],["worldEdge","--map-world-edge"],["unitShadow","--map-unit-shadow"],["unitRing","--map-unit-ring"],["unitGlyph","--map-unit-glyph"]])MAPC[k]=themeColor(t);
 // ---------- UI state ----------
-let world=null, playing=false, timer=null, selectedKingdom=null, watchedKingdom=null, pendingInject=null, tickInFlight=false, matchGeneration=0;
+let world=null, playing=false, timer=null, selectedKingdom=null, watchedKingdom=null, viewKingdom=null, pendingInject=null, tickInFlight=false, matchGeneration=0;
 let replayData=null, replayIdx=0, renderedEventCount=0, eventView="highlights";
 const $=(id)=>document.getElementById(id);
 let aboutOrigin="home";
@@ -1647,8 +1666,8 @@ function newMatch(cfg,seed){
   renderedEventCount=0;
   $("home").classList.add("hidden"); $("setup").classList.add("hidden"); $("app").classList.remove("hidden");
   $("replaybar").classList.remove("show");
-  pause(); selectedKingdom=null; watchedKingdom=null;
-  resetMapView(); setSheet("peek",true); setTimeout(layoutBoard,80);
+  pause(); selectedKingdom=null; watchedKingdom=null; viewKingdom=null;
+  renderViewPicker(); resetMapView(); setSheet("peek",true); setTimeout(layoutBoard,80);
   toast("Match started - seed "+world.seed);
   renderAll();
   DB.save({id:"latest",savedAt:Date.now(),data:exportData()});
@@ -1719,7 +1738,13 @@ function renderWorldTab(w){
     +(notable.length?'<div class="agent-section"><label>Latest shifts</label>'+notable.map(e=>'<div class="agent-action"><span>'+eventIcon(e.type)+'</span><span>'+htmlSafe(evText(w,e))+'</span></div>').join('')+'</div>':'')
     +'<div class="analysis-empty" style="padding-top:8px">Tap a kingdom on the map or in the agent strip to follow its story.</div>';
 }
-function renderAll(){ if(!world)return; $("app").classList.toggle("match-over",world.over); const end=$("matchEnd"); end.textContent=world.over?(world.winner?("🏆 "+world.kingdoms[world.winner.id].name+" wins by "+world.winner.how.replace("_"," ")+"."):"Every kingdom has fallen."):""; renderBoard(world); renderLeaderboard(world); renderEmpires(world); renderEvents(world); renderInspector(); renderClock(world); renderWorldTab(world); if(world.aiAnalysis)renderAnalysis(world.aiAnalysis); }
+function renderViewPicker(){
+  const el=$("viewSel");if(!el||!world)return;
+  const chosen=viewKingdom===null?"all":String(viewKingdom);
+  el.innerHTML='<option value="all">View: all</option>'+world.kingdoms.map(k=>'<option value="'+k.id+'">View: #'+(k.id+1)+' '+htmlSafe(k.name)+'</option>').join("");
+  el.value=chosen;
+}
+function renderAll(){ if(!world)return; renderViewPicker(); $("app").classList.toggle("match-over",world.over); const end=$("matchEnd"); end.textContent=world.over?(world.winner?("🏆 "+world.kingdoms[world.winner.id].name+" wins by "+world.winner.how.replace("_"," ")+"."):"Every kingdom has fallen."):""; renderBoard(world); renderLeaderboard(world); renderEmpires(world); renderEvents(world); renderInspector(); renderClock(world); renderWorldTab(world); if(world.aiAnalysis)renderAnalysis(world.aiAnalysis); }
 function storyFor(w,ev){
   if(!ev)return {title:"The kingdoms are taking position",detail:"Press play to watch the first decisions unfold."};
   const name=id=>id>=0&&w.kingdoms[id]?w.kingdoms[id].name:"A kingdom";
@@ -1959,12 +1984,24 @@ function renderBoard(w, snap){
     }
     if(shield>0){ctx.strokeStyle=MAPC.shield;ctx.lineWidth=Math.max(2,cell*.09);ctx.globalAlpha=.5+.2*shield;ctx.strokeRect(px+cell*.16,py+cell*.16,cell*.68,cell*.68);ctx.globalAlpha=1;}
   }
+  // Polytopia-style perspective: owned land plus its one-tile orthogonal ring is visible.
+  // View-all is the operator default; a kingdom view hides both terrain detail and army tokens outside sight.
+  let visible=null;
+  if(viewKingdom!==null){
+    visible=new Set();
+    const ownerAt=(x,y)=>{if(snap){const o=get(x,y,"owners");return o===-1?null:o;}return w.grid[y][x].owner;};
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(ownerAt(x,y)===viewKingdom){visible.add(x+","+y);for(const n of neighbors4(w,x,y))visible.add(n[0]+","+n[1]);}
+    ctx.save();ctx.fillStyle=MAPC.symbolInk;ctx.globalAlpha=.88;
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(!visible.has(x+","+y))ctx.fillRect(ox+x*cell,oy+y*cell,cell,cell);
+    ctx.restore();
+  }
   ctx.strokeStyle=MAPC.worldEdge;ctx.lineWidth=Math.max(2,cell*.10);ctx.strokeRect(ox-1,oy-1,W*cell+2,H*cell+2);
   const dispCell=cell*mapView.s*(cv.clientWidth?cv.clientWidth/cv.width:1);
   if(dispCell>=10){
     ctx.textAlign="center";ctx.textBaseline="middle";
     const tokenKingdoms=snap?snap.kingdoms.map(k=>({id:k.id,alive:k.alive,army:k.army,groups:(k.armyGroups||[])})):w.kingdoms.map(k=>({id:k.id,alive:k.alive,army:k.army,groups:normalizeArmyGroups(w,k)}));
     for(const k of tokenKingdoms){if(!k.alive||k.army<=0)continue;for(const g of k.groups){
+      if(visible&&!visible.has(g.x+","+g.y))continue;
       const cx=ox+g.x*cell+cell*.5,cy=oy+g.y*cell+cell*.5,kc=factionColor(k.id);
       const size=Math.max(cell*.58,Math.min(cell*.95,cell*.58+Math.min(g.size,12)*cell*.02)),r=size/2;
       ctx.save();ctx.shadowColor=MAPC.unitShadow;ctx.shadowBlur=4;ctx.fillStyle=kc;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle=MAPC.unitRing;ctx.lineWidth=Math.max(1.5,size*.07);ctx.stroke();
@@ -2109,7 +2146,7 @@ function restoreSnapshot(snap){
   snap.kingdoms.forEach((s,i)=>{const k=world.kingdoms[i];Object.assign(k,{alive:s.alive,pop:s.pop,army:s.army,armyGroups:s.armyGroups||null,armyPos:s.armyPos||null,armyIntent:s.armyIntent||"capital garrison",food:s.food,metal:s.metal??world.cfg.startMetal??defaultConfig().startMetal,stamina:s.stamina,bulletin:s.bulletin,selfNote:s.selfNote,goal:s.goal||k.goal,talkModel:s.talkModel||k.talkModel,actModel:s.actModel||k.actModel,mutedUntil:s.mutedUntil||0,pendingOffers:Array.isArray(s.pendingOffers)?s.pendingOffers.map(o=>({...o})):[]});normalizeArmyGroups(world,k);});
 }
 function loadReplay(data){
-  validateReplay(data); matchGeneration++; selectedKingdom=null; watchedKingdom=null; replayData=data; replayIdx=0;
+  validateReplay(data); matchGeneration++; selectedKingdom=null; watchedKingdom=null; viewKingdom=null; replayData=data; replayIdx=0;
   $("home").classList.add("hidden"); $("setup").classList.add("hidden"); $("app").classList.remove("hidden");
   $("replaybar").classList.add("show"); pause(); resetMapView(); setSheet("peek",true); setTimeout(layoutBoard,80);
   const cfg=data.config;
@@ -2207,6 +2244,7 @@ function launchConfiguredMatch(){const cfg=readConfig(),models=[$("modelA").valu
 $("quickStart").onclick=launchConfiguredMatch;
 function toast(msg){ const t=$("toast"); t.textContent=msg; t.style.display="block"; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display="none",3200); }
 const overviewBtn=$("overviewBtn");
+$("viewSel").onchange=()=>{viewKingdom=$("viewSel").value==="all"?null:+$("viewSel").value;renderBoard(world);toast(viewKingdom===null?"Viewing the whole world":"Viewing as "+world.kingdoms[viewKingdom].name);};
 if(overviewBtn) overviewBtn.onclick=()=>{ resetMapView(); const cv=$("board"); if(cv)cv.dataset.mobileViewReady="1"; renderBoard(world); toast("Whole world"); };
 $("playBtn").onclick=()=>{ replayData?null:(playing?pause():play()); };
 $("stepBtn").onclick=()=>{ if(!replayData){pause();tickOnce();} };
@@ -2303,6 +2341,7 @@ DB.open().then(async ()=>{
 </script>
 </body>
 </html>
+
 
 
 
