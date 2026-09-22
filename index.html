@@ -715,6 +715,23 @@
   }
   @media(min-width:760px){#overviewBtn{display:none}}
 
+
+  /* ===== Rankings table: replaces the player card strip ===== */
+  #empirebar{display:block;width:100%;max-width:100%;height:auto!important;min-height:0!important;max-height:40dvh;overflow-y:auto;overflow-x:hidden;padding:2px 8px 6px;scrollbar-width:none}
+  #empirebar::-webkit-scrollbar{display:none}
+  .rank-head{display:flex;align-items:center;gap:7px;min-height:34px;cursor:pointer;user-select:none;color:var(--foam-9);font-size:11px;font-weight:750}
+  .rank-head .chev{color:var(--cyan);font-size:12px;width:12px}
+  .rank-head .rank-lead{margin-left:auto;font-size:10px;font-weight:500;color:var(--sea-30);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #empirebar table{width:100%;border-collapse:collapse;font-size:11px;font-variant-numeric:tabular-nums}
+  #empirebar th{font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--sea-30);padding:4px;text-align:right;cursor:pointer;user-select:none;white-space:nowrap;font-weight:700}
+  #empirebar th.sorted{color:var(--cyan)}
+  #empirebar th:nth-child(2){text-align:left;cursor:default}
+  #empirebar td{padding:4px;color:var(--foam-9);text-align:right}
+  #empirebar td.rno,#empirebar th.rno{text-align:left;width:20px;color:var(--sea-30)}
+  #empirebar td.rname{text-align:left;max-width:104px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
+  #empirebar tbody tr{cursor:pointer;border-top:1px solid var(--veil-5)}
+  #empirebar tbody tr.sel td{background:var(--sea-81)}
+  #empirebar tbody tr.dead{opacity:.35}
 </style>
 </head>
 <body>
@@ -1966,20 +1983,30 @@ function evText(w,ev){
     default: return JSON.stringify(ev);
   }
 }
+let rankOpen=false, rankSort={key:"overall",dir:-1};
+function rankScore(k,land){ return land*1000+k.pop*10+k.food; } // the timed-win composite: the game's own definition of "best overall"
 function renderEmpires(w){
   const bar=$("empirebar"); if(!bar) return;
-  const rows=w.kingdoms.map(k=>({k,land:cellsOf(w,k.id).length})).sort((a,b)=>b.land-a.land||b.k.army-a.k.army);
-  let html="";
-  for (const {k,land} of rows){
-    const glyph=k.army<=0?"○":k.army===1?"♟":k.army<=3?"⚔":k.army<=6?"♜":"♛";
-    const latest=[...w.events].reverse().find(e=>e.type==="Act"&&e.kingdomId===k.id);
-    const action=latest?(ACTION_VISUALS[latest.act]||["•",latest.act]):[k.alive?"…":"✕",k.alive?"Waiting":"Defeated"];
-    html+='<div class="ecard'+(k.alive?"":" dead")+(selectedKingdom===k.id?" sel":"")+'" data-k="'+k.id+'" style="--kc:'+factionColor(k.id)+'">'
-      +'<span class="edot">'+glyph+'</span>'
-      +'<span class="emeta"><b>'+htmlSafe(k.name)+'</b><i>'+glyph+''+k.army+' · ●'+k.pop+' · 🌾'+k.food+'/'+k.pop+' · ⛏'+k.metal+'/'+k.army+'</i><i class="eaction">'+action[0]+' '+htmlSafe(action[1])+'</i></span></div>';
+  const rows=w.kingdoms.map(k=>{const land=cellsOf(w,k.id).length;return {k,land,score:rankScore(k,land)};});
+  const keyFn={overall:r=>r.score,army:r=>r.k.army,pop:r=>r.k.pop,metal:r=>r.k.metal,land:r=>r.land}[rankSort.key]||(r=>r.score);
+  rows.sort((a,b)=>((b.k.alive?1:0)-(a.k.alive?1:0))||(keyFn(b)-keyFn(a))*(rankSort.dir===1?-1:1)||b.land-a.land||b.k.pop-a.k.pop||b.k.army-a.k.army);
+  const lead=rows.find(r=>r.k.alive)||rows[0];
+  let html='<div class="rank-head" id="rankHead"><span class="chev">'+(rankOpen?"\u25be":"\u25b8")+'</span><b>Rankings</b><span class="rank-lead">'+(lead?htmlSafe(lead.k.name)+' leads \u00b7 '+lead.land+' land':'')+'</span></div>';
+  if(rankOpen){
+    html+='<table><thead><tr><th data-s="overall" class="rno '+(rankSort.key==="overall"?"sorted":"")+'">#'+(rankSort.key==="overall"?(rankSort.dir===1?" \u2191":" \u2193"):"")+'</th><th>Kingdom</th>'
+      +[["army","\u2694 Army"],["pop","\u25cf Pop"],["metal","\u26cf Min"],["land","\u25a6 Land"]].map(c=>'<th data-s="'+c[0]+'" class="'+(rankSort.key===c[0]?"sorted":"")+'">'+c[1]+(rankSort.key===c[0]?(rankSort.dir===1?" \u2191":" \u2193"):"")+'</th>').join("")+'</tr></thead><tbody>';
+    rows.forEach((r,i)=>{
+      html+='<tr data-k="'+r.k.id+'" class="'+(r.k.alive?"":"dead")+(selectedKingdom===r.k.id?" sel":"")+'">'
+        +'<td class="rno">'+(i+1)+'</td>'
+        +'<td class="rname"><span class="dot" style="background:'+factionColor(r.k.id)+'"></span>'+htmlSafe(r.k.name)+'</td>'
+        +'<td>'+r.k.army+'</td><td>'+r.k.pop+'</td><td>'+r.k.metal+'</td><td>'+r.land+'</td></tr>';
+    });
+    html+='</tbody></table>';
   }
   bar.innerHTML=html;
-  for (const c of bar.querySelectorAll(".ecard")) c.onclick=()=>{ selectedKingdom=+c.dataset.k; renderLeaderboard(world); renderEmpires(world); renderInspector(); showTab("insp"); focusKingdom(selectedKingdom,true); setSheet("half"); };
+  $("rankHead").onclick=()=>{rankOpen=!rankOpen;renderEmpires(world);};
+  for(const th of bar.querySelectorAll("th[data-s]")) th.onclick=()=>{const s=th.dataset.s;if(rankSort.key===s)rankSort.dir=-rankSort.dir;else rankSort={key:s,dir:-1};renderEmpires(world);};
+  for(const tr of bar.querySelectorAll("tr[data-k]")) tr.onclick=()=>{selectedKingdom=+tr.dataset.k;renderLeaderboard(world);renderEmpires(world);renderInspector();showTab("insp");focusKingdom(selectedKingdom,true);setSheet("half");};
 }
 function eventIcon(t){return ({Combat:"⚔️",Fall:"🔥",Dawn:"🌅",Transfer:"🤝",Control:"⚡",ThinkTimeout:"⏱️",ThinkFailure:"⏱️",Letter:"💬",Bulletin:"📣",Act:"•"})[t]||"•";}
 function renderEvents(w){
