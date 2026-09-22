@@ -48,12 +48,12 @@ const check=(name,cond)=>{ if(!cond){fails++;console.error('FAIL:',name);} else 
   const f2=w2.kingdoms.map(k=>k.food+','+k.pop+','+k.army).join('|');
   check('deterministic replay (same seed, same end state)',f1===f2 && w.events.length===w2.events.length);
 
-  // combat mechanics: force a raid
+  // combat mechanics: force a raid (army group must border the target cell)
   const cfg2=E.defaultConfig(); cfg2.width=8;cfg2.height=8;cfg2.playerCount=2;cfg2.startArmy=3;cfg2.startStamina=4;
   const w3=E.createWorld(cfg2,7);
-  // put kingdom 1 next to kingdom 0 manually
+  // put kingdom 1 next to kingdom 0 and place kingdom 0's army group on the border
   w3.grid[0][0].owner=0; w3.grid[0][1].owner=1;
-  const before=E.cellsOf(w3,0).length;
+  w3.kingdoms[0].armyGroups=[{id:'g1',x:0,y:0,size:3,intent:'capital garrison'}]; w3.kingdoms[0].army=3;
   E.executeAct(w3,0,{act:'raid',target:1,dir:null,note:'test'},w3.events);
   check('raid emits Combat event',w3.events.some(e=>e.type==='Combat'));
 
@@ -102,3 +102,4 @@ const check=(name,cond)=>{ if(!cond){fails++;console.error('FAIL:',name);} else 
   console.log(fails===0?'\nALL TESTS PASSED':'\n'+fails+' FAILURES');
   process.exit(fails?1:0);
 })();
+
