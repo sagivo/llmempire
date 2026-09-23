@@ -47,7 +47,7 @@
     --map-board:#e8d39b;
     --map-board-edge:rgba(101,76,39,.58);
     --map-land:#cdbb78;
-    --map-tile-glint:rgba(255,255,255,.16);
+    --map-tile-glint:rgba(255,255,255,.10);
     --map-tile-shade:rgba(32,40,28,.10);
     --map-tile-edge:rgba(47,52,38,.28);
     --map-symbol-ink:#24301f;
@@ -2022,14 +2022,19 @@ function renderBoard(w, snap, target){
     const ground=terrain==="mine"?MAPC.mineRock:terrain==="hill"?MAPC.hill:MAPC.grass;
     // Tiny Attack language: chunky edge-locked hex, bright flat top and beveled lower facets.
     // Light comes from the left everywhere: left half glints, right half shades.
+    // A deterministic per-tile tonal jitter keeps neighbouring hexes from reading
+    // as one flat quilt of identical tiles.
     const hr=cell*.505;hexPath(ctx,hcx,hcy,hr);ctx.fillStyle=ground;ctx.fill();
     const hp=hexPoints(hcx,hcy,hr);
     poly([hp[5],hp[0],hp[1],[hcx,hcy]],MAPC.tileShade);
     poly([hp[2],hp[3],hp[4],[hcx,hcy]],MAPC.tileGlint);
+    const tj=(((x*73856093)^(y*19349663))>>>0)%100/100;
+    ctx.fillStyle=tj>.5?`rgba(255,255,255,${((tj-.5)*.09).toFixed(3)})`:`rgba(18,42,26,${((.5-tj)*.09).toFixed(3)})`;
+    hexPath(ctx,hcx,hcy,hr);ctx.fill();
     if(owner!==null){
       // Ownership must read at a glance: a strong faction wash plus a thick faction frame.
-      ctx.save();ctx.globalAlpha=.42;hexPath(ctx,hcx,hcy,hr*.98);ctx.fillStyle=factionColor(owner);ctx.fill();ctx.restore();
-      ctx.strokeStyle=factionColor(owner);ctx.lineWidth=Math.max(2.6,cell*.13);hexPath(ctx,hcx,hcy,hr*.90);ctx.stroke();
+      ctx.save();ctx.globalAlpha=.58;hexPath(ctx,hcx,hcy,hr*.98);ctx.fillStyle=factionColor(owner);ctx.fill();ctx.restore();
+      ctx.strokeStyle=factionColor(owner);ctx.lineWidth=Math.max(3,cell*.16);hexPath(ctx,hcx,hcy,hr*.94);ctx.stroke();
     }else{ctx.strokeStyle=MAPC.tileEdge;ctx.lineWidth=Math.max(1,cell*.035);hexPath(ctx,hcx,hcy,hr*.98);ctx.stroke();}
     const dia=(gx,gy,sz,fill)=>poly([[gx,gy-sz],[gx+sz*.7,gy],[gx,gy+sz],[gx-sz*.7,gy]],fill);
     // value pill: one small dark badge, bottom-right, icon-colored number - houses, ore, crop
@@ -2147,9 +2152,12 @@ function renderBoard(w, snap, target){
         }
       }
       ctx.restore();
-      if(houses>0)pill(houses,MAPC.labelText);
-      else if(terrain==="mine"&&ore>0)pill(ore,MAPC.ore);
-      else if(terrain==="field"&&crop>0)pill(crop,MAPC.crop);
+      // Value badges are noise on small zoomed-out hexes; the tile popup carries the detail.
+      if(cell>=30){
+        if(houses>0)pill(houses,MAPC.labelText);
+        else if(terrain==="mine"&&ore>0)pill(ore,MAPC.ore);
+        else if(terrain==="field"&&crop>0)pill(crop,MAPC.crop);
+      }
     }
     if(shield>0){ctx.strokeStyle=MAPC.shield;ctx.lineWidth=Math.max(2,cell*.075);ctx.globalAlpha=.5+.2*shield;hexPath(ctx,hcx,hcy,cell*.33);ctx.stroke();ctx.globalAlpha=1;}
   }
