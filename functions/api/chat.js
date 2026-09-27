@@ -21,9 +21,15 @@ export async function onRequestPost({ request }) {
     headers["x-api-key"] = authorization.replace(/^Bearer\s+/i, "");
     headers["anthropic-version"] = "2023-06-01";
     const system = body.messages?.find(message => message.role === "system")?.content || "";
+    // Honor the client's requested output budget (analysis asks for 16000);
+    // the old hardcoded 4096 silently truncated long reports into emptiness.
+    const requestedMax = Number(body.max_tokens);
+    const maxTokens = Number.isFinite(requestedMax)
+      ? Math.min(Math.max(Math.floor(requestedMax), 1), 32000)
+      : 4096;
     body = {
       model: body.model,
-      max_tokens: 4096,
+      max_tokens: maxTokens,
       temperature: body.temperature,
       system,
       messages: (body.messages || []).filter(message => message.role !== "system")
@@ -41,8 +47,16 @@ export async function onRequestPost({ request }) {
 
   if (directProvider === "anthropic" && upstream.ok) {
     const result = await upstream.json();
+    // Collect text from any block carrying it (not just type:"text"), and
+    // surface Anthropic's stop_reason so callers can tell truncation apart
+    // from an empty reply.
+    const textOut = (result.content || [])
+      .filter(part => part && typeof part.text === "string")
+      .map(part => part.text).join("");
+    const stopReason = result.stop_reason || null;
     return Response.json({
-      choices: [{ message: { content: (result.content || []).filter(part => part.type === "text").map(part => part.text).join("") } }],
+      choices: [{ message: { content: textOut },
+                  finish_reason: stopReason === "end_turn" ? "stop" : stopReason }],
       usage: { prompt_tokens: result.usage?.input_tokens || 0, completion_tokens: result.usage?.output_tokens || 0 }
     }, { headers: { "Cache-Control": "no-store" } });
   }
