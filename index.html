@@ -956,7 +956,8 @@ const CONFIG_SCHEMA = [
     ["playerCount",4,2,24,"Kingdoms spawned"],["ticksPerDay",8,4,12,"Ticks between Dawn cycles"],
     ["maxDays",30,5,200,"Hard day limit (timed mode)"],
     ["endMode","timed",null,null,"dominion | last_stand | timed | open"],
-    ["dominionPct",25,20,80,"% of map cells for dominion victory"]
+    ["dominionPct",25,20,80,"% of map cells for dominion victory"],
+    ["seasonDays",6,0,12,"Days per season (0 disables seasons)"]
   ]],
   ["caps", [
     ["startFood",12,2,20,"Starting food"],["startMetal",8,0,20,"Starting mine stock"],["startPop",2,1,8,"Starting population"],
@@ -964,7 +965,9 @@ const CONFIG_SCHEMA = [
     ["foodCap",40,10,99,"Food storage cap"],["metalCap",40,10,99,"Mine storage cap"],["popBaseCap",2,1,8,"Pop supported with no houses"],
     ["housePop",4,1,8,"People supported per house"],["maxHousesPerTile",3,1,6,"Max houses per tile"],["startHouses",1,0,6,"Houses at the capital"],["armyCap",12,4,30,"Global army ceiling"],["armyMoveRange",3,1,6,"Army tiles per move"],
     ["staminaCap",6,3,12,"Stamina cap"],["staminaPerDawn",3,1,6,"Stamina recovered each Dawn"],["shieldCap",2,0,4,"Max shield per cell"],
-    ["raidLootMax",3,1,10,"Max food looted per raid"]
+    ["raidLootMax",3,1,10,"Max food looted per raid"],
+    ["freeLand",18,4,40,"Land tiles before supply lines cost food"],
+    ["supplyPerTiles",6,2,10,"Extra food per N tiles over free land"]
   ]],
   ["costs", [
     ["plantCostFood",1,0,5,"Food to plant"],["eatStaminaGain",2,1,5,"Stamina per food eaten"],
@@ -1000,7 +1003,7 @@ function createWorld(cfg, seed){
   // Topography drives the economy: fields grow food, mines yield resources, plains hold settlements.
   for (let y=0;y<cfg.height;y++){ const row=[]; for (let x=0;x<cfg.width;x++){
     const r=rng(),terrain=r<.29?"field":r<.43?"mine":r<.58?"forest":r<.68?"hill":"plain";
-    row.push({owner:null,terrain,crop:terrain==="field"&&rng()<.42?1:0,ore:terrain==="mine"?3+Math.floor(rng()*3):0,shield:0,houses:0});
+    row.push({owner:null,terrain,crop:terrain==="field"&&rng()<.42?1:0,ore:terrain==="mine"?3+Math.floor(rng()*3):0,shield:0,houses:0,unrest:0});
   } grid.push(row); }
   // far-placed capitals: greedy max-min toroidal distance
   const caps = [];
@@ -1025,10 +1028,12 @@ function createWorld(cfg, seed){
     return { id:i, name:KINGDOM_NAMES[i%KINGDOM_NAMES.length]+" #"+(i+1), color:factionColor(i),
       alive:true, pop:cfg.startPop, army:cfg.startArmy, armyGroups:cfg.startArmy>0?[{id:"g1",x:c[0],y:c[1],size:cfg.startArmy,intent:"capital garrison"}]:[], capital:{x:c[0],y:c[1]}, armyPos:{x:c[0],y:c[1]}, armyIntent:"capital garrison", food:cfg.startFood, metal:cfg.startMetal, stamina:cfg.startStamina,
       goal:STOCK_GOALS[i%STOCK_GOALS.length], selfNote:"", bulletin:"", inbox:[], outbox:[],
+      relations:{}, atWar:[], allies:[], tributeTo:{},
       talkModel:"mock", actModel:"mock", mutedUntil:0, pendingOffers:[] };
   });
   const world = { cfg, seed, rng, grid, kingdoms, day:1, tick:0, phase:"A", over:false, winner:null,
-           curfewUntil:0, silenceUntil:0, events:[], snapshots:[], usage:{inputTokens:0,outputTokens:0,costUsd:0} };
+           curfewUntil:0, silenceUntil:0, events:[], snapshots:[], usage:{inputTokens:0,outputTokens:0,costUsd:0},
+           season:{kind:"calm",daysLeft:cfg.seasonDays>0?cfg.seasonDays:1,forecast:null}, skirmish:{}, lastHostile:{} };
   world.snapshots.push(takeSnapshot(world));
   return world;
 }
@@ -1091,7 +1096,7 @@ function legalActions(world,k){
   const adj=adjacentKingdoms(world,k.id);
   if (k.food>=2 && adj.length) acts.push("share");
   if (adj.length) acts.push("trade_offer");
-  if (k.pendingOffers.length && k.food>=2) acts.push("honor");
+  if (k.pendingOffers.some(o=>{const f=world.kingdoms[o.from];return f&&f.alive&&canAfford(f,o.give)&&canAfford(k,o.get);})) acts.push("honor");
   acts.push("rest");
   if(k.army>0&&normalizeArmyGroups(world,k).length)acts.push("move");
   return acts;
@@ -1114,6 +1119,85 @@ function adjacentKingdoms(world,kid){
   return [...set];
 }
 
+// ---------- diplomacy: memory, war, tribute, trade ----------
+function normBundle(v){
+  if(v&&typeof v==="object")return {food:Math.max(0,Math.floor(+v.food||0)),metal:Math.max(0,Math.floor(+v.metal||0))};
+  const n=Math.max(0,Math.floor(+v||0));return {food:n,metal:0};
+}
+function bundleEmpty(b){return !b||(!(b.food>0)&&!(b.metal>0));}
+function bundleText(b){const p=[];if(b.food>0)p.push(b.food+" food");if(b.metal>0)p.push(b.metal+" metal");return p.join(" + ")||"nothing";}
+function canAfford(k,b){return k.food>=(b.food||0)&&k.metal>=(b.metal||0);}
+function payBundle(k,b){k.food-=(b.food||0);k.metal-=(b.metal||0);}
+function gainBundle(world,k,b){const cfg=world.cfg;k.food=Math.min(cfg.foodCap,k.food+(b.food||0));k.metal=Math.min(cfg.metalCap,k.metal+(b.metal||0));}
+function relOf(k,other){return (k.relations&&k.relations[other])||0;}
+function addRel(world,a,b,d){
+  const A=world.kingdoms[a],B=world.kingdoms[b];
+  if(!A||!B||!A.alive||!B.alive||a===b)return;
+  A.relations=A.relations||{};
+  A.relations[b]=Math.max(-100,Math.min(100,relOf(A,b)+d));
+  // Mutual warmth hardens into an alliance.
+  if(d>0&&relOf(A,b)>=60&&relOf(B,a)>=60&&!isAlly(world,a,b))allyWith(world,a,b);
+}
+function isAlly(world,a,b){const A=world.kingdoms[a];return !!(A&&A.allies&&A.allies.includes(b));}
+function atWar(world,a,b){const A=world.kingdoms[a];return !!(A&&A.atWar&&A.atWar.includes(b));}
+function allyWith(world,a,b){
+  const A=world.kingdoms[a],B=world.kingdoms[b];
+  if(!A||!B||!A.alive||!B.alive)return;
+  A.allies=A.allies||[];B.allies=B.allies||[];
+  if(!A.allies.includes(b))A.allies.push(b);
+  if(!B.allies.includes(a))B.allies.push(a);
+  emit(world,{type:"Alliance",tick:absTick(world),a,b});
+}
+function breakAlliance(world,a,b,reason){
+  const A=world.kingdoms[a],B=world.kingdoms[b];
+  if(A&&A.allies)A.allies=A.allies.filter(x=>x!==b);
+  if(B&&B.allies)B.allies=B.allies.filter(x=>x!==a);
+  emit(world,{type:"AllianceBroken",tick:absTick(world),a,b,reason:reason||null});
+}
+function declareWar(world,a,b,cause){
+  const A=world.kingdoms[a],B=world.kingdoms[b];
+  if(!A||!B||!A.alive||!B.alive||atWar(world,a,b))return;
+  A.atWar=A.atWar||[];B.atWar=B.atWar||[];
+  A.atWar.push(b);B.atWar.push(a);
+  if(isAlly(world,a,b))breakAlliance(world,a,b,"war");
+  emit(world,{type:"War",tick:absTick(world),a,b,cause:cause||null});
+}
+function makePeace(world,a,b,cause){
+  const A=world.kingdoms[a],B=world.kingdoms[b];
+  if(!atWar(world,a,b))return;
+  if(A&&A.atWar)A.atWar=A.atWar.filter(x=>x!==b);
+  if(B&&B.atWar)B.atWar=B.atWar.filter(x=>x!==a);
+  addRel(world,a,b,10);addRel(world,b,a,10);
+  emit(world,{type:"Peace",tick:absTick(world),a,b,cause:cause||null});
+}
+// Every hostile raid/pillage passes through here: betrayals sting, feuds become wars.
+function noteSkirmish(world,a,b){
+  const t=absTick(world);
+  world.lastHostile[a+">"+b]=t;
+  const log=world.skirmish[a+">"+b]=world.skirmish[a+">"+b]||[];
+  log.push(t);while(log.length&&log[0]<t-3*world.cfg.ticksPerDay)log.shift();
+  const A=world.kingdoms[a],D=world.kingdoms[b];
+  if(!A||!D||!A.alive||!D.alive)return{betrayal:false};
+  const wereAllies=isAlly(world,a,b);
+  if(!atWar(world,a,b)&&(wereAllies||relOf(D,a)>=25)){
+    if(wereAllies)breakAlliance(world,a,b,"betrayal");
+    D.relations=D.relations||{};D.relations[a]=-60;
+    A.relations=A.relations||{};A.relations[b]=Math.min(relOf(A,b),-10);
+    emit(world,{type:"Betrayal",tick:t,attackerId:a,defenderId:b,wereAllies});
+    return{betrayal:true};
+  }
+  addRel(world,b,a,-25);addRel(world,a,b,-8);
+  if(!atWar(world,a,b)&&log.length>=2)declareWar(world,a,b,"repeated raids");
+  return{betrayal:false};
+}
+const SEASON_KINDS=["bountiful","drought","plague","goldrush","calm"];
+function pickSeason(world,avoid){
+  const r=world.rng();let kind;
+  if(r<0.30)kind="calm";else if(r<0.475)kind="bountiful";else if(r<0.65)kind="drought";else if(r<0.825)kind="plague";else kind="goldrush";
+  if(kind===avoid&&kind!=="calm")kind="calm";
+  return kind;
+}
+
 // ---------- action execution ----------
 function executeAct(world,kid,action,events){
   const k=world.kingdoms[kid], cfg=world.cfg;
@@ -1124,7 +1208,7 @@ function executeAct(world,kid,action,events){
   switch(action.act){
     case "harvest":{
       const c=pick(cells.filter(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="field"&&g.crop>=2;}));
-      const y=3;
+      const y=world.grid[c[1]][c[0]].crop>=3?5:4;
       world.grid[c[1]][c[0]].crop=0; k.stamina-=1; k.food=Math.min(cfg.foodCap,k.food+y);
       emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"harvest",target:null,dir:null,note:action.note||("+"+y+" food")});
       break;}
@@ -1134,7 +1218,7 @@ function executeAct(world,kid,action,events){
       emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"plant",target:null,dir:null,note:action.note||"field planted"});
       break;}
     case "mine":{
-      const c=pick(cells.filter(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="mine"&&g.ore>0;})),g=world.grid[c[1]][c[0]],y=Math.min(3,g.ore);
+      const c=pick(cells.filter(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="mine"&&g.ore>0;})),g=world.grid[c[1]][c[0]],y=Math.min(4,g.ore);
       g.ore-=y;k.stamina-=1;k.metal=Math.min(cfg.metalCap,k.metal+y);emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"mine",target:null,dir:null,note:action.note||("+"+y+" mine stock")});break;}
     case "build_house":{
       // Urbanize: stack on the most-built-up eligible tile so towns visibly grow toward the cap.
@@ -1179,38 +1263,53 @@ function executeAct(world,kid,action,events){
       break;}
     case "raid":{
       let targets=[];for(const g of normalizeArmyGroups(world,k))for(const n of neighbors6(world,g.x,g.y)){const o=world.grid[n[1]][n[0]].owner;if(o!==null&&o!==kid&&world.kingdoms[o].alive)targets.push(n);}
-      let cell=targets[0];
+      const mode=action.mode==="pillage"?"pillage":"conquer";
+      let pool=targets;
       if (action.target!==null && action.target!==undefined){
         const pref=targets.filter(n=>world.grid[n[1]][n[0]].owner===action.target);
-        if (pref.length) cell=pick(pref); else cell=pick(targets);
-      } else cell=pick(targets);
+        pool=pref.length?pref:targets;
+      }
+      if (mode==="pillage"){ const fields=pool.filter(n=>world.grid[n[1]][n[0]].crop>0); if(fields.length)pool=fields; }
+      const cell=pick(pool);
       k.stamina-=1;
-      resolveCombat(world,kid,cell,action.note);
+      resolveCombat(world,kid,cell,action.note,mode);
       break;}
     case "share":{
       const adj=adjacentKingdoms(world,kid);
       let to=(action.target!==null&&action.target!==undefined&&adj.includes(action.target))?action.target:pick(adj);
       const amt=Math.min(2,k.food);
       k.food-=amt; world.kingdoms[to].food=Math.min(cfg.foodCap,world.kingdoms[to].food+amt);
-      emit(world,{type:"Transfer",tick:absTick(world),from:kid,to:to,resource:"food",amount:amt});
-      emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"share",target:to,dir:null,note:action.note||("shared "+amt)});
+      // Food sent to a feared raider buys about two days of safety. The raider records who pays.
+      let tribute=false;
+      const R=world.kingdoms[to], scary=R&&(R.goal==="Raider"||R.goal==="Warlord")&&R.army>=3;
+      if(R&&relOf(k,to)<15&&scary){ R.tributeTo=R.tributeTo||{}; R.tributeTo[kid]=absTick(world)+2*cfg.ticksPerDay; tribute=true; }
+      emit(world,{type:"Transfer",tick:absTick(world),from:kid,to:to,resource:"food",amount:amt,tribute});
+      addRel(world,to,kid,8); addRel(world,kid,to,3);
+      emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"share",target:to,dir:null,note:action.note||(tribute?("tribute: "+amt+" food for peace"):("shared "+amt))});
       break;}
     case "trade_offer":{
       const adj=adjacentKingdoms(world,kid);
       const to=(action.target!==null&&action.target!==undefined&&adj.includes(action.target))?action.target:pick(adj);
-      world.kingdoms[to].pendingOffers.push({from:kid,give:2,get:2,tick:absTick(world)});
-      emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"trade_offer",target:to,dir:null,note:action.note||"offers 2 food for 2 food"});
+      // give = what YOU pay, get = what YOU receive. Default: buy 2 food with 2 metal.
+      const give=(action.give===undefined&&action.get===undefined)?{food:0,metal:2}:normBundle(action.give);
+      const get=(action.give===undefined&&action.get===undefined)?{food:2,metal:0}:normBundle(action.get);
+      if(bundleEmpty(give)||bundleEmpty(get)){ emit(world,{type:"ActRejected",tick:absTick(world),kingdomId:kid,attemptedAct:"trade_offer",reason:"empty offer"}); break; }
+      world.kingdoms[to].pendingOffers.push({from:kid,give,get,tick:absTick(world)});
+      emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"trade_offer",target:to,dir:null,note:action.note||("offers "+bundleText(give)+" for "+bundleText(get))});
       break;}
     case "honor":{
-      const offer=k.pendingOffers.find(o=>world.kingdoms[o.from].alive && world.kingdoms[o.from].food>=o.get && k.food>=o.give);
+      const offer=k.pendingOffers.find(o=>{const f=world.kingdoms[o.from];return f&&f.alive&&canAfford(f,o.give)&&canAfford(k,o.get);});
       if (!offer){ emit(world,{type:"ActRejected",tick:absTick(world),kingdomId:kid,attemptedAct:"honor",reason:"no payable offer"}); k.pendingOffers=[]; break; }
       const from=world.kingdoms[offer.from];
-      k.food-=offer.give; from.food=Math.min(cfg.foodCap,from.food+offer.give);
-      from.food-=offer.get; k.food=Math.min(cfg.foodCap,k.food+offer.get);
+      payBundle(from,offer.give); gainBundle(world,k,offer.give);
+      payBundle(k,offer.get); gainBundle(world,from,offer.get);
       k.pendingOffers=k.pendingOffers.filter(o=>o!==offer);
-      emit(world,{type:"Transfer",tick:absTick(world),from:kid,to:offer.from,resource:"food",amount:offer.give});
-      emit(world,{type:"Transfer",tick:absTick(world),from:offer.from,to:kid,resource:"food",amount:offer.get});
-      emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"honor",target:offer.from,dir:null,note:action.note||"trade honored"});
+      for(const r of ["food","metal"]){
+        if(offer.give[r]>0)emit(world,{type:"Transfer",tick:absTick(world),from:offer.from,to:kid,resource:r,amount:offer.give[r]});
+        if(offer.get[r]>0)emit(world,{type:"Transfer",tick:absTick(world),from:kid,to:offer.from,resource:r,amount:offer.get[r]});
+      }
+      addRel(world,kid,offer.from,10); addRel(world,offer.from,kid,10);
+      emit(world,{type:"Act",tick:absTick(world),kingdomId:kid,act:"honor",target:offer.from,dir:null,note:action.note||("traded "+bundleText(offer.give)+" for "+bundleText(offer.get))});
       break;}
     case "move":{
       const intent=["village","mine","border"].includes(action.placement)?action.placement:"border",groups=normalizeArmyGroups(world,k);
@@ -1226,45 +1325,105 @@ function executeAct(world,kid,action,events){
   }
 }
 
-function resolveCombat(world,attackerId,cell,note){
+function resolveCombat(world,attackerId,cell,note,mode){
+  mode=mode==="pillage"?"pillage":"conquer";
   const cfg=world.cfg,g=world.grid[cell[1]][cell[0]],defenderId=g.owner;
   const A=world.kingdoms[attackerId],D=world.kingdoms[defenderId];
   normalizeArmyGroups(world,A);normalizeArmyGroups(world,D);
   const attackers=A.armyGroups.filter(g=>neighbors6(world,g.x,g.y).some(n=>n[0]===cell[0]&&n[1]===cell[1])),attackGroup=attackers.sort((a,b)=>b.size-a.size)[0],attacking=attackGroup?.size||0, defending=armyAt(world,D,cell[0],cell[1]);
+  // Pillage: burn the fields and steal food, but take no land.
+  if(mode==="pillage"){
+    const burned=g.crop>0; g.crop=0; if(g.shield>0)g.shield-=1;
+    const loot=Math.min(cfg.raidLootMax,D.food); D.food-=loot; A.food=Math.min(cfg.foodCap,A.food+loot);
+    if(attacking>0&&defending*2>=attacking) loseArmy(world,A,1,attackGroup?.x,attackGroup?.y); // ambush by the defenders
+    const winnerId=(burned||loot>0)?attackerId:-1;
+    emit(world,{type:"Act",tick:absTick(world),kingdomId:attackerId,act:"raid",target:defenderId,dir:null,note:note||("pillaged "+(burned?"crops":"stores"))});
+    emit(world,{type:"Combat",tick:absTick(world),attackerId,defenderId,cell,winnerId,attackingArmy:attacking,defendingArmy:defending,foodLooted:loot,mode:"pillage",burned});
+    noteSkirmish(world,attackerId,defenderId);
+    return;
+  }
   const placeBonus=g.houses>0?2:(g.terrain==="mine"?1:0);
   const warCombat=cfg.endMode==="dominion"||cfg.endMode==="last_stand",pA=attacking+(A.stamina>=3?1:0)+(warCombat?1:0),pD=defending+(warCombat?0:placeBonus+g.shield)+(D.stamina>=3?1:0);
   let winnerId,loot=0;
   if(pA>pD){
     const dLoss=Math.min(defending,Math.max(1,Math.ceil(attacking/2)));loseArmy(world,D,dLoss,cell[0],cell[1]);
-    g.shield=0;g.owner=attackerId;if(attackGroup){attackGroup.x=cell[0];attackGroup.y=cell[1];attackGroup.intent="occupied enemy tile";}normalizeArmyGroups(world,A);
+    g.shield=0;g.owner=attackerId;g.unrest=2; // occupied land seethes until garrisoned
+    if(attackGroup){attackGroup.x=cell[0];attackGroup.y=cell[1];attackGroup.intent="occupied enemy tile";}normalizeArmyGroups(world,A);
     // Losing a settlement can lower population capacity immediately. Do not leave an over-cap kingdom until Dawn.
     D.pop=Math.min(D.pop,popCap(world,D));D.army=Math.min(D.army,Math.min(cfg.armyCap,D.pop));normalizeArmyGroups(world,D);syncSettlementPop(world,D);
     loot=Math.min(cfg.raidLootMax,D.food);D.food-=loot;A.food=Math.min(cfg.foodCap,A.food+loot);winnerId=attackerId;
   }else if(pD>pA){loseArmy(world,A,1,attackGroup?.x,attackGroup?.y);winnerId=defenderId;
   }else{loseArmy(world,A,1,attackGroup?.x,attackGroup?.y);loseArmy(world,D,1,cell[0],cell[1]);if(A.food>0)A.food-=1;if(D.food>0)D.food-=1;winnerId=-1;}
   emit(world,{type:"Act",tick:absTick(world),kingdomId:attackerId,act:"raid",target:defenderId,dir:null,note:note||("local power "+pA+" vs "+pD)});
-  emit(world,{type:"Combat",tick:absTick(world),attackerId,defenderId,cell,winnerId,attackingArmy:attacking,defendingArmy:defending,foodLooted:loot});
-  const warMode=cfg.endMode==="dominion"||cfg.endMode==="last_stand",capitalTaken=winnerId===attackerId&&warMode&&D.capital&&cell[0]===D.capital.x&&cell[1]===D.capital.y;if((capitalTaken||cellsOf(world,defenderId).length===0)&&D.alive){D.alive=false;D.pendingOffers=[];D.army=0;D.armyGroups=[];D.armyPos=null;for(let y=0;y<cfg.height;y++)for(let x=0;x<cfg.width;x++)if(world.grid[y][x].owner===defenderId)world.grid[y][x].owner=attackerId;emit(world,{type:"Fall",tick:absTick(world),kingdomId:defenderId,conqueredBy:attackerId});}
+  emit(world,{type:"Combat",tick:absTick(world),attackerId,defenderId,cell,winnerId,attackingArmy:attacking,defendingArmy:defending,foodLooted:loot,mode:"conquer"});
+  const warMode=cfg.endMode==="dominion"||cfg.endMode==="last_stand",capitalTaken=winnerId===attackerId&&warMode&&D.capital&&cell[0]===D.capital.x&&cell[1]===D.capital.y;if((capitalTaken||cellsOf(world,defenderId).length===0)&&D.alive){D.alive=false;D.pendingOffers=[];D.army=0;D.armyGroups=[];D.armyPos=null;for(let y=0;y<cfg.height;y++)for(let x=0;x<cfg.width;x++)if(world.grid[y][x].owner===defenderId){world.grid[y][x].owner=attackerId;world.grid[y][x].unrest=1;}emit(world,{type:"Fall",tick:absTick(world),kingdomId:defenderId,conqueredBy:attackerId});}
+  noteSkirmish(world,attackerId,defenderId);
 }
 
 // ---------- dawn ----------
 function processDawn(world){
-  const cfg=world.cfg, starvedPop={}, unsupportedArmy={}, grown=[];
-  for (const k of world.kingdoms){
-    if (!k.alive) continue;
-    const foodNeed=k.pop, metalNeed=(cfg.endMode==="dominion"||cfg.endMode==="last_stand")?0:k.army;
-    if (k.food>=foodNeed){ k.food-=foodNeed; k.pop=Math.min(popCap(world,k),k.pop+1); }
-    else { const gap=foodNeed-k.food; k.food=0; const floor=(cfg.endMode==="dominion"||cfg.endMode==="last_stand")?2:1,loss=Math.min(Math.max(0,k.pop-floor),Math.max(1,gap)); k.pop-=loss; if(loss>0)starvedPop[k.id]=loss; }
+  const cfg=world.cfg, starvedPop={}, unsupportedArmy={}, grown=[], plagued={}, revolts=[];
+  const warUpkeep=cfg.endMode==="dominion"||cfg.endMode==="last_stand";
+  const alive=world.kingdoms.filter(k=>k.alive);
+  const lands=alive.map(k=>cellsOf(world,k.id).length);
+  const topLand=Math.max(0,...lands);
+  const underdogs=[];
+  const seasonKind=world.season?world.season.kind:"calm";
+  const now=absTick(world);
+  for (let i=0;i<alive.length;i++){
+    const k=alive[i], land=lands[i];
+    // Supply lines: sprawling empires eat more every Dawn.
+    const supply=Math.ceil(Math.max(0,land-cfg.freeLand)/cfg.supplyPerTiles);
+    const foodNeed=k.pop+supply, metalNeed=warUpkeep?0:Math.ceil(k.army/2);
+    // Population grows only on genuine surplus: the treadmill that starved everyone is gone.
+    if (k.food>=foodNeed){ k.food-=foodNeed; if(k.food>=k.pop)k.pop=Math.min(popCap(world,k),k.pop+1); }
+    else { const gap=foodNeed-k.food; k.food=0; const floor=warUpkeep?2:1,loss=Math.min(Math.max(0,k.pop-floor),Math.max(1,gap)); k.pop-=loss; if(loss>0)starvedPop[k.id]=loss; }
     if (k.metal>=metalNeed) k.metal-=metalNeed;
     else { const gap=metalNeed-k.metal; k.metal=0; const loss=Math.min(k.army,Math.max(1,Math.ceil(gap/2))); loseArmy(world,k,loss); if(loss>0)unsupportedArmy[k.id]=loss; }
     k.stamina=Math.min(cfg.staminaCap,k.stamina+cfg.staminaPerDawn);
-    k.army=Math.min(k.army,Math.min(cfg.armyCap,k.pop)); if((cfg.endMode==="dominion"||cfg.endMode==="last_stand")&&k.army===0&&k.pop>0){k.army=1;} normalizeArmyGroups(world,k);
-    if (k.pop<=1 && cellsOf(world,k.id).length===0){ k.alive=false; emit(world,{type:"Fall",tick:absTick(world),kingdomId:k.id,conqueredBy:-1}); }
+    // Underdogs fight scrappier: less than half the leader's land means extra stamina.
+    if (land>0&&topLand>0&&land<topLand*0.5){ k.stamina=Math.min(cfg.staminaCap,k.stamina+1); underdogs.push(k.id); }
+    k.army=Math.min(k.army,Math.min(cfg.armyCap,k.pop)); if(warUpkeep&&k.army===0&&k.pop>0){k.army=1;} normalizeArmyGroups(world,k);
+    if (k.pop<=1 && cellsOf(world,k.id).length===0){ k.alive=false; emit(world,{type:"Fall",tick:now,kingdomId:k.id,conqueredBy:-1}); }
     if (k.pop<=0){ k.pop=1; } syncSettlementPop(world,k);
+    if (seasonKind==="plague"&&k.alive&&k.pop>3&&world.rng()<0.25){ k.pop-=1; plagued[k.id]=1; }
+    // Fear of the leader: small kingdoms resent a runaway frontrunner, so coalitions form.
+    if (k.alive&&topLand>0&&land<topLand/1.8){ const li=lands.indexOf(topLand); if(alive[li]&&alive[li].id!==k.id){ k.relations=k.relations||{}; k.relations[alive[li].id]=Math.max(-40,relOf(k,alive[li].id)-2); } }
   }
-  for (let y=0;y<cfg.height;y++)for(let x=0;x<cfg.width;x++){ const c=world.grid[y][x]; if (c.terrain==="field"&&c.crop>0&&c.crop<3){c.crop+=1;grown.push([x,y]);} if(c.terrain==="mine"&&c.ore<5)c.ore+=1; }
+  for (let y=0;y<cfg.height;y++)for(let x=0;x<cfg.width;x++){ const c=world.grid[y][x];
+    if (c.terrain==="field"&&c.crop>0&&c.crop<3){
+      if(seasonKind==="drought"){ if(world.rng()<0.15)c.crop=0; }
+      else { c.crop=Math.min(3,c.crop+(seasonKind==="bountiful"?2:1)); grown.push([x,y]); }
+    }
+    if(c.terrain==="mine"){ const cap=seasonKind==="goldrush"?7:5; if(c.ore<cap)c.ore=Math.min(cap,c.ore+(seasonKind==="goldrush"?3:2)); }
+  }
+  // Occupied land: garrison it or it revolts back to no-man's-land.
+  for (let y=0;y<cfg.height;y++)for(let x=0;x<cfg.width;x++){ const c=world.grid[y][x];
+    if(c.owner===null||!c.unrest)continue;
+    const k=world.kingdoms[c.owner];
+    if(!k||!k.alive){c.unrest=0;continue;}
+    const garrisoned=normalizeArmyGroups(world,k).some(g=>g.x===x&&g.y===y);
+    if(garrisoned){c.unrest=Math.max(0,c.unrest-1);}
+    else if(world.rng()<0.18*c.unrest){ const old=c.owner; c.owner=null; c.unrest=0; revolts.push([x,y]); emit(world,{type:"Revolt",tick:now,cell:[x,y],kingdomId:old}); }
+  }
+  // Wars cool off when the borders go quiet for five days.
+  for (const k of alive){
+    if(!k.alive||!k.atWar)continue;
+    for (const e of [...k.atWar]){
+      if(e<k.id)continue;
+      const lastA=world.lastHostile[k.id+">"+e]||-1e9, lastB=world.lastHostile[e+">"+k.id]||-1e9;
+      if(Math.max(lastA,lastB)<now-5*cfg.ticksPerDay) makePeace(world,k.id,e,"quiet borders");
+    }
+  }
+  // Seasons turn: forecast a day ahead, then break.
+  if(world.season&&cfg.seasonDays>0){
+    const s=world.season;
+    s.daysLeft-=1;
+    if(s.daysLeft===1&&!s.forecast){ s.forecast=pickSeason(world,s.kind); emit(world,{type:"SeasonForecast",tick:now,kind:s.forecast,day:world.day+1}); }
+    if(s.daysLeft<=0){ s.kind=s.forecast||pickSeason(world,s.kind); s.forecast=null; s.daysLeft=cfg.seasonDays; emit(world,{type:"SeasonStart",tick:now,kind:s.kind,day:world.day+1}); }
+  }
   world.day+=1;
-  emit(world,{type:"Dawn",tick:absTick(world)-1,day:world.day,starvedPop,unsupportedArmy,grownCrops:grown});
+  emit(world,{type:"Dawn",tick:now-1,day:world.day,starvedPop,unsupportedArmy,grownCrops:grown,season:seasonKind,plagued,underdogs,revoltCount:revolts.length});
 }
 
 function absTick(world){ return (world.day-1)*world.cfg.ticksPerDay + world.tick; }
@@ -1355,7 +1514,11 @@ function mockPhaseA(world,k){
       letters.push({to:t.id,text:texts[k.goal]||"Peace."});
     }
   }
-  const note="day "+world.day+" food:"+k.food+"/"+k.pop+" mine:"+k.metal+"/"+k.army+" army:"+k.army+" pop:"+k.pop+" land:"+cells+" | inbox:"+inboxTexts.length+" | plan:"+mockPlan(world,k);
+  if(!bulletin&&(k.atWar||[]).length&&rng()<0.5)bulletin="War with "+k.atWar.map(o=>"#"+(o+1)).join(", ")+". No mercy until they break.";
+  if(!bulletin&&(k.allies||[]).length&&rng()<0.25)bulletin="My pact with "+k.allies.map(o=>"#"+(o+1)).join(", ")+" holds. Cross us and see what happens.";
+  const foes=(k.atWar||[]).map(o=>"#"+(o+1)).join(","),pals=(k.allies||[]).map(o=>"#"+(o+1)).join(",");
+  const season=world.season?world.season.kind:"calm";
+  const note="day "+world.day+" food:"+k.food+"/"+k.pop+" mine:"+k.metal+"/"+k.army+" army:"+k.army+" pop:"+k.pop+" land:"+cells+" war:["+foes+"] allies:["+pals+"] season:"+season+" | inbox:"+inboxTexts.length+" | plan:"+mockPlan(world,k);
   return {bulletin,letters,self_note:note};
 }
 function mockPlan(world,k){
@@ -1368,17 +1531,31 @@ function mockPlan(world,k){
 }
 function mockPhaseB(world,k){
   const legal=legalActions(world,k);
-  const cfg=world.cfg, cells=cellsOf(world,k.id), land=cells.length;
-  const pickT=(pred)=>{ const adj=adjacentKingdoms(world,k.id).filter(pred); return adj.length?adj[Math.floor(world.rng()*adj.length)]:null; };
-  const richest=(pred)=>{const adj=adjacentKingdoms(world,k.id).filter(pred);return adj.length?adj[Math.floor(world.rng()*adj.length)]:null;};
-  const hasEmpty=cells.some(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="field"&&g.crop===0;});
+  const cfg=world.cfg, cells=cellsOf(world,k.id), land=cells.length, total=cfg.width*cfg.height, rng=world.rng, now=absTick(world);
+  const pickT=(pred)=>{ const adj=adjacentKingdoms(world,k.id).filter(pred); return adj.length?adj[Math.floor(rng()*adj.length)]:null; };
   const warMode=cfg.endMode==="dominion"||cfg.endMode==="last_stand";
-  const aggressive=warMode||(k.goal==="Raider"||k.goal==="Warlord"||k.goal==="Schemer");
-  const target=warMode?cfg.width*cfg.height:Math.max(4,Math.min(7,k.pop+3));
-  // 1. survival: crops feed population; mine stock supports the army every Dawn
-  if (k.food<k.pop){
+  const aggressive=warMode||k.goal==="Raider"||k.goal==="Warlord"||k.goal==="Schemer";
+  const supply=Math.ceil(Math.max(0,land-cfg.freeLand)/cfg.supplyPerTiles);
+  const foodNeed=k.pop+supply;
+  const hasEmpty=cells.some(c=>{const g=world.grid[c[1]][c[0]];return g.terrain==="field"&&g.crop===0;});
+  const neighbors=adjacentKingdoms(world,k.id);
+  const enemiesAtWar=neighbors.filter(o=>atWar(world,k.id,o));
+  const threat=neighbors.find(o=>{const r=world.kingdoms[o];return r.alive&&(r.goal==="Raider"||r.goal==="Warlord")&&r.army>=3&&relOf(k,o)<10;});
+  const recentAttacker=neighbors.find(o=>now-(world.lastHostile[o+">"+k.id]||-1e9)<12);
+  const targetLand=Math.max(10,Math.min(48,Math.round(total*0.16)));
+  const paysTributeTo=(to)=>world.kingdoms[to].tributeTo&&world.kingdoms[to].tributeTo[k.id]>now;
+  const raidOn=(to,why)=>{
+    if(to===null||to===undefined||!legal.includes("raid"))return null;
+    if(paysTributeTo(to))return null; // tribute is honored
+    if(isAlly(world,k.id,to)&&k.goal!=="Schemer")return null;
+    const mode=(k.army<2||(k.goal==="Raider"&&rng()<0.35))?"pillage":"conquer";
+    return {act:"raid",target:to,mode,dir:null,note:why};
+  };
+  // 1. survival: crops feed the population, mine stock supports the army
+  if (k.food<foodNeed){
     if (legal.includes("harvest")) return {act:"harvest",target:null,dir:null,note:"food upkeep first"};
-    if (legal.includes("raid")&&k.army>=1){ const t=richest(()=>true)||pickT(()=>true); return {act:"raid",target:t,dir:null,note:"raid for food"}; }
+    const prey=recentAttacker!==undefined?recentAttacker:pickT(()=>true);
+    const r=raidOn(prey,"raid for food"); if(r)return r;
     if (legal.includes("plant")&&hasEmpty) return {act:"plant",target:null,dir:null,note:"emergency planting"};
     if (legal.includes("claim")) return {act:"claim",target:null,dir:null,note:"settle toward fields"};
     return {act:"rest",target:null,dir:null,note:"save stamina"};
@@ -1388,39 +1565,84 @@ function mockPhaseB(world,k){
     if (legal.includes("claim")) return {act:"claim",target:null,dir:null,note:"seek a mine"};
     return {act:"rest",target:null,dir:null,note:"army will shrink without mine stock"};
   }
-  if (legal.includes("mine")&&k.metal<cfg.trainCostMetal+2) return {act:"mine",target:null,dir:null,note:"stock minerals"};
-  // 2. Split the force among assets and mobilize up to the configured range.
+  // 2. tribute: buy off a looming raid with food
+  if (threat!==undefined&&k.food>foodNeed+1&&!(world.kingdoms[threat].tributeTo&&world.kingdoms[threat].tributeTo[k.id]>now)&&rng()<0.5&&legal.includes("share"))
+    return {act:"share",target:threat,dir:null,note:"tribute for peace"};
+  // 3. prosecute wars
+  if (enemiesAtWar.length){
+    const foe=enemiesAtWar.slice().sort((a,b)=>world.kingdoms[a].army-world.kingdoms[b].army)[0];
+    if (legal.includes("train")&&k.metal>=cfg.trainCostMetal+k.army&&rng()<0.8) return {act:"train",target:null,dir:null,note:"raise the host"};
+    const r=raidOn(foe,"war on "+world.kingdoms[foe].name); if(r)return r;
+    if (legal.includes("claim")) return {act:"claim",target:null,dir:null,note:"march on the enemy"};
+    if (legal.includes("fortify")&&rng()<0.5) return {act:"fortify",target:null,dir:null,note:"fortify the frontier"};
+  }
+  // 4. retaliation keeps grudges alive
+  if (recentAttacker!==undefined&&k.army>=2&&rng()<0.6){
+    const r=raidOn(recentAttacker,"retaliation"); if(r)return r;
+  }
+  // 5. the schemer's knife: fatten a weaker neighbor's trust, then betray it
+  if ((k.goal==="Schemer"||k.goal==="Raider")&&legal.includes("share")&&k.food>foodNeed+3&&rng()<0.35){
+    const mark=pickT(o=>!atWar(world,k.id,o)&&(cellsOf(world,o).length+world.kingdoms[o].army)<(land+k.army)&&relOf(world.kingdoms[o],k.id)<25);
+    if(mark!==null&&mark!==undefined)return {act:"share",target:mark,dir:null,note:"fatten the mark"};
+  }
+  if ((k.goal==="Schemer"||k.goal==="Raider")&&k.army>=3&&rng()<0.35){
+    const mark=neighbors.filter(o=>!atWar(world,k.id,o)&&relOf(world.kingdoms[o],k.id)>=25&&(cellsOf(world,o).length+world.kingdoms[o].army)<(land+k.army));
+    if (mark.length){ const r=raidOn(mark[0],"the knife comes out"); if(r)return r; }
+  }
+  // 6. archetype aggression
+  if (aggressive&&k.army>=3&&rng()<0.5){
+    const foe=pickT(o=>relOf(k,o)<0||k.goal==="Warlord"||(k.goal==="Raider"&&!paysTributeTo(o)));
+    if (foe!==null&&foe!==undefined){ const r=raidOn(foe,k.goal+" strikes"); if(r)return r; }
+  }
+  // 7. expand while there is room worth taking
+  if (legal.includes("claim")&&land<targetLand&&rng()<0.85) return {act:"claim",target:null,dir:null,note:"expand"};
+  // 8. split the force among assets and mobilize up to the configured range
   const groups=normalizeArmyGroups(world,k),roles=new Set(groups.map(g=>g.intent));
   if(k.army>1&&legal.includes("move")){
     if(settlementCells(world,k.id).length&&!roles.has("village"))return {act:"move",group_id:groups[0]?.id,amount:1,placement:"village",target:null,dir:null,note:"split a village garrison"};
     if(cells.some(([x,y])=>world.grid[y][x].terrain==="mine")&&!roles.has("mine"))return {act:"move",group_id:groups.slice().sort((a,b)=>b.size-a.size)[0]?.id,amount:1,placement:"mine",target:null,dir:null,note:"split a mine guard"};
     if(aggressive&&!roles.has("border"))return {act:"move",group_id:groups.slice().sort((a,b)=>b.size-a.size)[0]?.id,amount:Math.max(1,Math.floor(k.army/2)),placement:"border",target:null,dir:null,note:"mobilize an attack group"};
-    if(world.rng()<0.22)return {act:"move",group_id:groups.slice().sort((a,b)=>b.size-a.size)[0]?.id,amount:Math.max(1,Math.floor(k.army/2)),placement:aggressive?"border":"village",target:null,dir:null,note:"redeploy "+(world.cfg.armyMoveRange||3)+" tiles"};
+    if(rng()<0.22)return {act:"move",group_id:groups.slice().sort((a,b)=>b.size-a.size)[0]?.id,amount:Math.max(1,Math.floor(k.army/2)),placement:aggressive?"border":"village",target:null,dir:null,note:"redeploy "+(cfg.armyMoveRange||3)+" tiles"};
   }
-  // 3. military archetypes: mine before training, then march and raid
-  if (aggressive){
-    if (legal.includes("raid")&&k.army>=1){ const t=richest(()=>true)||pickT(()=>true); return {act:"raid",target:t,dir:null,note:k.goal+" strikes"}; }
-    if (legal.includes("train")&&k.metal>=cfg.trainCostMetal+k.army+1&&world.rng()<0.9) return {act:"train",target:null,dir:null,note:"raise the host"};
-    if (legal.includes("claim")) return {act:"claim",target:null,dir:null,note:"march on rivals"};
-    if (legal.includes("plant")&&hasEmpty&&k.food>2*k.pop+2) return {act:"plant",target:null,dir:null,note:"work conquered fields"};
-    if (legal.includes("harvest")) return {act:"harvest",target:null,dir:null,note:"loot the fields"};
-    if (legal.includes("eat")&&k.stamina<2&&k.food>1) return {act:"eat",target:null,dir:null,note:"recover"};
-    if (legal.includes("rest")) return {act:"rest",target:null,dir:null,note:"sharpen blades"};
-  }
-  // 4. agrarian archetypes: expand, settle, plant, harvest
+  // 9. economy: houses, crops, and real food-for-metal trade
   if (legal.includes("build_house")&&k.pop>=popCap(world,k)-1) return {act:"build_house",target:null,dir:null,note:"raise housing"};
-  if (legal.includes("claim")&&land<target) return {act:"claim",target:null,dir:null,note:"expand"};
-  if (legal.includes("plant")&&hasEmpty&&k.food>k.pop+cfg.plantCostFood) return {act:"plant",target:null,dir:null,note:"seed future food"};
-  if (legal.includes("harvest")&&(k.food<3*k.pop||k.stamina>=cfg.staminaCap)) return {act:"harvest",target:null,dir:null,note:"cash in crops"};
-  if (legal.includes("eat")&&k.stamina<2&&k.food>k.pop+2) return {act:"eat",target:null,dir:null,note:"recover stamina"};
-  if (legal.includes("train")&&k.metal>=cfg.trainCostMetal+k.army+1&&world.rng()<0.5) return {act:"train",target:null,dir:null,note:"militia"};
-  if (k.goal==="Steward"&&legal.includes("share")&&k.food>2*k.pop+2&&world.rng()<0.4){
-    const t=pickT(o=>world.kingdoms[o].food<world.kingdoms[o].pop)||pickT(()=>true);
-    return {act:"share",target:t,dir:null,note:"goodwill grain"};
+  if (legal.includes("mine")&&k.metal<k.army+cfg.trainCostMetal+1) return {act:"mine",target:null,dir:null,note:"fill the war chest"};
+  if (aggressive&&legal.includes("mine")&&k.metal<k.army*2+4) return {act:"mine",target:null,dir:null,note:"stockpile for war"};
+  if (legal.includes("plant")&&hasEmpty&&k.food>foodNeed+cfg.plantCostFood) return {act:"plant",target:null,dir:null,note:"seed future food"};
+  if (legal.includes("harvest")&&(k.food<2*foodNeed||k.stamina>=cfg.staminaCap)) return {act:"harvest",target:null,dir:null,note:"cash in crops"};
+  if (neighbors.length){
+    if (k.food<foodNeed+2&&k.metal>=3&&rng()<0.6&&legal.includes("trade_offer")){
+      const to=pickT(o=>world.kingdoms[o].food>world.kingdoms[o].pop+2&&!atWar(world,k.id,o));
+      if(to!==null&&to!==undefined)return {act:"trade_offer",target:to,give:{food:0,metal:2},get:{food:3,metal:0},dir:null,note:"2 metal for 3 food"};
+    }
+    if (k.metal<k.army+cfg.trainCostMetal&&k.food>foodNeed+4&&rng()<0.6&&legal.includes("trade_offer")){
+      const to=pickT(o=>world.kingdoms[o].metal>4&&!atWar(world,k.id,o));
+      if(to!==null&&to!==undefined)return {act:"trade_offer",target:to,give:{food:3,metal:0},get:{food:0,metal:2},dir:null,note:"3 food for 2 metal"};
+    }
+    if (k.goal==="Merchant"&&rng()<0.25&&legal.includes("trade_offer")){
+      const to=pickT(o=>!atWar(world,k.id,o));
+      if(to!==null&&to!==undefined){
+        const o=world.kingdoms[to];
+        if(k.food>foodNeed+4&&o.metal>4)return {act:"trade_offer",target:to,give:{food:3,metal:0},get:{food:0,metal:2},dir:null,note:"merchant arbitrage"};
+        if(k.metal>4&&o.food>o.pop+4)return {act:"trade_offer",target:to,give:{food:0,metal:2},get:{food:3,metal:0},dir:null,note:"merchant arbitrage"};
+      }
+    }
+    if (legal.includes("honor")){
+      const good=k.pendingOffers.find(o=>{ const f=world.kingdoms[o.from]; if(!f||!f.alive||!canAfford(k,o.get)||!canAfford(f,o.give))return false;
+        const needFood=k.food<foodNeed+1, needMetal=k.metal<k.army+1;
+        return ((o.give.food||0)>0&&needFood)||((o.give.metal||0)>0&&needMetal)||rng()<0.25; });
+      if(good)return {act:"honor",target:null,dir:null,note:"honor trade"};
+    }
   }
-  if (k.goal==="Merchant"&&legal.includes("trade_offer")&&world.rng()<0.3){ const t=pickT(()=>true); return {act:"trade_offer",target:t,dir:null,note:"open trade"}; }
-  if (legal.includes("honor")&&world.rng()<0.5) return {act:"honor",target:null,dir:null,note:"honor trade"};
-  if (legal.includes("fortify")&&adjacentKingdoms(world,k.id).length&&world.rng()<0.4) return {act:"fortify",target:null,dir:null,note:"fortify border"};
+  // 10. steward generosity: feed friends and allies
+  if ((k.goal==="Steward"||k.goal==="Merchant"||k.goal==="Hermit")&&legal.includes("share")&&k.food>foodNeed+3&&rng()<0.45){
+    const t=pickT(o=>isAlly(world,k.id,o)||relOf(k,o)>20)||pickT(o=>world.kingdoms[o].food<world.kingdoms[o].pop);
+    if(t!==null&&t!==undefined)return {act:"share",target:t,dir:null,note:"goodwill grain"};
+  }
+  // 11. defense and deterrence
+  if (legal.includes("fortify")&&neighbors.length&&rng()<(k.goal==="Hermit"?0.6:0.3)) return {act:"fortify",target:null,dir:null,note:"fortify border"};
+  if (legal.includes("train")&&k.metal>=cfg.trainCostMetal+k.army+1&&rng()<(aggressive?0.7:0.35)) return {act:"train",target:null,dir:null,note:aggressive?"raise the host":"militia"};
+  if (legal.includes("eat")&&k.stamina<2&&k.food>foodNeed+1) return {act:"eat",target:null,dir:null,note:"recover stamina"};
   if (legal.includes("harvest")) return {act:"harvest",target:null,dir:null,note:"cash in crops"};
   if (legal.includes("mine")) return {act:"mine",target:null,dir:null,note:"work the mine"};
   if (legal.includes("plant")&&hasEmpty&&k.food>1) return {act:"plant",target:null,dir:null,note:"plant"};
@@ -1442,11 +1664,12 @@ function injectCacheDrop(world,x,y){ const c=wrap(world,x,y),g=world.grid[c[1]][
 // ---------- snapshots (compact, for replay/export) ----------
 function takeSnapshot(world){
   const W=world.cfg.width,H=world.cfg.height;
-  const owners=new Array(W*H), crops=new Array(W*H), shields=new Array(W*H), terrains=new Array(W*H), ores=new Array(W*H), houses=new Array(W*H);
-  for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const g=world.grid[y][x],i=y*W+x; owners[i]=g.owner===null?-1:g.owner; crops[i]=g.crop; shields[i]=g.shield;terrains[i]=g.terrain;ores[i]=g.ore||0;houses[i]=g.houses||0; }
+  const owners=new Array(W*H), crops=new Array(W*H), shields=new Array(W*H), terrains=new Array(W*H), ores=new Array(W*H), houses=new Array(W*H), unrests=new Array(W*H);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const g=world.grid[y][x],i=y*W+x; owners[i]=g.owner===null?-1:g.owner; crops[i]=g.crop; shields[i]=g.shield;terrains[i]=g.terrain;ores[i]=g.ore||0;houses[i]=g.houses||0;unrests[i]=g.unrest||0; }
   return { day:world.day, tick:world.tick, over:world.over, winner:world.winner, rngState:world.rng.getState?.(), curfewUntil:world.curfewUntil, silenceUntil:world.silenceUntil,
-    owners, crops, shields, terrains, ores, houses,
-    kingdoms: world.kingdoms.map(k=>({id:k.id,alive:k.alive,pop:k.pop,army:k.army,armyGroups:normalizeArmyGroups(world,k).map(g=>({...g})),armyPos:k.armyPos?{...k.armyPos}:null,armyIntent:k.armyIntent||null,food:k.food,metal:k.metal,stamina:k.stamina,bulletin:k.bulletin,selfNote:k.selfNote,goal:k.goal,talkModel:k.talkModel,actModel:k.actModel,mutedUntil:k.mutedUntil,pendingOffers:k.pendingOffers.map(o=>({...o}))})) };
+    owners, crops, shields, terrains, ores, houses, unrests,
+    season:world.season?{kind:world.season.kind,daysLeft:world.season.daysLeft,forecast:world.season.forecast}:null,
+    kingdoms: world.kingdoms.map(k=>({id:k.id,alive:k.alive,pop:k.pop,army:k.army,armyGroups:normalizeArmyGroups(world,k).map(g=>({...g})),armyPos:k.armyPos?{...k.armyPos}:null,armyIntent:k.armyIntent||null,food:k.food,metal:k.metal,stamina:k.stamina,bulletin:k.bulletin,selfNote:k.selfNote,goal:k.goal,talkModel:k.talkModel,actModel:k.actModel,mutedUntil:k.mutedUntil,pendingOffers:k.pendingOffers.map(o=>({from:o.from,give:{...o.give},get:{...o.get},tick:o.tick})),relations:{...(k.relations||{})},atWar:[...(k.atWar||[])],allies:[...(k.allies||[])],tributeTo:{...(k.tributeTo||{})}})) };
 }
 
 // ---------- one full tick ----------
@@ -1542,14 +1765,22 @@ function phaseASystem(k,cfg){
   "3. You must restrict all public broadcasts (bulletins) and targeted private messages (letters) to a maximum of "+cfg.sentencesPerMsg+" sentences each.\n"+
   "4. Name other kingdoms explicitly using their identifier notation: #n.\n"+
   "5. You may output a private internal scratchpad note ('self_note') to preserve context for future rounds. This note is strictly confidential.\n\n"+
+  "DIPLOMACY HAS TEETH:\n"+
+  "1. Generosity is remembered: sharing food and honoring trade deals builds relations. Sustained goodwill (high mutual relations) forges a formal ALLIANCE - allies will not be raided by honorable kingdoms.\n"+
+  "2. BETRAYAL is possible: raiding a kingdom that trusts you (or your ally) inflicts a betrayal, wrecks relations, and can trigger a declared WAR. Schemers do it anyway; everyone else pays a price in fear.\n"+
+  "3. Repeated raids escalate: three skirmishes in five days means WAR - open, public, and remembered until the border goes quiet for five days.\n"+
+  "4. TRIBUTE works: food gifts to a feared raider buy temporary safety. Raiders who accept tribute and raid anyway are marked as oathbreakers.\n\n"+
   'OUTPUT SCHEMA REQUIREMENTS:\nRespond ONLY with a valid JSON object adhering strictly to the following structural schema:\n'+
   '{\n  "bulletin": string | null,\n  "letters": Array<{ "to": number, "text": string }>,\n  "self_note": string\n}';
 }
 function phaseAUser(world,k){
-  const peers=world.kingdoms.filter(o=>o.alive&&o.id!==k.id).map(o=>({id:o.id+1,land:cellsOf(world,o.id).length,pop:o.pop,bulletin:o.bulletin||null}));
+  const peers=world.kingdoms.filter(o=>o.alive&&o.id!==k.id).map(o=>({id:o.id+1,land:cellsOf(world,o.id).length,pop:o.pop,bulletin:o.bulletin||null,relation:relOf(k,o.id),atWar:atWar(world,k.id,o.id),ally:isAlly(world,k.id,o.id)}));
+  const supply=Math.ceil(Math.max(0,cellsOf(world,k.id).length-world.cfg.freeLand)/world.cfg.supplyPerTiles);
+  const wars=(k.atWar||[]).map(o=>"#"+(o+1)).join(","),allies=(k.allies||[]).map(o=>"#"+(o+1)).join(",");
   return "CURRENT WORLD TICK: Round "+(world.tick+1)+" of Day "+world.day+" (Phase A)\n"+
-  "YOUR SECRET STATE: Food Stores = "+k.food+" (next Dawn needs "+k.pop+"), Mine Stock = "+k.metal+" (next Dawn needs "+k.army+"), Stamina = "+k.stamina+", Stock Archetype = "+k.goal+"\n"+
+  "YOUR SECRET STATE: Food Stores = "+k.food+" (next Dawn needs "+k.pop+" for people + "+supply+" for supply lines), Mine Stock = "+k.metal+" (next Dawn needs "+Math.ceil(k.army/2)+" for army), Stamina = "+k.stamina+", Stock Archetype = "+k.goal+"\n"+
   "YOUR STATE: Controlled Cells = "+cellsOf(world,k.id).length+", Army = "+k.army+", Population = "+k.pop+", Your army groups = "+JSON.stringify(normalizeArmyGroups(world,k))+"\n"+
+  "DIPLOMACY: at war with ["+wars+"], allied with ["+allies+"]. Season: "+(world.season?world.season.kind:"calm")+(world.season&&world.season.forecast?" (forecast: "+world.season.forecast+" tomorrow)":"")+".\n"+
   "YOUR STRATEGIC TILES: "+JSON.stringify(cellsOf(world,k.id).map(([x,y])=>({x,y,terrain:world.grid[y][x].terrain,houses:world.grid[y][x].houses||0})))+"\n\n"+
   "VISIBLE PEERS (army sizes and positions are hidden from you):\n"+JSON.stringify(peers)+"\n\n"+
   "INBOX MESSAGES RECEIVED THIS ROUND:\n"+JSON.stringify(k.inbox.map(m=>({from:"#"+(m.from+1),text:m.text})))+"\n\n"+
@@ -1566,23 +1797,28 @@ function phaseBSystem(world,k){
   "- 'build_house': Requires an owned tile below the house cap ("+cfg.maxHousesPerTile+" per tile), "+cfg.houseCostMetal+" minerals and 1 stamina. Each house supports "+cfg.housePop+" people.\n"+
   "- 'plant': Consumes "+cfg.plantCostFood+" food. Plants crop level 1 on an owned empty FIELD tile only.\n"+
   "- 'eat': Consumes 1 food. Restores +"+cfg.eatStaminaGain+" stamina.\n"+
-  "- 'share': Consumes food from your store and transfers it to target kingdom adjacent to your border.\n"+
-  "- 'trade_offer': Proposes a resource exchange agreement to a target kingdom.\n"+
-  "- 'honor': Fulfills a previously negotiated trade proposal.\n"+
+  "- 'share': Consumes food from your store and transfers it to target kingdom adjacent to your border. Gifts build relations; food sent to a feared raider counts as TRIBUTE and buys temporary safety.\n"+
+  "- 'trade_offer': Proposes a REAL resource exchange to a target kingdom. Include give:{food,metal} (what you pay) and get:{food,metal} (what you receive). Example: give 3 food, get 2 metal. The deal only executes if the other side honors it.\n"+
+  "- 'honor': Fulfills a previously negotiated trade proposal. Honoring builds relations and can forge alliances.\n"+
   "- 'train': Consumes "+cfg.trainCostMetal+" mine stock and "+cfg.trainCostStamina+" stamina. Increases standing army by +1.\n"+
   "- 'fortify': Consumes 1 stamina. Increases shield level of an owned cell by +1 (Max "+cfg.shieldCap+").\n"+
   "- 'claim': Requires one of your army groups on a frontier tile and 1 stamina. The group advances into an adjacent unowned tile and conquers it without casualties. With no army, you cannot expand; train a new unit at a settlement first. Use group_id to choose the vanguard.\n"+
-  "- 'raid': Consumes 1 stamina. Attacks a target adjacent cell owned by a peer kingdom.\n"+
-  "- 'move': Moves some or all of one army group through owned land, up to "+cfg.armyMoveRange+" tiles this turn. Use group_id, amount, and placement ('village', 'mine', or 'border'). Moving part of a group splits it; groups that meet merge. Split forces to garrison villages, guard mines, and form attack groups.\n"+
+  "- 'raid': Consumes 1 stamina. Attacks a target adjacent cell owned by a peer kingdom. Set mode:'conquer' (default) to SEIZE the tile - it becomes yours but its people may REVOLT unless you garrison it; or mode:'pillage' to burn their crops, steal their food, and leave the land alone. Pillaging a trusted friend or ally is BETRAYAL.\n"+
+  "- 'move': Moves some or all of one army group through owned land, up to "+cfg.armyMoveRange+" tiles this turn. Use group_id, amount, and placement ('village', 'mine', or 'border'). Moving part of a group splits it; groups that meet merge. Split forces to garrison villages, guard mines, and form attack groups. Garrison freshly conquered tiles or lose them to revolt.\n"+
   "- 'rest': Consumes no resources. Restores +2 stamina up to stamina cap.\n\n"+
   "FOG OF WAR: You know all of your own army groups. You cannot see rival army size, groups, or position; do not assume an enemy tile is defended or empty. Choose deployments from your own assets and intent.\n\n"+
-  "SURVIVAL ECONOMICS: Every Dawn, pay 1 food per population and 1 mineral per army. Armies are also the only way to conquer unowned land, so an unsupported army loss stops expansion until you train again. A food deficit shrinks population; a mineral deficit shrinks army. Population is capped by housing: "+cfg.housePop+" people per house, up to "+cfg.maxHousesPerTile+" houses per tile, each house costs "+cfg.houseCostMetal+" minerals. Reserve both BEFORE expanding or training.\n\n"+
+  "SURVIVAL ECONOMICS: Every Dawn, pay 1 food per population PLUS supply lines (1 food per "+cfg.supplyPerTiles+" land tiles beyond your first "+cfg.freeLand+" - sprawling empires starve first), and 1 mine stock per 2 army (rounded up). A food deficit shrinks population; a mineral deficit shrinks army. Population grows only on genuine surplus, and is capped by housing: "+cfg.housePop+" people per house, up to "+cfg.maxHousesPerTile+" houses per tile, each house costs "+cfg.houseCostMetal+" minerals. Harvest yields 4 food (5 from a fully grown crop). Seasons change everything: drought kills crops, bountiful doubles growth, plague shrinks population, gold rush enriches mines. The coming season is forecast a day ahead - plan for it.\n\n"+
+  "WAR AND PEACE: Repeated raids (3 skirmishes in 5 days) mean declared WAR - public and remembered. Wars end only when the border goes quiet for five days. Conquered land SEETHES: garrison it with an army group or it revolts back to no-man's-land. Small kingdoms fight scrappier when outmatched (extra stamina); everyone fears a runaway leader, so coalitions form against frontrunners.\n\n"+
   "LEGAL ACTIONS AVAILABLE THIS ROUND:\n"+JSON.stringify(legalActions(world,k))+"\n\n"+
   'OUTPUT SCHEMA REQUIREMENTS:\nRespond ONLY with a valid JSON object matching the following structure:\n'+
-  '{\n  "act": string,\n  "target": number | null,\n  "dir": string | null,\n  "group_id": string | null,\n  "amount": number | null,\n  "placement": string | null,\n  "note": string\n}\nKingdom ids for target are 0-based: kingdom #n has id n-1.';
+  '{\n  "act": string,\n  "target": number | null,\n  "dir": string | null,\n  "group_id": string | null,\n  "amount": number | null,\n  "placement": string | null,\n  "mode": "conquer" | "pillage" | null,\n  "give": { "food": number, "metal": number } | null,\n  "get": { "food": number, "metal": number } | null,\n  "note": string\n}\nKingdom ids for target are 0-based: kingdom #n has id n-1. Include mode only for raid; give/get only for trade_offer.';
 }
 function phaseBUser(world,k){
-  return "Day "+world.day+" tick "+(world.tick+1)+". Secret: food "+k.food+"/"+k.pop+" needed, mine stock "+k.metal+"/"+k.army+" needed, stamina "+k.stamina+". Own groups: "+JSON.stringify(normalizeArmyGroups(world,k))+". Land "+cellsOf(world,k.id).length+", pop "+k.pop+". Archetype: "+k.goal+". Pending trade offers: "+k.pendingOffers.length+". Curfew: "+(absTick(world)<world.curfewUntil?"active":"none")+".";
+  const offers=k.pendingOffers.map(o=>({from:"#"+(o.from+1),give:o.give,get:o.get}));
+  const wars=(k.atWar||[]).map(o=>"#"+(o+1)).join(","),allies=(k.allies||[]).map(o=>"#"+(o+1)).join(",");
+  const tribute=Object.entries(k.tributeTo||{}).filter(([to,until])=>until>absTick(world)).map(([to])=>"pays #"+(+to+1)).join(",");
+  const supply=Math.ceil(Math.max(0,cellsOf(world,k.id).length-world.cfg.freeLand)/world.cfg.supplyPerTiles);
+  return "Day "+world.day+" tick "+(world.tick+1)+". Secret: food "+k.food+"/"+(k.pop+supply)+" needed (pop "+k.pop+" + supply "+supply+"), mine stock "+k.metal+"/"+Math.ceil(k.army/2)+" needed, stamina "+k.stamina+". Own groups: "+JSON.stringify(normalizeArmyGroups(world,k))+". Land "+cellsOf(world,k.id).length+", pop "+k.pop+". Archetype: "+k.goal+". War with ["+wars+"], allied ["+allies+"], tribute {"+tribute+"}. Season: "+(world.season?world.season.kind+(world.season.forecast?"->"+world.season.forecast:""):"calm")+". Pending trade offers: "+JSON.stringify(offers)+". Curfew: "+(absTick(world)<world.curfewUntil?"active":"none")+".";
 }
 
 async function thinkPhaseA(world,k){
@@ -1606,7 +1842,8 @@ async function thinkPhaseB(world,k){
     const j=parseModelJson(r.text);
     const legal=legalActions(world,k);
     if (!j||!legal.includes(j.act)) throw new Error("illegal act "+(j&&j.act));
-    return {act:j.act,target:(j.target===undefined||j.target===null||j.target===""?null:(Number.isFinite(+j.target)?Math.floor(+j.target):null)),dir:j.dir||null,group_id:j.group_id||null,amount:Number.isFinite(+j.amount)?Math.floor(+j.amount):null,placement:j.placement||null,note:String(j.note||"").slice(0,80)};
+    const bundle=v=>({food:Math.max(0,Math.floor(+((v||{}).food)||0)),metal:Math.max(0,Math.floor(+((v||{}).metal)||0))});
+    return {act:j.act,target:(j.target===undefined||j.target===null||j.target===""?null:(Number.isFinite(+j.target)?Math.floor(+j.target):null)),dir:j.dir||null,group_id:j.group_id||null,amount:Number.isFinite(+j.amount)?Math.floor(+j.amount):null,placement:j.placement||null,mode:j.mode==="pillage"?"pillage":"conquer",give:j.act==="trade_offer"?bundle(j.give):undefined,get:j.act==="trade_offer"?bundle(j.get):undefined,note:String(j.note||"").slice(0,80)};
   }catch(e){
     emit(world,{type:"ThinkFailure",tick:absTick(world),kingdomId:k.id,phase:"B",reason:e.code||"invalid_response",message:String(e.message||e).slice(0,120),fallbackExecuted:"mock"});
     return mockPhaseB(world,k);
@@ -1844,8 +2081,8 @@ function renderWorldTab(w){
   const el=$("worldview"); if(!el)return;
   const ranked=w.kingdoms.map(k=>({k,land:cellsOf(w,k.id).length})).sort((a,b)=>b.land-a.land||b.k.army-a.k.army);
   const alive=ranked.filter(r=>r.k.alive);
-  const notable=[...w.events].reverse().filter(e=>["Combat","Fall","Dawn","Transfer","Letter","Bulletin"].includes(e.type)).slice(0,4);
-  const shift=[...w.events].reverse().find(e=>["Combat","Fall","Dawn","Transfer","Letter","Bulletin","ActRejected"].includes(e.type)||(e.type==="Control"&&e.operatorAction!=="match_start"));
+  const notable=[...w.events].reverse().filter(e=>["Combat","Fall","Dawn","Transfer","Letter","Bulletin","War","Peace","Alliance","AllianceBroken","Betrayal","Revolt","SeasonStart"].includes(e.type)).slice(0,4);
+  const shift=[...w.events].reverse().find(e=>["Combat","Fall","Dawn","Transfer","Letter","Bulletin","ActRejected","War","Peace","Alliance","AllianceBroken","Betrayal","Revolt","SeasonStart"].includes(e.type)||(e.type==="Control"&&e.operatorAction!=="match_start"));
   const story=storyFor(w,shift);
   el.innerHTML='<div class="agent-section world-brief" style="margin-top:2px"><label>World now</label><div class="story-title">'+ic(story.icon)+'<span>'+htmlSafe(story.title)+'</span></div><div class="story-detail">'+htmlSafe(story.detail)+'</div><p>Day '+w.day+' · '+alive.length+'/'+w.kingdoms.length+' standing'+(ranked[0]?' · '+htmlSafe(ranked[0].k.name)+' leads with '+ranked[0].land+' land':'')+'</p></div>'
     +(notable.length?'<div class="agent-section"><label>Latest shifts</label>'+notable.map(e=>'<div class="agent-action"><span>'+eventIcon(e.type)+'</span><span>'+htmlSafe(evText(w,e))+'</span></div>').join('')+'</div>':'')
@@ -1868,7 +2105,18 @@ function renderAll(){ if(!world)return; renderViewPicker(); if(tileInfoCell)show
 function storyFor(w,ev){
   if(!ev)return {icon:"flag",title:"The kingdoms are taking position",detail:"Press play to watch the first decisions unfold."};
   const name=id=>id>=0&&w.kingdoms[id]?w.kingdoms[id].name:"A kingdom";
-  if(ev.type==="Combat")return {icon:"swords",title:name(ev.attackerId)+" attacked "+name(ev.defenderId),detail:(ev.winnerId<0?"The clash ended in a draw":name(ev.winnerId)+" won the territory")+(ev.foodLooted?" and took "+ev.foodLooted+" food":"")+"."};
+  if(ev.type==="Combat"){
+    const pillage=ev.mode==="pillage";
+    return {icon:"swords",title:name(ev.attackerId)+(pillage?" pillaged ":" attacked ")+name(ev.defenderId),
+      detail:(ev.winnerId<0?"The raid found nothing worth taking.":name(ev.winnerId)+(pillage?" burned the fields":" won the territory"))+(ev.burned?" Crops went up in smoke.":"")+(ev.foodLooted?" They carried off "+ev.foodLooted+" food.":"")};
+  }
+  if(ev.type==="War")return {icon:"swords",title:name(ev.a)+" declared war on "+name(ev.b),detail:(ev.cause==="betrayal"?"The knife came out of an ally's back. ":(ev.cause==="repeated raids"?"Raids finally boiled over. ":""))+"Watch the border burn."};
+  if(ev.type==="Peace")return {icon:"check",title:name(ev.a)+" and "+name(ev.b)+" made peace",detail:"The war is over - for now. Old grudges fade slowly."};
+  if(ev.type==="Alliance")return {icon:"shieldPlus",title:name(ev.a)+" and "+name(ev.b)+" signed a pact",detail:"Two kingdoms stand together. Everyone else should worry."};
+  if(ev.type==="AllianceBroken")return {icon:"x",title:"The pact between "+name(ev.a)+" and "+name(ev.b)+" broke",detail:"Trust is gone. The map just got more dangerous."};
+  if(ev.type==="Betrayal")return {icon:"sword",title:name(ev.attackerId)+" betrayed "+name(ev.defenderId),detail:ev.wereAllies?"They were allies. Nobody is safe now.":"A friendly face hid a drawn blade."};
+  if(ev.type==="Revolt")return {icon:"burst",title:"Revolt in occupied land",detail:name(ev.kingdomId)+" lost control - the locals threw off their garrison."};
+  if(ev.type==="SeasonStart"){const d={drought:"Crops wither and fields die. Stockpile food.",bountiful:"Harvests overflow. Fortunes are made.",plague:"Sickness spreads. Populations shrink.",goldrush:"The mines run rich. Armies march.",calm:"A quiet season. Kingdoms scheme."};return {icon:"globe",title:"A "+ev.kind+" season begins",detail:d[ev.kind]||"The world changes."};}
   if(ev.type==="Fall")return {icon:"flame",title:name(ev.kingdomId)+" has fallen",detail:ev.conqueredBy>=0?name(ev.conqueredBy)+" delivered the final blow.":"Their last territory is gone."};
   if(ev.type==="Transfer")return {icon:"transfer",title:name(ev.from)+" helped "+name(ev.to),detail:"They sent "+ev.amount+" food. Watch whether the favor is returned."};
   if(ev.type==="Letter")return {icon:"envelope",title:name(ev.from)+" contacted "+name(ev.to),detail:'"'+(ev.text||"").slice(0,90)+'"'};
@@ -1885,7 +2133,7 @@ function renderClock(w){
   $("silencePill").style.display = absTick(w)<w.silenceUntil?"":"none";
   const ranked=w.kingdoms.map(k=>({k,land:cellsOf(w,k.id).length})).sort((a,b)=>b.land-a.land||b.k.army-a.k.army);
   if($("pulseLeader")&&ranked[0]) $("pulseLeader").innerHTML=htmlSafe(ranked[0].k.name)+" · "+ric("land",ranked[0].land)+" "+ric("army",ranked[0].k.army);
-  const shift=[...w.events].reverse().find(e=>["Combat","Fall","Dawn","Transfer","Letter","Bulletin","ActRejected"].includes(e.type)||(e.type==="Control"&&e.operatorAction!=="match_start"));
+  const shift=[...w.events].reverse().find(e=>["Combat","Fall","Dawn","Transfer","Letter","Bulletin","ActRejected","War","Peace","Alliance","AllianceBroken","Betrayal","Revolt","SeasonStart"].includes(e.type)||(e.type==="Control"&&e.operatorAction!=="match_start"));
   if($("pulseEvent")) $("pulseEvent").textContent=shift?evText(w,shift):"No major shift yet";
   if($("storyTitle")){const story=storyFor(w,shift);$("storyTitle").innerHTML=ic(story.icon)+"<span>"+htmlSafe(story.title)+"</span>";$("storyDetail").textContent=story.detail;}
 }
@@ -2328,8 +2576,16 @@ function evText(w,ev){
     case "ActRejected": return kn(ev.kingdomId)+" tried "+ev.attemptedAct+" - rejected: "+ev.reason;
     case "ThinkTimeout": return kn(ev.kingdomId)+" phase "+ev.phase+" timed out/failed - fell back to "+ev.fallbackExecuted;
     case "ThinkFailure": return kn(ev.kingdomId)+" phase "+ev.phase+" failed ("+(ev.reason||"error")+(ev.message?": "+ev.message:"")+") - fell back to "+ev.fallbackExecuted;
-    case "Transfer": return kn(ev.from)+" gave "+ev.amount+" food to "+kn(ev.to);
-    case "Combat": return "Combat at ["+ev.cell+"]: "+kn(ev.attackerId)+" vs "+kn(ev.defenderId)+" - winner "+(ev.winnerId===-1?"tie":kn(ev.winnerId))+(ev.foodLooted?", looted "+ev.foodLooted:"");
+    case "Transfer": return kn(ev.from)+" gave "+ev.amount+" food to "+kn(ev.to)+(ev.tribute?" (tribute for peace)":"");
+    case "Combat": return (ev.mode==="pillage"?"Raid":"Combat")+" at ["+ev.cell+"]: "+kn(ev.attackerId)+" vs "+kn(ev.defenderId)+" - "+(ev.winnerId===-1?"tie":("winner "+kn(ev.winnerId)))+(ev.burned?", crops burned":"")+(ev.foodLooted?", looted "+ev.foodLooted:"");
+    case "War": return "WAR: "+kn(ev.a)+" declared war on "+kn(ev.b)+(ev.cause?" ("+ev.cause+")":"");
+    case "Peace": return "Peace: "+kn(ev.a)+" and "+kn(ev.b)+" ended their war"+(ev.cause?" ("+ev.cause+")":"");
+    case "Alliance": return "ALLIANCE: "+kn(ev.a)+" and "+kn(ev.b)+" signed a pact";
+    case "AllianceBroken": return "Pact broken: "+kn(ev.a)+" and "+kn(ev.b)+(ev.reason?" ("+ev.reason+")":"");
+    case "Betrayal": return "BETRAYAL: "+kn(ev.attackerId)+" struck "+(ev.wereAllies?"their ally ":"")+kn(ev.defenderId);
+    case "Revolt": return "Revolt at ["+ev.cell+"]: "+kn(ev.kingdomId)+" lost control of occupied land";
+    case "SeasonForecast": return "Forecast: "+ev.kind+" season begins tomorrow";
+    case "SeasonStart": return "Season: "+ev.kind+" grips the world";
     case "Fall": return "FALL: "+kn(ev.kingdomId)+" has fallen"+(ev.conqueredBy>=0?" to "+kn(ev.conqueredBy):"");
     case "Dawn": { const s=Object.keys(ev.starvedPop||{}).length,m=Object.keys(ev.unsupportedArmy||{}).length; return "Dawn of day "+ev.day+(s?" - hungry population shrank in "+s+" kingdom(s)":"")+(m?" - unsupported armies shrank in "+m+" kingdom(s)":"")+" - "+(ev.grownCrops||[]).length+" crops grew"; }
     case "Control": return "Operator: "+ev.operatorAction+" "+JSON.stringify(ev.parameters);
@@ -2365,9 +2621,9 @@ function renderEmpires(w){
   for(const th of bar.querySelectorAll("th[data-s]")) th.onclick=()=>{const s=th.dataset.s;if(rankSort.key===s)rankSort.dir=-rankSort.dir;else rankSort={key:s,dir:-1};renderEmpires(world);};
   for(const tr of bar.querySelectorAll("tr[data-k]")) tr.onclick=()=>{selectedKingdom=+tr.dataset.k;renderLeaderboard(world);renderEmpires(world);renderInspector();showTab("insp");focusKingdom(selectedKingdom,true);setSheet("half");};
 }
-function eventIcon(t){const n=({Combat:"swords",Fall:"flame",Dawn:"sunrise",Transfer:"transfer",Control:"bolt",ThinkTimeout:"clock",ThinkFailure:"clock",Letter:"envelope",Bulletin:"megaphone",Act:""})[t];return n?ic(n):"•";}
+function eventIcon(t){const n=({Combat:"swords",Fall:"flame",Dawn:"sunrise",Transfer:"transfer",Control:"bolt",ThinkTimeout:"clock",ThinkFailure:"clock",Letter:"envelope",Bulletin:"megaphone",Act:"",War:"swords",Peace:"check",Alliance:"shieldPlus",AllianceBroken:"x",Betrayal:"sword",Revolt:"burst",SeasonForecast:"eye",SeasonStart:"globe"})[t];return n?ic(n):"•";}
 function renderEvents(w){
-  const box=$("events"), important=new Set(["Combat","Fall","Dawn","Transfer","Control","ThinkTimeout","ThinkFailure","Letter","Bulletin"]);
+  const box=$("events"), important=new Set(["Combat","Fall","Dawn","Transfer","Control","ThinkTimeout","ThinkFailure","Letter","Bulletin","War","Peace","Alliance","AllianceBroken","Betrayal","Revolt","SeasonStart"]);
   const source=(eventView==="highlights"?w.events.filter(e=>important.has(e.type)):w.events).slice(-120).reverse();let lastDay=null,out="";
   for(const ev of source){const day=ev.day||Math.floor((ev.tick||0)/w.cfg.ticksPerDay)+1;if(day!==lastDay){out+='<div class="ev-day">Day '+day+'</div>';lastDay=day;}out+='<div class="ev '+ev.type+(important.has(ev.type)?' important':'')+'"><span class="ev-icon">'+eventIcon(ev.type)+'</span><span class="t">'+(ev.tick!==undefined?'T'+ev.tick:'')+'</span><span class="ev-copy">'+htmlSafe(evText(w,ev))+'</span></div>';}
   box.innerHTML=out||'<div class="empty-feed">No major events yet. Let the match run or use a God mode power.</div>';
@@ -2408,8 +2664,9 @@ function validateReplay(data){
 function restoreSnapshot(snap){
   world.day=snap.day;world.tick=snap.tick;world.over=snap.over;world.winner=snap.winner;world.curfewUntil=snap.curfewUntil||0;world.silenceUntil=snap.silenceUntil||0;if(snap.rngState!==undefined)world.rng.setState?.(snap.rngState);
   const W=world.cfg.width;
-  for(let y=0;y<world.cfg.height;y++)for(let x=0;x<W;x++){const i=y*W+x,g=world.grid[y][x];g.owner=snap.owners[i]===-1?null:snap.owners[i];g.crop=snap.crops[i];g.shield=snap.shields[i];g.terrain=snap.terrains?.[i]||g.terrain||"plain";g.ore=snap.ores?.[i]||0;g.houses=snap.houses?.[i]??(snap.settlements?.[i]?2:0);}
-  snap.kingdoms.forEach((s,i)=>{const k=world.kingdoms[i];Object.assign(k,{alive:s.alive,pop:s.pop,army:s.army,armyGroups:s.armyGroups||null,armyPos:s.armyPos||null,armyIntent:s.armyIntent||"capital garrison",food:s.food,metal:s.metal??world.cfg.startMetal??defaultConfig().startMetal,stamina:s.stamina,bulletin:s.bulletin,selfNote:s.selfNote,goal:s.goal||k.goal,talkModel:s.talkModel||k.talkModel,actModel:s.actModel||k.actModel,mutedUntil:s.mutedUntil||0,pendingOffers:Array.isArray(s.pendingOffers)?s.pendingOffers.map(o=>({...o})):[]});normalizeArmyGroups(world,k);});
+  for(let y=0;y<world.cfg.height;y++)for(let x=0;x<W;x++){const i=y*W+x,g=world.grid[y][x];g.owner=snap.owners[i]===-1?null:snap.owners[i];g.crop=snap.crops[i];g.shield=snap.shields[i];g.terrain=snap.terrains?.[i]||g.terrain||"plain";g.ore=snap.ores?.[i]||0;g.houses=snap.houses?.[i]??(snap.settlements?.[i]?2:0);g.unrest=snap.unrests?.[i]||0;}
+  if(snap.season)world.season={kind:snap.season.kind,daysLeft:snap.season.daysLeft,forecast:snap.season.forecast??null};
+  snap.kingdoms.forEach((s,i)=>{const k=world.kingdoms[i];Object.assign(k,{alive:s.alive,pop:s.pop,army:s.army,armyGroups:s.armyGroups||null,armyPos:s.armyPos||null,armyIntent:s.armyIntent||"capital garrison",food:s.food,metal:s.metal??world.cfg.startMetal??defaultConfig().startMetal,stamina:s.stamina,bulletin:s.bulletin,selfNote:s.selfNote,goal:s.goal||k.goal,talkModel:s.talkModel||k.talkModel,actModel:s.actModel||k.actModel,mutedUntil:s.mutedUntil||0,pendingOffers:Array.isArray(s.pendingOffers)?s.pendingOffers.map(o=>({...o})):[]});k.relations={...(s.relations||{})};k.atWar=[...(s.atWar||[])];k.allies=[...(s.allies||[])];k.tributeTo={...(s.tributeTo||{})};normalizeArmyGroups(world,k);});
 }
 function loadReplay(data){
   validateReplay(data); matchGeneration++; selectedKingdom=null; watchedKingdom=null; viewKingdom=null; replayData=data; replayIdx=0;
