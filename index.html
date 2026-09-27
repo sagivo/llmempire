@@ -1808,7 +1808,7 @@ function phaseASystem(k,cfg){
   "3. Repeated raids escalate: three skirmishes in five days means WAR - open, public, and remembered until the border goes quiet for five days.\n"+
   "4. TRIBUTE works: food gifts to a feared raider buy temporary safety. Raiders who accept tribute and raid anyway are marked as oathbreakers.\n\n"+
   'OUTPUT SCHEMA REQUIREMENTS:\nRespond ONLY with a valid JSON object adhering strictly to the following structural schema:\n'+
-  '{\n  "bulletin": string | null,\n  "letters": Array<{ "to": number, "text": string }>,\n  "self_note": string\n}';
+  '{\n  "bulletin": string | null,\n  "letters": Array<{ "to": number, "text": string }>,\n  "self_note": string (1-2 sentences max, terse private scratchpad)\n}';
 }
 function phaseAUser(world,k){
   const peers=world.kingdoms.filter(o=>o.alive&&o.id!==k.id).map(o=>({id:o.id+1,land:cellsOf(world,o.id).length,pop:o.pop,bulletin:o.bulletin||null,relation:relOf(k,o.id),atWar:atWar(world,k.id,o.id),ally:isAlly(world,k.id,o.id)}));
@@ -1861,7 +1861,7 @@ function phaseBUser(world,k){
 async function thinkPhaseA(world,k){
   if (k.talkModel==="mock") return mockPhaseA(world,k);
   try{
-    const r=await LLM.chat(k.talkModel,phaseASystem(k,world.cfg),phaseAUser(world,k));
+    const r=await LLM.chat(k.talkModel,phaseASystem(k,world.cfg),phaseAUser(world,k),{maxTokens:600});
     logUsage(world,k,k.talkModel,r.usage);
     const j=parseModelJson(r.text);
     if (typeof j!=="object"||j===null) throw new Error("bad json");
@@ -1874,7 +1874,7 @@ async function thinkPhaseA(world,k){
 async function thinkPhaseB(world,k){
   if (k.actModel==="mock") return mockPhaseB(world,k);
   try{
-    const r=await LLM.chat(k.actModel,phaseBSystem(world,k),phaseBUser(world,k));
+    const r=await LLM.chat(k.actModel,phaseBSystem(world,k),phaseBUser(world,k),{maxTokens:300});
     logUsage(world,k,k.actModel,r.usage);
     const j=parseModelJson(r.text);
     const legal=legalActions(world,k);
@@ -2139,7 +2139,7 @@ function repairTruncatedJson(text){
   try{return JSON.parse(out);}catch(e){return null;}
 }
 function parseJsonLoose(text){try{return JSON.parse(text);}catch(e){const a=text.indexOf("{"),b=text.lastIndexOf("}");if(a>=0&&b>a){try{return JSON.parse(text.slice(a,b+1));}catch(e2){}}const repaired=repairTruncatedJson(text);if(repaired)return repaired;throw new Error("The model returned an unreadable report");}}
-function parseModelJson(text){if(typeof text!=="string")throw new Error("bad json");try{return JSON.parse(text);}catch(e){const a=text.indexOf("{"),b=text.lastIndexOf("}");if(a>=0&&b>a)return JSON.parse(text.slice(a,b+1));throw new Error("bad json");}}
+function parseModelJson(text){if(typeof text!=="string")throw new Error("bad json");try{return JSON.parse(text);}catch(e){const a=text.indexOf("{"),b=text.lastIndexOf("}");if(a>=0&&b>a){try{return JSON.parse(text.slice(a,b+1));}catch(e2){}}const repaired=repairTruncatedJson(text);if(repaired)return repaired;throw new Error("bad json");}}
 async function analyzeMatch(){
  if(replayData){toast("Exit replay to analyze a live match");return;} if(!world){toast("Start a match first");return;} if(!LLM.key){toast("Add an API key in New match → LLM roster first");return;}
  const chosen=$("modelA").value.trim(), model=chosen!=="mock"?chosen:(world.kingdoms.find(k=>k.actModel!=="mock")?.actModel||""); if(!model){toast("Choose an AI model first");return;}
