@@ -1764,7 +1764,7 @@ const LLM = {
       const headers={"Content-Type":"application/json","Authorization":"Bearer "+key};
       if(directProvider) headers["X-LLM-Provider"]=directProvider;
       const messages=[{role:"system",content:system},{role:"user",content:user}];
-      const fullBody={model:requestModel,temperature:this.temperature,response_format:{type:"json_object"},messages};
+      const fullBody={model:requestModel,temperature:this.temperature,reasoning_effort:"low",response_format:{type:"json_object"},messages};
       const minimalBody={model:requestModel,messages};
       if(opts.maxTokens){fullBody.max_tokens=opts.maxTokens;minimalBody.max_tokens=opts.maxTokens;}
       const attempt=async (body)=>{
@@ -1861,7 +1861,9 @@ function phaseBUser(world,k){
 async function thinkPhaseA(world,k){
   if (k.talkModel==="mock") return mockPhaseA(world,k);
   try{
+    const t0=performance.now();
     const r=await LLM.chat(k.talkModel,phaseASystem(k,world.cfg),phaseAUser(world,k),{maxTokens:600});
+    noteThinkMs(k,performance.now()-t0);
     logUsage(world,k,k.talkModel,r.usage);
     const j=parseModelJson(r.text);
     if (typeof j!=="object"||j===null) throw new Error("bad json");
@@ -1874,7 +1876,9 @@ async function thinkPhaseA(world,k){
 async function thinkPhaseB(world,k){
   if (k.actModel==="mock") return mockPhaseB(world,k);
   try{
+    const t0=performance.now();
     const r=await LLM.chat(k.actModel,phaseBSystem(world,k),phaseBUser(world,k),{maxTokens:300});
+    noteThinkMs(k,performance.now()-t0);
     logUsage(world,k,k.actModel,r.usage);
     const j=parseModelJson(r.text);
     const legal=legalActions(world,k);
@@ -1894,6 +1898,7 @@ async function thinkPhaseB(world,k){
     return mockPhaseB(world,k);
   }
 }
+function noteThinkMs(k,ms){ if(!k)return; (k._thinkMs=k._thinkMs||[]).push(ms); if(k._thinkMs.length>12)k._thinkMs.shift(); }
 function logUsage(world,k,model,u){
   const cost=estimateCost(model,u.inputTokens,u.outputTokens);
   world.usage.inputTokens+=u.inputTokens; world.usage.outputTokens+=u.outputTokens; world.usage.costUsd+=cost;
@@ -2641,12 +2646,14 @@ function positionMapActions(){
 }
 function renderLeaderboard(w){
   const rows=w.kingdoms.map(k=>({k,land:cellsOf(w,k.id).length})).sort((a,b)=>b.land-a.land||b.k.pop-a.k.pop);
-  let html="<table><thead><tr><th>Kingdom</th><th>Land</th><th>Pop</th><th>Army</th><th>Model</th><th>Cost</th></tr></thead><tbody>";
+  let html="<table><thead><tr><th>Kingdom</th><th>Land</th><th>Pop</th><th>Army</th><th>Model</th><th>Cost</th><th>Think</th></tr></thead><tbody>";
   for (const {k,land} of rows){
     const cost=(k.usage&&k.usage.costUsd)||0;
+    const _tms=(k._thinkMs&&k._thinkMs.length)?k._thinkMs.reduce((a,b)=>a+b,0)/k._thinkMs.length:0;
+    const _think=_tms>0?(_tms>=1000?(_tms/1000).toFixed(1)+"s":Math.round(_tms)+"ms"):"–";
     html+='<tr data-k="'+k.id+'" class="'+(k.alive?"":"dead")+(selectedKingdom===k.id?" sel":"")+'">'
       +'<td><span class="dot" style="background:'+factionColor(k.id)+'"></span>'+htmlSafe(k.name)+'</td>'
-      +"<td>"+land+"</td><td>"+k.pop+"</td><td>"+k.army+"</td><td>"+htmlSafe(k.actModel==="mock"?"mock":k.actModel.split("/")[1]||k.actModel)+"</td><td>"+(cost>0?"$"+cost.toFixed(4):"–")+"</td></tr>";
+      +"<td>"+land+"</td><td>"+k.pop+"</td><td>"+k.army+"</td><td>"+htmlSafe(k.actModel==="mock"?"mock":k.actModel.split("/")[1]||k.actModel)+"</td><td>"+(cost>0?"$"+cost.toFixed(4):"–")+"</td><td>"+_think+"</td></tr>";
   }
   $("lb").innerHTML=html+"</tbody></table>";
   for (const tr of $("lb").querySelectorAll("tr[data-k]")) tr.onclick=()=>{ selectedKingdom=+tr.dataset.k; renderLeaderboard(world); renderEmpires(world); renderInspector(); showTab("insp"); };
