@@ -21,8 +21,7 @@ export async function onRequestPost({ request }) {
     headers["x-api-key"] = authorization.replace(/^Bearer\s+/i, "");
     headers["anthropic-version"] = "2023-06-01";
     const system = body.messages?.find(message => message.role === "system")?.content || "";
-    // Honor the client's requested output budget (analysis asks for 16000);
-    // the old hardcoded 4096 silently truncated long reports into emptiness.
+    // Honor the client's requested output budget (analysis asks for 16000).
     const requestedMax = Number(body.max_tokens);
     const maxTokens = Number.isFinite(requestedMax) ? Math.floor(requestedMax) : 4096;
     body = {
@@ -30,7 +29,8 @@ export async function onRequestPost({ request }) {
       max_tokens: maxTokens,
       temperature: body.temperature,
       system,
-      messages: (body.messages || []).filter(message => message.role !== "system")
+      messages: (body.messages || []).filter(message => message.role !== "system"),
+      thinking: { type: "disabled" }
     };
   } else {
     headers.Authorization = authorization;
@@ -52,11 +52,13 @@ export async function onRequestPost({ request }) {
       .filter(part => part && typeof part.text === "string")
       .map(part => part.text).join("");
     const stopReason = result.stop_reason || null;
-    return Response.json({
+    const converted = {
       choices: [{ message: { content: textOut },
                   finish_reason: stopReason === "end_turn" ? "stop" : stopReason }],
       usage: { prompt_tokens: result.usage?.input_tokens || 0, completion_tokens: result.usage?.output_tokens || 0 }
-    }, { headers: { "Cache-Control": "no-store" } });
+    };
+    if (!textOut) converted._up = JSON.stringify(result).slice(0, 1000);
+    return Response.json(converted, { headers: { "Cache-Control": "no-store" } });
   }
 
   const responseHeaders = new Headers();
