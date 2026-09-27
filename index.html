@@ -1744,19 +1744,28 @@ const LLM = {
       const requestModel=directProvider?model.replace(/^[^/]+\//,""):model;
       const headers={"Content-Type":"application/json","Authorization":"Bearer "+key};
       if(directProvider) headers["X-LLM-Provider"]=directProvider;
-      const res=await fetch(endpoint,{
-        method:"POST",signal:ctrl.signal,headers,
-        body:JSON.stringify({model:requestModel,temperature:this.temperature,response_format:{type:"json_object"},
-          messages:[{role:"system",content:system},{role:"user",content:user}]})
-      });
-      if (!res.ok){const detail=await res.text().catch(()=>"");const err=new Error(res.status===401?provider+" rejected the key":res.status===429?provider+" rate limited the request":res.status>=500?provider+" is unavailable":"LLM request failed ("+res.status+")");err.code="http_"+res.status;err.detail=detail.slice(0,160);throw err;}
-      const j=await res.json();
-      let text=j.choices?.[0]?.message?.content;
-      if(Array.isArray(text)) text=text.map(p=>typeof p==="string"?p:(p&&typeof p.text==="string"?p.text:"")).join("");
-      if(typeof text!=="string"&&typeof j.choices?.[0]?.text==="string") text=j.choices[0].text;
-      if(typeof text!=="string"||!text.trim()){const err=new Error("Model returned no response");err.code="empty_response";throw err;}
-      const u=j.usage||{};
-      return {text, usage:{inputTokens:u.prompt_tokens||0,outputTokens:u.completion_tokens||0}};
+      const messages=[{role:"system",content:system},{role:"user",content:user}];
+      const fullBody={model:requestModel,temperature:this.temperature,response_format:{type:"json_object"},messages};
+      const minimalBody={model:requestModel,messages};
+      const attempt=async (body)=>{
+        const res=await fetch(endpoint,{method:"POST",signal:ctrl.signal,headers,body:JSON.stringify(body)});
+        if (!res.ok){const detail=await res.text().catch(()=>"");const err=new Error((res.status===401?provider+" rejected the key":res.status===429?provider+" rate limited the request":res.status>=500?provider+" is unavailable":"LLM request failed ("+res.status+")")+(detail?": "+detail.slice(0,140):""));err.code="http_"+res.status;err.detail=detail.slice(0,160);throw err;}
+        const j=await res.json();
+        let text=j.choices?.[0]?.message?.content;
+        if(Array.isArray(text)) text=text.map(p=>typeof p==="string"?p:(p&&typeof p.text==="string"?p.text:"")).join("");
+        if(typeof text!=="string"&&typeof j.choices?.[0]?.text==="string") text=j.choices[0].text;
+        if(typeof text!=="string"||!text.trim()){const err=new Error("Model returned no response");err.code="empty_response";throw err;}
+        const u=j.usage||{};
+        return {text, usage:{inputTokens:u.prompt_tokens||0,outputTokens:u.completion_tokens||0}};
+      };
+      try{ return await attempt(fullBody); }
+      catch(e){
+        // Some models (reasoning models, custom endpoints) reject response_format or a
+        // non-default temperature with a 400. Retry once with a minimal OpenAI-style
+        // body; the prompts already demand JSON-only output and the parser extracts it.
+        if(e&&e.code==="http_400") return await attempt(minimalBody);
+        throw e;
+      }
     } catch(e){if(e?.name==="AbortError"){const err=new Error("Model request timed out");err.code="timeout";throw err;}if(!e.code)e.code="network";throw e;} finally { clearTimeout(to); }
   }
 };
