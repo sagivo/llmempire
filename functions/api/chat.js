@@ -24,9 +24,7 @@ export async function onRequestPost({ request }) {
     // Honor the client's requested output budget (analysis asks for 16000);
     // the old hardcoded 4096 silently truncated long reports into emptiness.
     const requestedMax = Number(body.max_tokens);
-    const maxTokens = Number.isFinite(requestedMax)
-      ? Math.min(Math.max(Math.floor(requestedMax), 1), 32000)
-      : 4096;
+    const maxTokens = Number.isFinite(requestedMax) ? Math.floor(requestedMax) : 4096;
     body = {
       model: body.model,
       max_tokens: maxTokens,
