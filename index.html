@@ -1202,7 +1202,7 @@ function pickSeason(world,avoid){
 function executeAct(world,kid,action,events){
   const k=world.kingdoms[kid], cfg=world.cfg;
   const legal=legalActions(world,k);
-  if (!legal.includes(action.act)){ emit(world,{type:"ActRejected",tick:absTick(world),kingdomId:kid,attemptedAct:action.act,reason:"not legal now"}); return; }
+  if (!action||!legal.includes(action.act)){ emit(world,{type:"ActRejected",tick:absTick(world),kingdomId:kid,attemptedAct:action&&action.act,reason:"not legal now"}); return; }
   const cells=cellsOf(world,kid);
   const pick=(arr)=>arr[Math.floor(world.rng()*arr.length)];
   switch(action.act){
@@ -1356,7 +1356,7 @@ function resolveCombat(world,attackerId,cell,note,mode){
   }else{loseArmy(world,A,1,attackGroup?.x,attackGroup?.y);loseArmy(world,D,1,cell[0],cell[1]);if(A.food>0)A.food-=1;if(D.food>0)D.food-=1;winnerId=-1;}
   emit(world,{type:"Act",tick:absTick(world),kingdomId:attackerId,act:"raid",target:defenderId,dir:null,note:note||("local power "+pA+" vs "+pD)});
   emit(world,{type:"Combat",tick:absTick(world),attackerId,defenderId,cell,winnerId,attackingArmy:attacking,defendingArmy:defending,foodLooted:loot,mode:"conquer"});
-  const warMode=cfg.endMode==="dominion"||cfg.endMode==="last_stand",capitalTaken=winnerId===attackerId&&warMode&&D.capital&&cell[0]===D.capital.x&&cell[1]===D.capital.y;if((capitalTaken||cellsOf(world,defenderId).length===0)&&D.alive){D.alive=false;D.pendingOffers=[];D.army=0;D.armyGroups=[];D.armyPos=null;for(let y=0;y<cfg.height;y++)for(let x=0;x<cfg.width;x++)if(world.grid[y][x].owner===defenderId){world.grid[y][x].owner=attackerId;world.grid[y][x].unrest=1;}emit(world,{type:"Fall",tick:absTick(world),kingdomId:defenderId,conqueredBy:attackerId});}
+  const warMode=cfg.endMode==="dominion"||cfg.endMode==="last_stand",capitalTaken=winnerId===attackerId&&warMode&&D.capital&&cell[0]===D.capital.x&&cell[1]===D.capital.y;if((capitalTaken||cellsOf(world,defenderId).length===0)&&D.alive){D.alive=false;D.pendingOffers=[];D.army=0;D.armyGroups=[];D.armyPos=null;for(let y=0;y<cfg.height;y++)for(let x=0;x<cfg.width;x++)if(world.grid[y][x].owner===defenderId){world.grid[y][x].owner=attackerId;world.grid[y][x].unrest=1;}D.pop=Math.min(D.pop,popCap(world,D));emit(world,{type:"Fall",tick:absTick(world),kingdomId:defenderId,conqueredBy:attackerId});}
   noteSkirmish(world,attackerId,defenderId);
 }
 
@@ -1383,10 +1383,10 @@ function processDawn(world){
     k.stamina=Math.min(cfg.staminaCap,k.stamina+cfg.staminaPerDawn);
     // Underdogs fight scrappier: less than half the leader's land means extra stamina.
     if (land>0&&topLand>0&&land<topLand*0.5){ k.stamina=Math.min(cfg.staminaCap,k.stamina+1); underdogs.push(k.id); }
+    if (seasonKind==="plague"&&k.alive&&k.pop>3&&world.rng()<0.25){ k.pop-=1; plagued[k.id]=1; }
     k.army=Math.min(k.army,Math.min(cfg.armyCap,k.pop)); if(warUpkeep&&k.army===0&&k.pop>0){k.army=1;} normalizeArmyGroups(world,k);
     if (k.pop<=1 && cellsOf(world,k.id).length===0){ k.alive=false; emit(world,{type:"Fall",tick:now,kingdomId:k.id,conqueredBy:-1}); }
     if (k.pop<=0){ k.pop=1; } syncSettlementPop(world,k);
-    if (seasonKind==="plague"&&k.alive&&k.pop>3&&world.rng()<0.25){ k.pop-=1; plagued[k.id]=1; }
     // Fear of the leader: small kingdoms resent a runaway frontrunner, so coalitions form.
     if (k.alive&&topLand>0&&land<topLand/1.8){ const li=lands.indexOf(topLand); if(alive[li]&&alive[li].id!==k.id){ k.relations=k.relations||{}; k.relations[alive[li].id]=Math.max(-40,relOf(k,alive[li].id)-2); } }
   }
@@ -1404,7 +1404,9 @@ function processDawn(world){
     if(!k||!k.alive){c.unrest=0;continue;}
     const garrisoned=normalizeArmyGroups(world,k).some(g=>g.x===x&&g.y===y);
     if(garrisoned){c.unrest=Math.max(0,c.unrest-1);}
-    else if(world.rng()<0.18*c.unrest){ const old=c.owner; c.owner=null; c.unrest=0; revolts.push([x,y]); emit(world,{type:"Revolt",tick:now,cell:[x,y],kingdomId:old}); }
+    else if(world.rng()<0.18*c.unrest){ const old=c.owner; c.owner=null; c.unrest=0; revolts.push([x,y]); emit(world,{type:"Revolt",tick:now,cell:[x,y],kingdomId:old});
+      // Losing a settlement can shrink population capacity: re-clamp like conquest does.
+      const ok=world.kingdoms[old]; if(ok&&ok.alive){ ok.pop=Math.min(ok.pop,popCap(world,ok)); ok.army=Math.min(ok.army,Math.min(cfg.armyCap,ok.pop)); normalizeArmyGroups(world,ok); } }
   }
   // Wars cool off when the borders go quiet for five days.
   for (const k of alive){
@@ -1442,6 +1444,12 @@ function checkVictory(world){
     let best=null,score=-1;
     for (const k of alive){ const s=cellsOf(world,k.id).length*1000+k.pop*10+k.food; if (s>score){score=s;best=k;} }
     world.over=true; world.winner={id:best.id,how:"timed"};
+  }
+  // Safety net: dominion/last_stand decide by score at maxDays so a stalled match always ends.
+  if ((cfg.endMode==="dominion"||cfg.endMode==="last_stand") && !world.over && world.day>cfg.maxDays){
+    let best=null,score=-1;
+    for (const k of alive){ const s=cellsOf(world,k.id).length*1000+k.pop*10+k.food; if (s>score){score=s;best=k;} }
+    world.over=true; world.winner={id:best.id,how:"score"};
   }
 }
 
@@ -1843,7 +1851,15 @@ async function thinkPhaseB(world,k){
     const legal=legalActions(world,k);
     if (!j||!legal.includes(j.act)) throw new Error("illegal act "+(j&&j.act));
     const bundle=v=>({food:Math.max(0,Math.floor(+((v||{}).food)||0)),metal:Math.max(0,Math.floor(+((v||{}).metal)||0))});
-    return {act:j.act,target:(j.target===undefined||j.target===null||j.target===""?null:(Number.isFinite(+j.target)?Math.floor(+j.target):null)),dir:j.dir||null,group_id:j.group_id||null,amount:Number.isFinite(+j.amount)?Math.floor(+j.amount):null,placement:j.placement||null,mode:j.mode==="pillage"?"pillage":"conquer",give:j.act==="trade_offer"?bundle(j.give):undefined,get:j.act==="trade_offer"?bundle(j.get):undefined,note:String(j.note||"").slice(0,80)};
+    const bundleEmpty=b=>b.food<=0&&b.metal<=0;
+    // Mirror executeAct's default (2 metal for 2 food) so a bare trade_offer stays valid.
+    let give, get;
+    if (j.act==="trade_offer"){
+      if (j.give===undefined&&j.get===undefined){ give={food:0,metal:2}; get={food:2,metal:0}; }
+      else { give=bundle(j.give); get=bundle(j.get); }
+      if (bundleEmpty(give)||bundleEmpty(get)) throw new Error("empty trade bundle");
+    }
+    return {act:j.act,target:(j.target===undefined||j.target===null||j.target===""?null:(Number.isFinite(+j.target)?Math.floor(+j.target):null)),dir:j.dir||null,group_id:j.group_id||null,amount:Number.isFinite(+j.amount)?Math.floor(+j.amount):null,placement:j.placement||null,mode:j.mode==="pillage"?"pillage":"conquer",give:j.act==="trade_offer"?give:undefined,get:j.act==="trade_offer"?get:undefined,note:String(j.note||"").slice(0,80)};
   }catch(e){
     emit(world,{type:"ThinkFailure",tick:absTick(world),kingdomId:k.id,phase:"B",reason:e.code||"invalid_response",message:String(e.message||e).slice(0,120),fallbackExecuted:"mock"});
     return mockPhaseB(world,k);
