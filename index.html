@@ -1703,9 +1703,18 @@ function runTick(world,thinkers){
     const said=await mapLimit(alive,8,k=>thinkers.phaseA(world,k));
     alive.forEach((k,i)=>speak(world,k,said[i]));
     // Phase B: tactical. Simultaneous decisions from the post-diplomacy state;
-    // acts resolve in kingdom order (a kingdom eliminated mid-resolution skips its act).
+    // acts resolve in kingdom order. A decision overtaken by an earlier act
+    // (target taken, offer lapsed) becomes a rest, flagged in the feed.
     const decided=await mapLimit(alive,8,k=>thinkers.phaseB(world,k));
-    alive.forEach((k,i)=>{ if(!k.alive)return; executeAct(world,k.id,decided[i]); k.inbox=[]; });
+    alive.forEach((k,i)=>{
+      if(!k.alive)return;
+      let d=decided[i];
+      if(!d||!legalActions(world,k).includes(d.act)){
+        emit(world,{type:"ActStale",tick:absTick(world),kingdomId:k.id,attemptedAct:d&&d.act,note:String((d&&d.note)||"").slice(0,80)});
+        d={act:"rest",target:null,dir:null,note:"plan overtaken by events"};
+      }
+      executeAct(world,k.id,d); k.inbox=[];
+    });
     world.tick+=1;
     if (world.tick>=world.cfg.ticksPerDay){ world.tick=0; processDawn(world); }
     checkVictory(world);
@@ -2031,7 +2040,7 @@ function exportData(){ return { format:"commons.json", version:1, exportedAt:new
 // Events worth an analyst's attention: the story beats plus the significant actions
 // (raids, gifts/tribute, trade offers, honored deals). Routine micro-actions and token
 // usage are noise at this scale and would blow up the prompt on long matches.
-const ANALYSIS_EVENTS=new Set(["Combat","Fall","Dawn","Transfer","Control","ThinkTimeout","ThinkFailure","Letter","Bulletin","War","Peace","Alliance","AllianceBroken","Betrayal","Revolt","SeasonStart","ActRejected"]);
+const ANALYSIS_EVENTS=new Set(["Combat","Fall","Dawn","Transfer","Control","ThinkTimeout","ThinkFailure","Letter","Bulletin","War","Peace","Alliance","AllianceBroken","Betrayal","Revolt","SeasonStart","ActRejected","ActStale"]);
 const ANALYSIS_ACTS=new Set(["raid","share","trade_offer","honor"]);
 function sampleMax(arr,max){ if(arr.length<=max)return arr; const out=[],n=arr.length; for(let i=0;i<max;i++)out.push(arr[Math.round(i*(n-1)/(max-1))]); return out; }
 function analysisLogPayload(w){const step=Math.max(1,w.cfg.ticksPerDay||8),sampled=sampleMax(w.snapshots.filter((s,i)=>i===0||i===w.snapshots.length-1||i%step===0),40).map(s=>({day:s.day,tick:s.tick,over:s.over,winner:s.winner,kingdoms:s.kingdoms.map(k=>({id:k.id+1,alive:k.alive,pop:k.pop,army:k.army,food:k.food,metal:k.metal,stamina:k.stamina,groups:k.armyGroups?.length||0})),land:s.owners.reduce((a,o)=>{if(o>=0)a[o]=(a[o]||0)+1;return a},[])}));const events=w.events.filter(e=>ANALYSIS_EVENTS.has(e.type)||(e.type==="Act"&&ANALYSIS_ACTS.has(e.act))).slice(-1200);const payload={match:{seed:w.seed,config:w.cfg,day:w.day,tick:w.tick,over:w.over,winner:w.winner},players:w.kingdoms.map(k=>({id:k.id+1,name:k.name,model:k.actModel,alive:k.alive,final:{land:cellsOf(w,k.id).length,pop:k.pop,army:k.army,armyGroups:normalizeArmyGroups(w,k).map(g=>({...g})),food:k.food,metal:k.metal,stamina:k.stamina}})),events,snapshots:sampled,trimmed:{events:w.events.length,snapshots:w.snapshots.length}};let json=JSON.stringify(payload);if(json.length>150000){payload.events=payload.events.slice(-400);json=JSON.stringify(payload);}return JSON.parse(json);}
@@ -2198,6 +2207,7 @@ function storyFor(w,ev){
   if(ev.type==="Control"){const labels={drought:"The operator declared a drought",radio_silence:"The operator cut all speech",curfew:"The operator called a curfew",cache_drop:"The operator dropped a food cache",mute:"The operator muted a kingdom"};const icons={drought:"sun",radio_silence:"towerOff",curfew:"moon",cache_drop:"package",mute:"mute"};return {icon:icons[ev.operatorAction]||"bolt",title:labels[ev.operatorAction]||"The operator changed the world",detail:"God mode is shaping the experiment. Watch how the kingdoms adapt."};}
   if(ev.type==="Bulletin")return {icon:"megaphone",title:name(ev.kingdomId)+" speaks to everyone",detail:'"'+(ev.text||"").slice(0,140)+'"'};
   if(ev.type==="ActRejected")return {icon:"x",title:name(ev.kingdomId)+"'s move was rejected",detail:"Tried to "+ev.attemptedAct+" - "+ev.reason+"."};
+  if(ev.type==="ActStale")return {icon:"eye",title:name(ev.kingdomId)+"'s "+ev.attemptedAct+" fizzled",detail:"The world moved first - someone else got there. They rest instead."};
   return {icon:"eye",title:"The world keeps moving",detail:evText(w,ev)};
 }
 function renderClock(w){
@@ -2650,6 +2660,7 @@ function evText(w,ev){
     case "Act": return kn(ev.kingdomId)+" "+ev.act+(ev.target!==null&&ev.target!==undefined?" -> "+kn(ev.target):"")+(ev.note?" ("+ev.note+")":"");
     case "ActSummary": { const parts=Object.entries(ev.breakdown||{}).map(([a,n])=>a+(n>1?" ×"+n:"")).join(", "); return kn(ev.kingdomId)+" · "+ev.count+" routine action"+(ev.count===1?"":"s")+": "+parts; }
     case "ActRejected": return kn(ev.kingdomId)+" tried "+ev.attemptedAct+" - rejected: "+ev.reason;
+    case "ActStale": return kn(ev.kingdomId)+"'s "+ev.attemptedAct+" fizzled - overtaken by events"+(ev.note?" ("+ev.note+")":"");
     case "ThinkTimeout": return kn(ev.kingdomId)+" phase "+ev.phase+" timed out/failed - fell back to "+ev.fallbackExecuted;
     case "ThinkFailure": return kn(ev.kingdomId)+" phase "+ev.phase+" failed ("+(ev.reason||"error")+(ev.message?": "+ev.message:"")+") - fell back to "+ev.fallbackExecuted;
     case "Transfer": return kn(ev.from)+" gave "+ev.amount+" food to "+kn(ev.to)+(ev.tribute?" (tribute for peace)":"");
@@ -2717,7 +2728,7 @@ function collapseRoutineActs(w,evs){
   flush(); return out;
 }
 function renderEvents(w){
-  const box=$("events"), important=new Set(["Combat","Fall","Dawn","Transfer","Control","ThinkTimeout","ThinkFailure","Letter","Bulletin","War","Peace","Alliance","AllianceBroken","Betrayal","Revolt","SeasonStart"]);
+  const box=$("events"), important=new Set(["Combat","Fall","Dawn","Transfer","Control","ThinkTimeout","ThinkFailure","Letter","Bulletin","War","Peace","Alliance","AllianceBroken","Betrayal","Revolt","SeasonStart","ActStale"]);
   let evs=w.events.filter(e=>e.type!=="Usage");
   evs=(eventView==="highlights"?evs.filter(e=>important.has(e.type)):collapseRoutineActs(w,evs));
   const source=evs.slice(-120).reverse();let lastDay=null,out="";
