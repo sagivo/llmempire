@@ -1682,21 +1682,30 @@ function takeSnapshot(world){
 
 // ---------- one full tick ----------
 function runTick(world,thinkers){
+  // Run async tasks with a concurrency cap, preserving input order in the results.
+  // Synchronous thinkers (mocks) still execute strictly in order, so the RNG stream
+  // and event ordering stay identical to the old sequential loop.
+  const mapLimit=async (items,limit,fn)=>{
+    const out=new Array(items.length); let i=0;
+    const workers=Array.from({length:Math.max(1,Math.min(limit,items.length))},async ()=>{
+      while(i<items.length){ const idx=i++; out[idx]=await fn(items[idx],idx); }
+    });
+    await Promise.all(workers); return out;
+  };
   // thinkers: {phaseA(world,k)->Promise<{bulletin,letters,self_note}>, phaseB(world,k)->Promise<{act,...}>}
   return (async ()=>{
     if (world.over) return;
     for (const k of world.kingdoms) for (const g of normalizeArmyGroups(world,k)){ g.moving=false; g.heading=null; }
-    // Phase A: communication
-    for (const k of world.kingdoms){ if (!k.alive) continue;
-      const a=await thinkers.phaseA(world,k);
-      speak(world,k,a);
-    }
-    // Phase B: tactical
-    for (const k of world.kingdoms){ if (!k.alive) continue;
-      const b=await thinkers.phaseB(world,k);
-      executeAct(world,k.id,b);
-      k.inbox=[]; // inbox consumed each round
-    }
+    const alive=world.kingdoms.filter(k=>k.alive);
+    // Phase A: communication. Kingdoms draft simultaneously from the same state —
+    // no more turn-order peeking at bulletins posted earlier in the tick — then
+    // bulletins and letters go out in kingdom order.
+    const said=await mapLimit(alive,8,k=>thinkers.phaseA(world,k));
+    alive.forEach((k,i)=>speak(world,k,said[i]));
+    // Phase B: tactical. Simultaneous decisions from the post-diplomacy state;
+    // acts resolve in kingdom order (a kingdom eliminated mid-resolution skips its act).
+    const decided=await mapLimit(alive,8,k=>thinkers.phaseB(world,k));
+    alive.forEach((k,i)=>{ if(!k.alive)return; executeAct(world,k.id,decided[i]); k.inbox=[]; });
     world.tick+=1;
     if (world.tick>=world.cfg.ticksPerDay){ world.tick=0; processDawn(world); }
     checkVictory(world);
