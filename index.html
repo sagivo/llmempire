@@ -1677,7 +1677,7 @@ function takeSnapshot(world){
   return { day:world.day, tick:world.tick, over:world.over, winner:world.winner, rngState:world.rng.getState?.(), curfewUntil:world.curfewUntil, silenceUntil:world.silenceUntil,
     owners, crops, shields, terrains, ores, houses, unrests,
     season:world.season?{kind:world.season.kind,daysLeft:world.season.daysLeft,forecast:world.season.forecast}:null,
-    kingdoms: world.kingdoms.map(k=>({id:k.id,alive:k.alive,pop:k.pop,army:k.army,armyGroups:normalizeArmyGroups(world,k).map(g=>({...g})),armyPos:k.armyPos?{...k.armyPos}:null,armyIntent:k.armyIntent||null,food:k.food,metal:k.metal,stamina:k.stamina,bulletin:k.bulletin,selfNote:k.selfNote,goal:k.goal,talkModel:k.talkModel,actModel:k.actModel,mutedUntil:k.mutedUntil,pendingOffers:k.pendingOffers.map(o=>({from:o.from,give:{...o.give},get:{...o.get},tick:o.tick})),relations:{...(k.relations||{})},atWar:[...(k.atWar||[])],allies:[...(k.allies||[])],tributeTo:{...(k.tributeTo||{})}})) };
+    kingdoms: world.kingdoms.map(k=>({id:k.id,alive:k.alive,pop:k.pop,army:k.army,armyGroups:normalizeArmyGroups(world,k).map(g=>({...g})),armyPos:k.armyPos?{...k.armyPos}:null,armyIntent:k.armyIntent||null,food:k.food,metal:k.metal,stamina:k.stamina,bulletin:k.bulletin,selfNote:k.selfNote,goal:k.goal,talkModel:k.talkModel,actModel:k.actModel,mutedUntil:k.mutedUntil,usage:{inputTokens:k.usage?.inputTokens||0,outputTokens:k.usage?.outputTokens||0,costUsd:k.usage?.costUsd||0},pendingOffers:k.pendingOffers.map(o=>({from:o.from,give:{...o.give},get:{...o.get},tick:o.tick})),relations:{...(k.relations||{})},atWar:[...(k.atWar||[])],allies:[...(k.allies||[])],tributeTo:{...(k.tributeTo||{})}})) };
 }
 
 // ---------- one full tick ----------
@@ -1877,7 +1877,7 @@ async function thinkPhaseB(world,k){
 function logUsage(world,k,model,u){
   const cost=estimateCost(model,u.inputTokens,u.outputTokens);
   world.usage.inputTokens+=u.inputTokens; world.usage.outputTokens+=u.outputTokens; world.usage.costUsd+=cost;
-  emit(world,{type:"Usage",tick:absTick(world),kingdomId:k.id,modelId:model,inputTokens:u.inputTokens,outputTokens:u.outputTokens,estimatedCostUsd:cost});
+  if(k&&k.usage){k.usage.inputTokens+=u.inputTokens; k.usage.outputTokens+=u.outputTokens; k.usage.costUsd+=cost;}
 }
 </script>
 
@@ -2582,11 +2582,12 @@ function positionMapActions(){
 }
 function renderLeaderboard(w){
   const rows=w.kingdoms.map(k=>({k,land:cellsOf(w,k.id).length})).sort((a,b)=>b.land-a.land||b.k.pop-a.k.pop);
-  let html="<table><thead><tr><th>Kingdom</th><th>Land</th><th>Pop</th><th>Army</th><th>Model</th></tr></thead><tbody>";
+  let html="<table><thead><tr><th>Kingdom</th><th>Land</th><th>Pop</th><th>Army</th><th>Model</th><th>Cost</th></tr></thead><tbody>";
   for (const {k,land} of rows){
+    const cost=(k.usage&&k.usage.costUsd)||0;
     html+='<tr data-k="'+k.id+'" class="'+(k.alive?"":"dead")+(selectedKingdom===k.id?" sel":"")+'">'
       +'<td><span class="dot" style="background:'+factionColor(k.id)+'"></span>'+htmlSafe(k.name)+'</td>'
-      +"<td>"+land+"</td><td>"+k.pop+"</td><td>"+k.army+"</td><td>"+htmlSafe(k.actModel==="mock"?"mock":k.actModel.split("/")[1]||k.actModel)+"</td></tr>";
+      +"<td>"+land+"</td><td>"+k.pop+"</td><td>"+k.army+"</td><td>"+htmlSafe(k.actModel==="mock"?"mock":k.actModel.split("/")[1]||k.actModel)+"</td><td>"+(cost>0?"$"+cost.toFixed(4):"–")+"</td></tr>";
   }
   $("lb").innerHTML=html+"</tbody></table>";
   for (const tr of $("lb").querySelectorAll("tr[data-k]")) tr.onclick=()=>{ selectedKingdom=+tr.dataset.k; renderLeaderboard(world); renderEmpires(world); renderInspector(); showTab("insp"); };
@@ -2598,6 +2599,7 @@ function evText(w,ev){
     case "Letter": return kn(ev.from)+"->"+kn(ev.to)+" "+ev.text;
     case "TalkTruncated": return kn(ev.kingdomId)+" speech truncated to "+ev.truncatedText;
     case "Act": return kn(ev.kingdomId)+" "+ev.act+(ev.target!==null&&ev.target!==undefined?" -> "+kn(ev.target):"")+(ev.note?" ("+ev.note+")":"");
+    case "ActSummary": { const parts=Object.entries(ev.breakdown||{}).map(([a,n])=>a+(n>1?" ×"+n:"")).join(", "); return kn(ev.kingdomId)+" · "+ev.count+" routine action"+(ev.count===1?"":"s")+": "+parts; }
     case "ActRejected": return kn(ev.kingdomId)+" tried "+ev.attemptedAct+" - rejected: "+ev.reason;
     case "ThinkTimeout": return kn(ev.kingdomId)+" phase "+ev.phase+" timed out/failed - fell back to "+ev.fallbackExecuted;
     case "ThinkFailure": return kn(ev.kingdomId)+" phase "+ev.phase+" failed ("+(ev.reason||"error")+(ev.message?": "+ev.message:"")+") - fell back to "+ev.fallbackExecuted;
@@ -2646,10 +2648,30 @@ function renderEmpires(w){
   for(const th of bar.querySelectorAll("th[data-s]")) th.onclick=()=>{const s=th.dataset.s;if(rankSort.key===s)rankSort.dir=-rankSort.dir;else rankSort={key:s,dir:-1};renderEmpires(world);};
   for(const tr of bar.querySelectorAll("tr[data-k]")) tr.onclick=()=>{selectedKingdom=+tr.dataset.k;renderLeaderboard(world);renderEmpires(world);renderInspector();showTab("insp");focusKingdom(selectedKingdom,true);setSheet("half");};
 }
-function eventIcon(t){const n=({Combat:"swords",Fall:"flame",Dawn:"sunrise",Transfer:"transfer",Control:"bolt",ThinkTimeout:"clock",ThinkFailure:"clock",Letter:"envelope",Bulletin:"megaphone",Act:"",War:"swords",Peace:"check",Alliance:"shieldPlus",AllianceBroken:"x",Betrayal:"sword",Revolt:"burst",SeasonForecast:"eye",SeasonStart:"globe"})[t];return n?ic(n):"•";}
+function eventIcon(t){const n=({Combat:"swords",Fall:"flame",Dawn:"sunrise",Transfer:"transfer",Control:"bolt",ThinkTimeout:"clock",ThinkFailure:"clock",Letter:"envelope",Bulletin:"megaphone",Act:"",War:"swords",Peace:"check",Alliance:"shieldPlus",AllianceBroken:"x",Betrayal:"sword",Revolt:"burst",SeasonForecast:"eye",SeasonStart:"globe",ActSummary:""})[t];return n?ic(n):"•";}
+// Routine micro-actions (harvest/claim/move/...) are noise one by one. In "All activity"
+// they collapse into a single per-kingdom, per-day summary; story-relevant actions
+// (raid, share/tribute, trade_offer, honor) always keep their own line.
+const ROUTINE_ACTS=new Set(["harvest","plant","mine","build_house","eat","train","fortify","claim","move","rest"]);
+function collapseRoutineActs(w,evs){
+  const out=[]; let run=null;
+  const flush=()=>{ if(run) out.push({type:"ActSummary",tick:run.tick,kingdomId:run.kingdomId,day:run.day,count:run.count,breakdown:run.breakdown}); run=null; };
+  for(const e of evs){
+    if(e.type==="Act"&&ROUTINE_ACTS.has(e.act)){
+      const day=e.day||Math.floor((e.tick||0)/w.cfg.ticksPerDay)+1;
+      if(run&&run.kingdomId===e.kingdomId&&run.day===day){ run.count++; run.breakdown[e.act]=(run.breakdown[e.act]||0)+1; run.tick=e.tick; }
+      else { flush(); run={kingdomId:e.kingdomId,day,tick:e.tick,count:1,breakdown:{[e.act]:1}}; }
+      continue;
+    }
+    flush(); out.push(e);
+  }
+  flush(); return out;
+}
 function renderEvents(w){
   const box=$("events"), important=new Set(["Combat","Fall","Dawn","Transfer","Control","ThinkTimeout","ThinkFailure","Letter","Bulletin","War","Peace","Alliance","AllianceBroken","Betrayal","Revolt","SeasonStart"]);
-  const source=(eventView==="highlights"?w.events.filter(e=>important.has(e.type)):w.events).slice(-120).reverse();let lastDay=null,out="";
+  let evs=w.events.filter(e=>e.type!=="Usage");
+  evs=(eventView==="highlights"?evs.filter(e=>important.has(e.type)):collapseRoutineActs(w,evs));
+  const source=evs.slice(-120).reverse();let lastDay=null,out="";
   for(const ev of source){const day=ev.day||Math.floor((ev.tick||0)/w.cfg.ticksPerDay)+1;if(day!==lastDay){out+='<div class="ev-day">Day '+day+'</div>';lastDay=day;}out+='<div class="ev '+ev.type+(important.has(ev.type)?' important':'')+'"><span class="ev-icon">'+eventIcon(ev.type)+'</span><span class="t">'+(ev.tick!==undefined?'T'+ev.tick:'')+'</span><span class="ev-copy">'+htmlSafe(evText(w,ev))+'</span></div>';}
   box.innerHTML=out||'<div class="empty-feed">No major events yet. Let the match run or use a God mode power.</div>';
   [...box.querySelectorAll(".ev")].forEach((node,i)=>{const ev=source[i];const id=ev&&(ev.kingdomId??ev.attackerId??ev.from??ev.defenderId??ev.to);if(id!==undefined&&w.kingdoms[id]){node.title="Open "+w.kingdoms[id].name;node.onclick=()=>{selectedKingdom=id;renderEmpires(w);renderInspector();showTab("insp");focusKingdom(id,true);};}});
@@ -2691,7 +2713,7 @@ function restoreSnapshot(snap){
   const W=world.cfg.width;
   for(let y=0;y<world.cfg.height;y++)for(let x=0;x<W;x++){const i=y*W+x,g=world.grid[y][x];g.owner=snap.owners[i]===-1?null:snap.owners[i];g.crop=snap.crops[i];g.shield=snap.shields[i];g.terrain=snap.terrains?.[i]||g.terrain||"plain";g.ore=snap.ores?.[i]||0;g.houses=snap.houses?.[i]??(snap.settlements?.[i]?2:0);g.unrest=snap.unrests?.[i]||0;}
   if(snap.season)world.season={kind:snap.season.kind,daysLeft:snap.season.daysLeft,forecast:snap.season.forecast??null};
-  snap.kingdoms.forEach((s,i)=>{const k=world.kingdoms[i];Object.assign(k,{alive:s.alive,pop:s.pop,army:s.army,armyGroups:s.armyGroups||null,armyPos:s.armyPos||null,armyIntent:s.armyIntent||"capital garrison",food:s.food,metal:s.metal??world.cfg.startMetal??defaultConfig().startMetal,stamina:s.stamina,bulletin:s.bulletin,selfNote:s.selfNote,goal:s.goal||k.goal,talkModel:s.talkModel||k.talkModel,actModel:s.actModel||k.actModel,mutedUntil:s.mutedUntil||0,pendingOffers:Array.isArray(s.pendingOffers)?s.pendingOffers.map(o=>({...o})):[]});k.relations={...(s.relations||{})};k.atWar=[...(s.atWar||[])];k.allies=[...(s.allies||[])];k.tributeTo={...(s.tributeTo||{})};normalizeArmyGroups(world,k);});
+  snap.kingdoms.forEach((s,i)=>{const k=world.kingdoms[i];Object.assign(k,{alive:s.alive,pop:s.pop,army:s.army,armyGroups:s.armyGroups||null,armyPos:s.armyPos||null,armyIntent:s.armyIntent||"capital garrison",food:s.food,metal:s.metal??world.cfg.startMetal??defaultConfig().startMetal,stamina:s.stamina,bulletin:s.bulletin,selfNote:s.selfNote,goal:s.goal||k.goal,talkModel:s.talkModel||k.talkModel,actModel:s.actModel||k.actModel,mutedUntil:s.mutedUntil||0,pendingOffers:Array.isArray(s.pendingOffers)?s.pendingOffers.map(o=>({...o})):[]});k.relations={...(s.relations||{})};k.atWar=[...(s.atWar||[])];k.allies=[...(s.allies||[])];k.tributeTo={...(s.tributeTo||{})};if(s.usage)k.usage={inputTokens:+s.usage.inputTokens||0,outputTokens:+s.usage.outputTokens||0,costUsd:+s.usage.costUsd||0};normalizeArmyGroups(world,k);});
 }
 function loadReplay(data){
   validateReplay(data); matchGeneration++; selectedKingdom=null; watchedKingdom=null; viewKingdom=null; replayData=data; replayIdx=0;
