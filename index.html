@@ -2088,14 +2088,46 @@ document.querySelectorAll("[data-ic]").forEach(el=>{el.innerHTML=ic(el.dataset.i
 if($("mapKey"))$("mapKey").innerHTML='<span class="mk">'+ic("army")+'Army · number = strength</span><span class="mk">'+ic("swords")+'Battle this turn</span><span class="mk">'+ic("flag")+'Territory</span>';
 function ric(name,num){return '<span class="ric ric-'+name+'"><i class="rico">'+RES_ICONS[name]+'</i>'+(num===undefined||num===null||num===''?'':'<b>'+num+'</b>')+'</span>';}
 function htmlSafe(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
-function parseJsonLoose(text){try{return JSON.parse(text);}catch(e){const a=text.indexOf("{"),b=text.lastIndexOf("}");if(a>=0&&b>a)return JSON.parse(text.slice(a,b+1));throw new Error("The model returned an unreadable report");}}
+// Best-effort salvage of a model response cut off mid-JSON: balance the brackets,
+// drop the dangling partial value at the cut, and parse whatever survived.
+function repairTruncatedJson(text){
+  let start=text.indexOf("{"),b=text.indexOf("[");
+  if(start<0||(b>=0&&b<start))start=b;
+  if(start<0)return null;
+  const s=text.slice(start);
+  let out="",stack=[],inStr=false,esc=false,strStart=0;
+  for(let i=0;i<s.length;i++){
+    const c=s[i];
+    if(inStr){
+      if(esc){esc=false;out+=c;continue;}
+      if(c==="\\"){esc=true;out+=c;continue;}
+      if(c==='"'){inStr=false;out+=c;continue;}
+      out+=c;continue;
+    }
+    if(c==='"'){inStr=true;strStart=out.length;out+=c;continue;}
+    if(c==="{"||c==="["){stack.push(c);out+=c;continue;}
+    if(c==="}"||c==="]"){
+      const want=c==="}"?"{":"[";
+      if(stack.length&&stack[stack.length-1]===want){stack.pop();out+=c;}
+      continue;
+    }
+    out+=c;
+  }
+  if(inStr)out=out.slice(0,strStart);
+  out=out.replace(/"[^"]*":\s*[^,{}\[\]"]*$/,"");
+  out=out.replace(/,\s*$/,"");
+  while(stack.length)out+=stack.pop()==="{"?"}":"]";
+  out=out.replace(/,\s*([}\]])/g,"$1");
+  try{return JSON.parse(out);}catch(e){return null;}
+}
+function parseJsonLoose(text){try{return JSON.parse(text);}catch(e){const a=text.indexOf("{"),b=text.lastIndexOf("}");if(a>=0&&b>a){try{return JSON.parse(text.slice(a,b+1));}catch(e2){}}const repaired=repairTruncatedJson(text);if(repaired)return repaired;throw new Error("The model returned an unreadable report");}}
 function parseModelJson(text){if(typeof text!=="string")throw new Error("bad json");try{return JSON.parse(text);}catch(e){const a=text.indexOf("{"),b=text.lastIndexOf("}");if(a>=0&&b>a)return JSON.parse(text.slice(a,b+1));throw new Error("bad json");}}
 async function analyzeMatch(){
  if(replayData){toast("Exit replay to analyze a live match");return;} if(!world){toast("Start a match first");return;} if(!LLM.key){toast("Add an API key in New match → LLM roster first");return;}
  const chosen=$("modelA").value.trim(), model=chosen!=="mock"?chosen:(world.kingdoms.find(k=>k.actModel!=="mock")?.actModel||""); if(!model){toast("Choose an AI model first");return;}
  const btn=$("analyzeBtn");btn.disabled=true;btn.innerHTML=ic("spark")+" Analyzing every log…";showTab("analysis");$("analysis").innerHTML='<div class="analysis-empty"><span class="pill">AI analyst working</span><p>Reading the full event history and per-tick snapshots…</p></div>';
- const system='You are a rigorous strategy-game analyst. Analyze the complete LLM Empire match log. Attribute behavior only when the evidence supports it. Identify how every player plays, recurring tendencies, pivotal brilliant moves, costly blunders, diplomacy patterns, and practical lessons. A brilliant move changes survival, territory, resources, alliances, or the final result. A blunder has a concrete avoidable cost. Cite day/tick and event evidence. Return strict JSON with keys: summary (string), players (array of {id,name,style,traits:string[],brilliantMoves:array of {when,move,why},blunders:array of {when,move,why},diplomacy,lesson}), turningPoints (array of {when,title,detail}), metaInsights (string[]). Cover every player, including weak or eliminated players. Do not invent hidden motives.';
- try{const result=await LLM.chat(model,system,JSON.stringify(analysisLogPayload(world)),{timeoutMs:120000,maxTokens:8000});world.aiAnalysis={model,createdAt:new Date().toISOString(),report:parseJsonLoose(result.text)};renderAnalysis(world.aiAnalysis);DB.save({id:"latest",savedAt:Date.now(),data:exportData()});toast("AI analysis ready");}
+ const system='You are a rigorous strategy-game analyst. Analyze the complete LLM Empire match log. Attribute behavior only when the evidence supports it. Identify how every player plays, recurring tendencies, pivotal brilliant moves, costly blunders, diplomacy patterns, and practical lessons. A brilliant move changes survival, territory, resources, alliances, or the final result. A blunder has a concrete avoidable cost. Cite day/tick and event evidence. Return strict JSON with keys: summary (string), players (array of {id,name,style,traits:string[],brilliantMoves:array of {when,move,why},blunders:array of {when,move,why},diplomacy,lesson}), turningPoints (array of {when,title,detail}), metaInsights (string[]). Cover every player, including weak or eliminated players. Do not invent hidden motives. Be thorough but economical: the entire report must fit in a single response, so keep prose tight and avoid padding.';
+ try{const result=await LLM.chat(model,system,JSON.stringify(analysisLogPayload(world)),{timeoutMs:120000,maxTokens:16000});world.aiAnalysis={model,createdAt:new Date().toISOString(),report:parseJsonLoose(result.text)};renderAnalysis(world.aiAnalysis);DB.save({id:"latest",savedAt:Date.now(),data:exportData()});toast("AI analysis ready");}
  catch(err){$("analysis").innerHTML='<div class="analysis-empty">Analysis failed: '+htmlSafe(err.message||String(err))+'<br><small>Check the model name, API key and connection settings.</small></div>';toast("Analysis failed");}
  finally{btn.disabled=false;btn.innerHTML=ic("spark")+" Analyze logs";}
 }
