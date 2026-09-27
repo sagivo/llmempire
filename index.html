@@ -1764,9 +1764,10 @@ const LLM = {
       const headers={"Content-Type":"application/json","Authorization":"Bearer "+key};
       if(directProvider) headers["X-LLM-Provider"]=directProvider;
       const messages=[{role:"system",content:system},{role:"user",content:user}];
-      const fullBody={model:requestModel,temperature:this.temperature,reasoning_effort:"low",response_format:{type:"json_object"},messages};
+      const fullBody={model:requestModel,temperature:this.temperature,response_format:{type:"json_object"},messages};
+      if(opts.reasoningEffort===undefined) fullBody.reasoning_effort="low"; else if(opts.reasoningEffort) fullBody.reasoning_effort=opts.reasoningEffort;
       const minimalBody={model:requestModel,messages};
-      if(opts.maxTokens){fullBody.max_tokens=opts.maxTokens;minimalBody.max_tokens=opts.maxTokens;}
+      if(opts.maxTokens) fullBody.max_tokens=opts.maxTokens;
       const attempt=async (body)=>{
         const res=await fetch(endpoint,{method:"POST",signal:ctrl.signal,headers,body:JSON.stringify(body)});
         if (!res.ok){const detail=await res.text().catch(()=>"");const err=new Error((res.status===401?provider+" rejected the key":res.status===429?provider+" rate limited the request":res.status>=500?provider+" is unavailable":"LLM request failed ("+res.status+")")+(detail?": "+detail.slice(0,140):""));err.code="http_"+res.status;err.detail=detail.slice(0,160);throw err;}
@@ -1783,7 +1784,7 @@ const LLM = {
         // Some models (reasoning models, custom endpoints) reject response_format or a
         // non-default temperature with a 400. Retry once with a minimal OpenAI-style
         // body; the prompts already demand JSON-only output and the parser extracts it.
-        if(e&&e.code==="http_400") return await attempt(minimalBody);
+        if(e&&(e.code==="http_400"||e.code==="empty_response")) return await attempt(minimalBody);
         throw e;
       }
     } catch(e){if(e?.name==="AbortError"){const err=new Error("Model request timed out");err.code="timeout";throw err;}if(!e.code)e.code="network";throw e;} finally { clearTimeout(to); }
@@ -2150,7 +2151,7 @@ async function analyzeMatch(){
  const chosen=$("modelA").value.trim(), model=chosen!=="mock"?chosen:(world.kingdoms.find(k=>k.actModel!=="mock")?.actModel||""); if(!model){toast("Choose an AI model first");return;}
  const btn=$("analyzeBtn");btn.disabled=true;btn.innerHTML=ic("spark")+" Analyzing every log…";showTab("analysis");$("analysis").innerHTML='<div class="analysis-empty"><span class="pill">AI analyst working</span><p>Reading the full event history and per-tick snapshots…</p></div>';
  const system='You are a rigorous strategy-game analyst. Analyze the complete LLM Empire match log. Attribute behavior only when the evidence supports it. Identify how every player plays, recurring tendencies, pivotal brilliant moves, costly blunders, diplomacy patterns, and practical lessons. A brilliant move changes survival, territory, resources, alliances, or the final result. A blunder has a concrete avoidable cost. Cite day/tick and event evidence. Return strict JSON with keys: summary (string), players (array of {id,name,style,traits:string[],brilliantMoves:array of {when,move,why},blunders:array of {when,move,why},diplomacy,lesson}), turningPoints (array of {when,title,detail}), metaInsights (string[]). Cover every player, including weak or eliminated players. Do not invent hidden motives. Be thorough but economical: the entire report must fit in a single response, so keep prose tight and avoid padding.';
- try{const result=await LLM.chat(model,system,JSON.stringify(analysisLogPayload(world)),{timeoutMs:120000,maxTokens:16000});world.aiAnalysis={model,createdAt:new Date().toISOString(),report:parseJsonLoose(result.text)};renderAnalysis(world.aiAnalysis);DB.save({id:"latest",savedAt:Date.now(),data:exportData()});toast("AI analysis ready");}
+ try{const result=await LLM.chat(model,system,JSON.stringify(analysisLogPayload(world)),{timeoutMs:120000,maxTokens:16000,reasoningEffort:null});world.aiAnalysis={model,createdAt:new Date().toISOString(),report:parseJsonLoose(result.text)};renderAnalysis(world.aiAnalysis);DB.save({id:"latest",savedAt:Date.now(),data:exportData()});toast("AI analysis ready");}
  catch(err){$("analysis").innerHTML='<div class="analysis-empty">Analysis failed: '+htmlSafe(err.message||String(err))+'<br><small>Check the model name, API key and connection settings.</small></div>';toast("Analysis failed");}
  finally{btn.disabled=false;btn.innerHTML=ic("spark")+" Analyze logs";}
 }
