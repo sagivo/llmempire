@@ -1775,7 +1775,7 @@ const LLM = {
         let text=j.choices?.[0]?.message?.content;
         if(Array.isArray(text)) text=text.map(p=>typeof p==="string"?p:(p&&typeof p.text==="string"?p.text:"")).join("");
         if(typeof text!=="string"&&typeof j.choices?.[0]?.text==="string") text=j.choices[0].text;
-        if(typeof text!=="string"||!text.trim()){const err=new Error("Model returned no response");err.code="empty_response";try{const ch=(j.choices||[])[0]||{};err.detail="model="+model+",choices="+(Array.isArray(j.choices)?j.choices.length:"none")+",finish="+(ch.finish_reason||"?")+",msg_keys="+Object.keys(ch.message||{}).join("|")+",usage="+!!j.usage+",err="+(j.error?JSON.stringify(j.error).slice(0,120):"none");}catch(_){}try{err.detail+=",raw="+JSON.stringify(j).slice(0,220);}catch(_){}throw err;}
+        if(typeof text!=="string"||!text.trim()){const err=new Error("Model returned no response");err.code="empty_response";try{const ch=(j.choices||[])[0]||{};err.detail="model="+model+",choices="+(Array.isArray(j.choices)?j.choices.length:"none")+",finish="+(ch.finish_reason||"?")+",msg_keys="+Object.keys(ch.message||{}).join("|")+",usage="+!!j.usage+",err="+(j.error?JSON.stringify(j.error).slice(0,120):"none");}catch(_){}try{err.detail+=",raw="+JSON.stringify(j).slice(0,1100);}catch(_){}throw err;}
         const u=j.usage||{};
         return {text, usage:{inputTokens:u.prompt_tokens||0,outputTokens:u.completion_tokens||0}};
       };
