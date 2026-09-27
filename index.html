@@ -2349,9 +2349,9 @@ function renderBoard(w, snap, target){
     let owner,crop,shield,terrain,ore,houses;
     if(snap){owner=get(x,y,"owners");crop=get(x,y,"crops");shield=get(x,y,"shields");terrain=get(x,y,"terrains")||"plain";ore=get(x,y,"ores")||0;houses=get(x,y,"houses")||0;owner=owner===-1?null:owner;}
     else{const g=w.grid[y][x];owner=g.owner;crop=g.crop;shield=g.shield;terrain=g.terrain||"plain";ore=g.ore||0;houses=g.houses||0;}
-    // Tiny Attack-style tiles: flush low-poly terrain hexagons. Terrain owns the ground color,
-    // ownership is a faction tint + faction frame; one centered flat icon, one value pill.
-    const ground=terrain==="mine"?MAPC.mineRock:terrain==="hill"?MAPC.hill:MAPC.grass;
+    // One ground color for every tile: terrain reads through the centered icon,
+    // ownership reads through the faction wash + frame. No terrain tinting.
+    const ground=MAPC.land;
     // Tiny Attack language: chunky edge-locked hex, bright flat top and beveled lower facets.
     // Light comes from the left everywhere: left half glints, right half shades.
     // A deterministic per-tile tonal jitter keeps neighbouring hexes from reading
@@ -2365,7 +2365,7 @@ function renderBoard(w, snap, target){
     hexPath(ctx,hcx,hcy,hr);ctx.fill();
     if(owner!==null){
       // Ownership must read at a glance: a strong faction wash plus a thick faction frame.
-      ctx.save();ctx.globalAlpha=.58;hexPath(ctx,hcx,hcy,hr*.98);ctx.fillStyle=factionColor(owner);ctx.fill();ctx.restore();
+      ctx.save();ctx.globalAlpha=.74;hexPath(ctx,hcx,hcy,hr*.98);ctx.fillStyle=factionColor(owner);ctx.fill();ctx.restore();
       ctx.strokeStyle=factionColor(owner);ctx.lineWidth=Math.max(3,cell*.16);hexPath(ctx,hcx,hcy,hr*.94);ctx.stroke();
     }else{ctx.strokeStyle=MAPC.tileEdge;ctx.lineWidth=Math.max(1,cell*.035);hexPath(ctx,hcx,hcy,hr*.98);ctx.stroke();}
     const dia=(gx,gy,sz,fill)=>poly([[gx,gy-sz],[gx+sz*.7,gy],[gx,gy+sz],[gx-sz*.7,gy]],fill);
